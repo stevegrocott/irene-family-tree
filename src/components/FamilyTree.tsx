@@ -28,7 +28,7 @@ import SearchBar from '@/components/SearchBar'
 import { applyDagreLayout } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
 import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
-import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID } from '@/constants/tree'
+import { DEFAULT_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID } from '@/constants/tree'
 
 /**
  * Minimal person summary used for the search bar and root selection.
@@ -49,51 +49,36 @@ const defaultEdgeOptions = {
   animated: false,
 }
 
-/** Tailwind classes applied to depth control buttons. */
-const depthBtnClass = 'w-6 h-6 flex items-center justify-center rounded-lg text-white/80 hover:bg-white/15 hover:text-white transition-colors text-sm font-medium'
-
 /**
- * Control for adjusting tree depth (number of hops from root).
- * Allows user to expand or collapse the family tree visualization.
- *
- * @param {number} hops - Current depth value between MIN_HOPS and MAX_HOPS
- * @param {Function} onChange - Callback fired when user adjusts the depth
- */
-function DepthControl({ hops, onChange }: { hops: number; onChange: (hops: number) => void }) {
-  return (
-    <div className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-      <span className="text-xs text-white/60 select-none">Depth</span>
-      <button
-        data-testid="hops-decrease"
-        onClick={() => onChange(Math.max(MIN_HOPS, hops - 1))}
-        className={depthBtnClass}
-        aria-label="Decrease depth"
-      >
-        −
-      </button>
-      <span data-testid="hops-value" className="text-sm text-white font-medium w-4 text-center select-none">
-        {hops}
-      </span>
-      <button
-        data-testid="hops-increase"
-        onClick={() => onChange(Math.min(MAX_HOPS, hops + 1))}
-        className={depthBtnClass}
-        aria-label="Increase depth"
-      >
-        +
-      </button>
-    </div>
-  )
-}
-
-/**
- * Displays count of people and families currently visible in the tree.
+ * Displays count of people and families currently visible in the tree,
+ * along with depth controls and a fit-view button.
  * Hidden when no people are displayed.
  *
  * @param {number} personCount - Number of person nodes displayed
  * @param {number} unionCount - Number of union (family) nodes displayed
+ * @param {string} rootName - Display name of the current root person
+ * @param {number} hops - Current depth value between MIN_HOPS and MAX_HOPS
+ * @param {Function} onHopsChange - Callback fired when user adjusts the depth
+ * @param {Function} onFit - Callback fired when user clicks fit-view
+ * @param {Node[]} nodes - All current ReactFlow nodes
  */
-function Toolbar({ personCount, unionCount }: { personCount: number; unionCount: number }) {
+function Toolbar({
+  personCount,
+  unionCount,
+  rootName: _rootName,
+  hops: _hops,
+  onHopsChange: _onHopsChange,
+  onFit: _onFit,
+  nodes: _nodes,
+}: {
+  personCount: number
+  unionCount: number
+  rootName: string
+  hops: number
+  onHopsChange: (hops: number) => void
+  onFit: () => void
+  nodes: Node[]
+}) {
   if (personCount === 0) return null
   return (
     <div
@@ -320,7 +305,7 @@ function FlowCanvas({
   const [error, setError] = useState<string | null>(null)
   const [hops, setHops] = useState(DEFAULT_HOPS)
   const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(null)
-  const { setViewport } = useReactFlow()
+  const { setViewport, fitView } = useReactFlow()
   const abortRef = useRef<AbortController | null>(null)
 
   /** Counts of person and union nodes currently rendered, derived from `nodes`. */
@@ -332,6 +317,12 @@ function FlowCanvas({
     }
     return { personCount, unionCount }
   }, [nodes])
+
+  /** Display name of the current root person, derived from `nodes` and `rootId`. */
+  const rootName = useMemo(() => {
+    const rootNode = nodes.find(n => n.type === 'person' && (n.data as PersonData).gedcomId === rootId)
+    return rootNode ? (rootNode.data as PersonData).name ?? '' : ''
+  }, [nodes, rootId])
 
   /**
    * Opens the person drawer when a person node is clicked.
@@ -435,8 +426,15 @@ function FlowCanvas({
   return (
     <>
       <SearchBar onSelect={onSelectRoot} persons={persons} />
-      <DepthControl hops={hops} onChange={setHops} />
-      <Toolbar personCount={personCount} unionCount={unionCount} />
+      <Toolbar
+        personCount={personCount}
+        unionCount={unionCount}
+        rootName={rootName}
+        hops={hops}
+        onHopsChange={setHops}
+        onFit={fitView}
+        nodes={nodes}
+      />
       {/* Loading/error overlays — ReactFlow stays mounted so its viewport is always initialized */}
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center text-slate-400 z-10 pointer-events-none">

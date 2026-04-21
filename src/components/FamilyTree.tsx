@@ -19,14 +19,11 @@ import PersonNode from '@/components/PersonNode'
 import UnionNode from '@/components/UnionNode'
 import SearchBar from '@/components/SearchBar'
 import { applyDagreLayout } from '@/lib/layout'
-import type { TreeResponse } from '@/types/tree'
+import type { TreeResponse, PersonData } from '@/types/tree'
+import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES } from '@/constants/tree'
 
 const nodeTypes = { person: PersonNode, union: UnionNode }
 
-const EDGE_STYLES: Record<string, React.CSSProperties> = {
-  UNION: { stroke: '#6366f1', strokeWidth: 1.5, opacity: 0.6 },
-  CHILD: { stroke: '#a78bfa', strokeWidth: 1, opacity: 0.45 },
-}
 const defaultEdgeStyle: React.CSSProperties = { stroke: '#6366f1', strokeWidth: 1.5, opacity: 0.5 }
 
 const defaultEdgeOptions = {
@@ -34,14 +31,16 @@ const defaultEdgeOptions = {
   animated: false,
 }
 
+const depthBtnClass = 'w-6 h-6 flex items-center justify-center rounded-lg text-white/80 hover:bg-white/15 hover:text-white transition-colors text-sm font-medium'
+
 function DepthControl({ hops, onChange }: { hops: number; onChange: (hops: number) => void }) {
   return (
     <div className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
       <span className="text-xs text-white/60 select-none">Depth</span>
       <button
         data-testid="hops-decrease"
-        onClick={() => onChange(Math.max(1, hops - 1))}
-        className="w-6 h-6 flex items-center justify-center rounded-lg text-white/80 hover:bg-white/15 hover:text-white transition-colors text-sm font-medium"
+        onClick={() => onChange(Math.max(MIN_HOPS, hops - 1))}
+        className={depthBtnClass}
         aria-label="Decrease depth"
       >
         −
@@ -51,8 +50,8 @@ function DepthControl({ hops, onChange }: { hops: number; onChange: (hops: numbe
       </span>
       <button
         data-testid="hops-increase"
-        onClick={() => onChange(Math.min(16, hops + 1))}
-        className="w-6 h-6 flex items-center justify-center rounded-lg text-white/80 hover:bg-white/15 hover:text-white transition-colors text-sm font-medium"
+        onClick={() => onChange(Math.min(MAX_HOPS, hops + 1))}
+        className={depthBtnClass}
         aria-label="Increase depth"
       >
         +
@@ -67,8 +66,14 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
   const [treeBounds, setTreeBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [hops, setHops] = useState(8)
+  const [hops, setHops] = useState(DEFAULT_HOPS)
   const { setViewport } = useReactFlow()
+
+  const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    if (node.type === 'person') {
+      onSelectRoot((node.data as PersonData).gedcomId)
+    }
+  }, [onSelectRoot])
 
   const fetchTree = useCallback(async () => {
     if (!rootId) return
@@ -83,15 +88,13 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
         id: n.id,
         type: n.type,
         data: n.type === 'person'
-          ? { ...n.data, isRoot: (n.data as import('@/types/tree').PersonData).gedcomId === rootId }
+          ? { ...n.data, isRoot: (n.data as PersonData).gedcomId === rootId }
           : n.data,
         position: n.position,
       }))
 
       const rawEdges: Edge[] = data.edges.map((e) => {
-        // CHILD edges: Neo4j direction is child→union, but union is rendered above.
-        // Swap source/target so React Flow routes top-down (union→person).
-        const isChild = e.label === 'CHILD'
+        const isChild = e.label === EDGE_TYPES.CHILD
         return {
           id: e.id,
           source: isChild ? e.target : e.source,
@@ -124,7 +127,6 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
       const PADDING = 0.15
       const MIN_ZOOM = 0.18
 
-      // Ideal zoom to fit the entire tree
       const idealZoom = Math.min(
         (vw * (1 - 2 * PADDING)) / treeBounds.width,
         (vh * (1 - 2 * PADDING)) / treeBounds.height,
@@ -136,7 +138,7 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
       } else {
         // Tree is wider than viewport at MIN_ZOOM — center on the root person instead
         const rootNode = nodes.find(
-          n => n.type === 'person' && (n.data as import('@/types/tree').PersonData).gedcomId === rootId
+          n => n.type === 'person' && (n.data as PersonData).gedcomId === rootId
         )
         if (rootNode) {
           setViewport({
@@ -171,11 +173,7 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         proOptions={{ hideAttribution: true }}
-        onNodeClick={(_event, node) => {
-          if (node.type === 'person') {
-            onSelectRoot((node.data as import('@/types/tree').PersonData).gedcomId)
-          }
-        }}
+        onNodeClick={handleNodeClick}
       >
         <Background variant={BackgroundVariant.Dots} color="#1e2a4a" gap={28} size={1} />
         <MiniMap
@@ -199,6 +197,7 @@ export default function FamilyTree() {
         const first = persons.find(p => p.name?.trim()) ?? persons[0]
         if (first) setRootId(first.gedcomId)
       })
+      .catch((err) => console.error('Failed to load persons', err))
   }, [])
 
   return (

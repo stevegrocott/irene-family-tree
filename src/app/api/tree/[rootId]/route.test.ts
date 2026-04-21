@@ -238,7 +238,7 @@ describe('GET /api/tree/[rootId]', () => {
       const body = await response.json()
 
       expect(response.status).toBe(400)
-      expect(body).toHaveProperty('error')
+      expect(body).toEqual({ error: 'hops must be a positive integer' })
     })
 
     it('returns 400 when hops is a float', async () => {
@@ -247,7 +247,7 @@ describe('GET /api/tree/[rootId]', () => {
       const body = await response.json()
 
       expect(response.status).toBe(400)
-      expect(body).toHaveProperty('error')
+      expect(body).toEqual({ error: 'hops must be a positive integer' })
     })
 
     it('returns 400 when hops is less than 1', async () => {
@@ -256,7 +256,7 @@ describe('GET /api/tree/[rootId]', () => {
       const body = await response.json()
 
       expect(response.status).toBe(400)
-      expect(body).toHaveProperty('error')
+      expect(body).toEqual({ error: 'hops must be at least 1' })
     })
   })
 })

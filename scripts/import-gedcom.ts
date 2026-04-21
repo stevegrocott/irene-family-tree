@@ -2,8 +2,8 @@
  * GEDCOM Family Tree Importer
  *
  * Imports family tree data from a GEDCOM file into a Neo4j database.
- * Parses individual and family records, creating Person and Family nodes
- * with relationships representing spouse and parent-child connections.
+ * Parses individual and family records, creating Person and Union nodes
+ * with UNION and CHILD relationships representing spouse and parent-child connections.
  *
  * Environment variables required:
  * - NEO4J_URI: URL of Neo4j database instance
@@ -29,29 +29,24 @@ if (fs.existsSync(envPath)) {
 
 /**
  * Represents a node in the parsed GEDCOM structure.
- * The GEDCOM format is hierarchical where records contain nested properties.
  *
  * @interface GedNode
  * @property {string} type - The GEDCOM record type (e.g., 'INDI', 'FAM', 'NAME', 'BIRT')
- * @property {Object} [data] - Optional metadata about the record
- * @property {string} [data.xref_id] - Cross-reference identifier for the record
- * @property {string} [data.pointer] - Reference pointer to another record
+ * @property {string} [xref_id] - Cross-reference identifier, direct property on INDI/FAM records
+ * @property {string} [data] - For pointer records (HUSB/WIFE/CHIL), this IS the pointer string
  * @property {string} [value] - The value associated with this node
  * @property {GedNode[]} children - Child nodes in the GEDCOM hierarchy
  */
 interface GedNode {
   type: string
-  data?: { xref_id?: string; pointer?: string }
+  xref_id?: string
+  data?: string
   value?: string
   children: GedNode[]
 }
 
 /**
  * Finds the first child node with the specified type.
- *
- * @param {GedNode[]} nodes - Array of nodes to search
- * @param {string} type - The GEDCOM type to find
- * @returns {GedNode | undefined} The first matching child node, or undefined if not found
  */
 function findChild(nodes: GedNode[], type: string): GedNode | undefined {
   return nodes.find(n => n.type === type)
@@ -59,11 +54,6 @@ function findChild(nodes: GedNode[], type: string): GedNode | undefined {
 
 /**
  * Extracts the value of a child node with the specified type.
- * Returns an empty string if the node or its value is not found.
- *
- * @param {GedNode[]} nodes - Array of nodes to search
- * @param {string} type - The GEDCOM type to find
- * @returns {string} The node's value, or empty string if not found
  */
 function childValue(nodes: GedNode[], type: string): string {
   return findChild(nodes, type)?.value ?? ''
@@ -71,14 +61,6 @@ function childValue(nodes: GedNode[], type: string): string {
 
 /**
  * Main entry point for the GEDCOM import process.
- *
- * Performs the following steps:
- * 1. Reads and parses the GEDCOM file
- * 2. Connects to Neo4j database
- * 3. Clears existing data and creates unique constraints
- * 4. Imports all individuals as Person nodes with biographical data
- * 5. Imports all families as Family nodes and creates relationship links
- * 6. Reports counts of imported records
  *
  * @async
  * @returns {Promise<void>}
@@ -98,73 +80,95 @@ async function main() {
 
   try {
     await session.run('MATCH (n) DETACH DELETE n')
-    await session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (p:Person) REQUIRE p.id IS UNIQUE')
-    await session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (f:Family) REQUIRE f.id IS UNIQUE')
+    await session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (p:Person) REQUIRE p.gedcomId IS UNIQUE')
+    await session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (u:Union) REQUIRE u.gedcomId IS UNIQUE')
 
-    const individuals = root.children.filter(r => r.type === 'INDI')
-    for (const indi of individuals) {
-      const id = indi.data?.xref_id ?? ''
-      const nameNode = findChild(indi.children, 'NAME')
-      const birthNode = findChild(indi.children, 'BIRT')
-      const deathNode = findChild(indi.children, 'DEAT')
+    // Batch-build person rows
+    const personRows = root.children
+      .filter(r => r.type === 'INDI')
+      .map(indi => {
+        const nameNode = findChild(indi.children, 'NAME')
+        const birthNode = findChild(indi.children, 'BIRT')
+        const deathNode = findChild(indi.children, 'DEAT')
+        const givenName = childValue(nameNode?.children ?? [], 'GIVN')
+        const surname = childValue(nameNode?.children ?? [], 'SURN')
+        return {
+          gedcomId: indi.xref_id ?? '',
+          name: [givenName, surname].filter(Boolean).join(' '),
+          sex: childValue(indi.children, 'SEX'),
+          birthDate: childValue(birthNode?.children ?? [], 'DATE'),
+          birthPlace: childValue(birthNode?.children ?? [], 'PLAC'),
+          deathDate: childValue(deathNode?.children ?? [], 'DATE'),
+          deathPlace: childValue(deathNode?.children ?? [], 'PLAC'),
+        }
+      })
 
-      const givenName = childValue(nameNode?.children ?? [], 'GIVN')
-      const surname = childValue(nameNode?.children ?? [], 'SURN')
-      const sex = childValue(indi.children, 'SEX')
-      const birthDate = childValue(birthNode?.children ?? [], 'DATE')
-      const birthPlace = childValue(birthNode?.children ?? [], 'PLAC')
-      const deathDate = childValue(deathNode?.children ?? [], 'DATE')
-      const deathPlace = childValue(deathNode?.children ?? [], 'PLAC')
+    await session.executeWrite(tx =>
+      tx.run(
+        `UNWIND $rows AS row
+         MERGE (p:Person {gedcomId: row.gedcomId})
+         SET p.name = row.name,
+             p.sex = row.sex,
+             p.birthDate = row.birthDate,
+             p.birthPlace = row.birthPlace,
+             p.deathDate = row.deathDate,
+             p.deathPlace = row.deathPlace`,
+        { rows: personRows }
+      )
+    )
 
-      await session.run(
-        `MERGE (p:Person {id: $id})
-         SET p.givenName = $givenName,
-             p.surname = $surname,
-             p.sex = $sex,
-             p.birthDate = $birthDate,
-             p.birthPlace = $birthPlace,
-             p.deathDate = $deathDate,
-             p.deathPlace = $deathPlace`,
-        { id, givenName, surname, sex, birthDate, birthPlace, deathDate, deathPlace }
+    // Batch-build union rows and relationship rows
+    const families = root.children.filter(r => r.type === 'FAM')
+    const unionRows = families.map(fam => ({ gedcomId: fam.xref_id ?? '' }))
+
+    const spouseRows: { pid: string; uid: string }[] = []
+    const childRows: { pid: string; uid: string }[] = []
+
+    for (const fam of families) {
+      const uid = fam.xref_id ?? ''
+      const husb = findChild(fam.children, 'HUSB')?.data
+      const wife = findChild(fam.children, 'WIFE')?.data
+      if (husb) spouseRows.push({ pid: husb, uid })
+      if (wife) spouseRows.push({ pid: wife, uid })
+      for (const chil of fam.children.filter(n => n.type === 'CHIL')) {
+        if (chil.data) childRows.push({ pid: chil.data, uid })
+      }
+    }
+
+    await session.executeWrite(tx =>
+      tx.run(
+        'UNWIND $rows AS row MERGE (u:Union {gedcomId: row.gedcomId})',
+        { rows: unionRows }
+      )
+    )
+
+    if (spouseRows.length > 0) {
+      await session.executeWrite(tx =>
+        tx.run(
+          `UNWIND $rows AS row
+           MATCH (p:Person {gedcomId: row.pid}), (u:Union {gedcomId: row.uid})
+           MERGE (p)-[:UNION]->(u)`,
+          { rows: spouseRows }
+        )
       )
     }
 
-    const families = root.children.filter(r => r.type === 'FAM')
-    for (const fam of families) {
-      const famId = fam.data?.xref_id ?? ''
-      await session.run('MERGE (f:Family {id: $id})', { id: famId })
-
-      const husb = findChild(fam.children, 'HUSB')?.data?.pointer
-      const wife = findChild(fam.children, 'WIFE')?.data?.pointer
-      const children = fam.children.filter(n => n.type === 'CHIL').map(n => n.data?.pointer ?? '')
-
-      if (husb) {
-        await session.run(
-          'MATCH (p:Person {id: $pid}), (f:Family {id: $fid}) MERGE (p)-[:SPOUSE_IN]->(f)',
-          { pid: husb, fid: famId }
+    if (childRows.length > 0) {
+      await session.executeWrite(tx =>
+        tx.run(
+          `UNWIND $rows AS row
+           MATCH (p:Person {gedcomId: row.pid}), (u:Union {gedcomId: row.uid})
+           MERGE (p)-[:CHILD]->(u)`,
+          { rows: childRows }
         )
-      }
-      if (wife) {
-        await session.run(
-          'MATCH (p:Person {id: $pid}), (f:Family {id: $fid}) MERGE (p)-[:SPOUSE_IN]->(f)',
-          { pid: wife, fid: famId }
-        )
-      }
-      for (const child of children) {
-        if (child) {
-          await session.run(
-            'MATCH (p:Person {id: $pid}), (f:Family {id: $fid}) MERGE (p)-[:CHILD_OF]->(f)',
-            { pid: child, fid: famId }
-          )
-        }
-      }
+      )
     }
 
     const personResult = await session.run('MATCH (p:Person) RETURN count(p) AS n')
-    const famResult = await session.run('MATCH (f:Family) RETURN count(f) AS n')
+    const unionResult = await session.run('MATCH (u:Union) RETURN count(u) AS n')
     const personCount = personResult.records[0].get('n')
-    const famCount = famResult.records[0].get('n')
-    console.log(`Imported ${personCount} people and ${famCount} families`)
+    const unionCount = unionResult.records[0].get('n')
+    console.log(`Imported ${personCount} people and ${unionCount} unions`)
   } finally {
     await session.close()
     await driver.close()

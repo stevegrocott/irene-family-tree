@@ -76,14 +76,10 @@ export async function GET(
 
   if (hopsParam === null) {
     hops = DEFAULT_HOPS
-  } else if (!/^\d+$/.test(hopsParam)) {
-    return Response.json({ error: 'hops must be a positive integer' }, { status: 400 })
+  } else if (!/^\d+$/.test(hopsParam) || parseInt(hopsParam, 10) < MIN_HOPS) {
+    hops = DEFAULT_HOPS
   } else {
-    hops = parseInt(hopsParam, 10)
-    if (hops < MIN_HOPS) {
-      return Response.json({ error: 'hops must be at least 1' }, { status: 400 })
-    }
-    hops = Math.min(hops, MAX_HOPS)
+    hops = Math.min(parseInt(hopsParam, 10), MAX_HOPS)
   }
 
   let rows: { nodes: Neo4jNode[]; rels: Neo4jRel[] }[]

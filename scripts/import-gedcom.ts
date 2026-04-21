@@ -56,15 +56,10 @@ if (fs.existsSync(envPath)) {
  * @property {string} [value] - The value associated with this node
  * @property {GedNode[]} children - Child nodes in the GEDCOM hierarchy
  */
-interface GedNodeData {
-  formal_name?: string
-  xref_id?: string
-  pointer?: string
-}
-
 interface GedNode {
   type: string
-  data?: GedNodeData
+  xref_id?: string
+  data?: string
   value?: string
   children: GedNode[]
 }
@@ -119,7 +114,7 @@ async function main() {
     // Batch-build person rows
     const personRows: { gedcomId: string; name: string; sex: string; birthYear: string | null; deathYear: string | null }[] = []
     for (const indi of root.children.filter(r => r.type === GEDCOM_TYPES.INDIVIDUAL)) {
-      if (!indi.data?.xref_id) {
+      if (!indi.xref_id) {
         console.warn('Skipping INDI record without xref_id')
         continue
       }
@@ -129,7 +124,7 @@ async function main() {
       const givenName = childValue(nameNode?.children ?? [], GEDCOM_TYPES.GIVEN_NAME)
       const surname = childValue(nameNode?.children ?? [], GEDCOM_TYPES.SURNAME)
       personRows.push({
-        gedcomId: indi.data.xref_id,
+        gedcomId: indi.xref_id,
         name: [givenName, surname].filter(Boolean).join(' '),
         sex: childValue(indi.children, GEDCOM_TYPES.SEX),
         birthYear: childValue(birthNode?.children ?? [], GEDCOM_TYPES.DATE).match(/\d{4}/)?.[0] ?? null,
@@ -156,18 +151,18 @@ async function main() {
     const childRows: { pid: string; uid: string }[] = []
 
     for (const fam of families) {
-      if (!fam.data?.xref_id) {
+      if (!fam.xref_id) {
         console.warn('Skipping FAM record without xref_id')
         continue
       }
-      const uid = fam.data.xref_id
+      const uid = fam.xref_id
       unionRows.push({ gedcomId: uid })
-      const husb = findChild(fam.children, GEDCOM_TYPES.HUSBAND)?.data?.pointer
-      const wife = findChild(fam.children, GEDCOM_TYPES.WIFE)?.data?.pointer
+      const husb = findChild(fam.children, GEDCOM_TYPES.HUSBAND)?.data
+      const wife = findChild(fam.children, GEDCOM_TYPES.WIFE)?.data
       if (husb) spouseRows.push({ pid: husb, uid })
       if (wife) spouseRows.push({ pid: wife, uid })
       for (const chil of fam.children.filter(n => n.type === GEDCOM_TYPES.CHILD)) {
-        if (chil.data?.pointer) childRows.push({ pid: chil.data.pointer, uid })
+        if (chil.data) childRows.push({ pid: chil.data, uid })
       }
     }
 

@@ -232,31 +232,40 @@ describe('GET /api/tree/[rootId]', () => {
       )
     })
 
-    it('returns 400 when hops is not a valid integer string', async () => {
+    it('falls back to default hops of 8 when hops is not a valid integer string', async () => {
+      mockRead.mockResolvedValue([{ nodes: [], rels: [] }])
+
       const request = new Request('http://localhost/api/tree/I001?hops=abc')
-      const response = await GET(request, makeParams('I001'))
-      const body = await response.json()
+      await GET(request, makeParams('I001'))
 
-      expect(response.status).toBe(400)
-      expect(body).toEqual({ error: 'hops must be a positive integer' })
+      expect(mockRead).toHaveBeenCalledWith(
+        expect.stringContaining('*1..8'),
+        expect.any(Object)
+      )
     })
 
-    it('returns 400 when hops is a float', async () => {
+    it('falls back to default hops of 8 when hops is a float', async () => {
+      mockRead.mockResolvedValue([{ nodes: [], rels: [] }])
+
       const request = new Request('http://localhost/api/tree/I001?hops=2.5')
-      const response = await GET(request, makeParams('I001'))
-      const body = await response.json()
+      await GET(request, makeParams('I001'))
 
-      expect(response.status).toBe(400)
-      expect(body).toEqual({ error: 'hops must be a positive integer' })
+      expect(mockRead).toHaveBeenCalledWith(
+        expect.stringContaining('*1..8'),
+        expect.any(Object)
+      )
     })
 
-    it('returns 400 when hops is less than 1', async () => {
-      const request = new Request('http://localhost/api/tree/I001?hops=0')
-      const response = await GET(request, makeParams('I001'))
-      const body = await response.json()
+    it('falls back to default hops of 8 when hops is less than 1', async () => {
+      mockRead.mockResolvedValue([{ nodes: [], rels: [] }])
 
-      expect(response.status).toBe(400)
-      expect(body).toEqual({ error: 'hops must be at least 1' })
+      const request = new Request('http://localhost/api/tree/I001?hops=0')
+      await GET(request, makeParams('I001'))
+
+      expect(mockRead).toHaveBeenCalledWith(
+        expect.stringContaining('*1..8'),
+        expect.any(Object)
+      )
     })
   })
 })

@@ -35,7 +35,7 @@ import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT
  * @property gedcomId - GEDCOM identifier of the person
  * @property name - Display name of the person
  */
-interface Person { gedcomId: string; name: string }
+interface Person { gedcomId: string; name: string; sex: string | null; birthYear: string | null; birthPlace: string | null }
 
 /** Map of custom node types for ReactFlow visualization. */
 const nodeTypes = { person: PersonNode, union: UnionNode }

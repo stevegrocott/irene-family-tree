@@ -9,7 +9,7 @@
 import { useState, useEffect } from 'react'
 
 /** Minimal person record used for search filtering. */
-interface Person { gedcomId: string; name: string }
+interface Person { gedcomId: string; name: string; sex: string | null; birthYear: string | null; birthPlace: string | null }
 
 /**
  * Props for the {@link SearchBar} component.
@@ -44,8 +44,13 @@ export default function SearchBar({ onSelect, persons: personsProp }: Props) {
 
   const persons = personsProp ?? fetchedPersons
 
+  const lowerQuery = query.toLowerCase()
   const results = query.length > 1
-    ? persons.filter(p => p.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
+    ? persons.filter(p =>
+        p.name.toLowerCase().includes(lowerQuery) ||
+        (p.birthPlace?.toLowerCase() ?? '').includes(lowerQuery) ||
+        (p.birthYear?.toLowerCase() ?? '').includes(lowerQuery)
+      ).slice(0, 8)
     : []
 
   return (
@@ -53,18 +58,33 @@ export default function SearchBar({ onSelect, persons: personsProp }: Props) {
       <input
         value={query}
         onChange={e => setQuery(e.target.value)}
-        placeholder="Search family…"
+        placeholder="Search by name, place or year…"
+        data-testid="search-input"
         className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-indigo-400/60 focus:bg-white/15 transition-all"
       />
       {results.length > 0 && (
-        <ul className="search-results mt-2 space-y-0.5 max-h-48 overflow-y-auto">
+        <ul data-testid="search-results" className="search-results mt-2 space-y-0.5 max-h-48 overflow-y-auto">
           {results.map(p => (
             <li
               key={p.gedcomId}
+              data-testid="search-result-item"
               onClick={() => { onSelect(p.gedcomId); setQuery('') }}
               className="px-3 py-2 rounded-lg text-sm text-white/80 cursor-pointer hover:bg-white/15 hover:text-white transition-colors"
             >
-              {p.name}
+              <span
+                className={`sex-dot w-2 h-2 rounded-full inline-block mr-1.5 ${
+                  p.sex === 'F' ? 'bg-pink-400' :
+                  p.sex === 'M' ? 'bg-blue-400' :
+                  'bg-slate-400'
+                }`}
+              />
+              <span className="font-medium">{p.name}</span>
+              {p.birthYear && (
+                <span className="text-white/50 text-xs ml-1.5">{p.birthYear}</span>
+              )}
+              {p.birthPlace && (
+                <span className="text-white/40 text-xs ml-1.5">{p.birthPlace.slice(0, 20)}</span>
+              )}
             </li>
           ))}
         </ul>

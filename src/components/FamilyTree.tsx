@@ -492,10 +492,19 @@ function FlowCanvas({
  * Root component for the interactive family tree visualization.
  * Fetches available people and renders the tree canvas with search and navigation.
  */
+const TREE_ROOT_STORAGE_KEY = 'family-tree-root-id'
+
 export default function FamilyTree() {
   const [rootId, setRootId] = useState('')
   const [persons, setPersons] = useState<Person[]>([])
   const [personsError, setPersonsError] = useState<string | null>(null)
+
+  const handleSelectRoot = (id: string) => {
+    setRootId(id)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(TREE_ROOT_STORAGE_KEY, id)
+    }
+  }
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -506,7 +515,9 @@ export default function FamilyTree() {
       })
       .then((data: Person[]) => {
         setPersons(data)
-        const defaultPerson = data.find(p => p.gedcomId === DEFAULT_ROOT_GEDCOM_ID) ?? data.find(p => p.name?.trim()) ?? data[0]
+        const storedId = typeof window !== 'undefined' ? localStorage.getItem(TREE_ROOT_STORAGE_KEY) : null
+        const storedPerson = storedId ? data.find(p => p.gedcomId === storedId) : null
+        const defaultPerson = storedPerson ?? data.find(p => p.gedcomId === DEFAULT_ROOT_GEDCOM_ID) ?? data.find(p => p.name?.trim()) ?? data[0]
         if (defaultPerson) setRootId(defaultPerson.gedcomId)
       })
       .catch((err) => {
@@ -530,7 +541,7 @@ export default function FamilyTree() {
   return (
     <div className="relative w-screen h-screen bg-[#050a18]">
       <ReactFlowProvider>
-        <FlowCanvas rootId={rootId} onSelectRoot={setRootId} persons={persons} />
+        <FlowCanvas rootId={rootId} onSelectRoot={handleSelectRoot} persons={persons} />
       </ReactFlowProvider>
     </div>
   )

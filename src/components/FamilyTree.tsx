@@ -58,13 +58,18 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
         position: n.position,
       }))
 
-      const rawEdges: Edge[] = data.edges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        style: EDGE_STYLES[e.label] ?? defaultEdgeStyle,
-        data: { relType: e.label },
-      }))
+      const rawEdges: Edge[] = data.edges.map((e) => {
+        // CHILD edges: Neo4j direction is child→union, but union is rendered above.
+        // Swap source/target so React Flow routes top-down (union→person).
+        const isChild = e.label === 'CHILD'
+        return {
+          id: e.id,
+          source: isChild ? e.target : e.source,
+          target: isChild ? e.source : e.target,
+          style: EDGE_STYLES[e.label] ?? defaultEdgeStyle,
+          data: { relType: e.label },
+        }
+      })
 
       const laid = applyDagreLayout(rawNodes, rawEdges)
       setNodes(laid.nodes)
@@ -82,7 +87,9 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
 
   useEffect(() => {
     if (nodes.length > 0) {
-      fitView()
+      // Defer so React Flow has time to measure rendered node positions before fitting.
+      const id = setTimeout(() => fitView({ padding: 0.15 }), 50)
+      return () => clearTimeout(id)
     }
   }, [nodes, fitView])
 

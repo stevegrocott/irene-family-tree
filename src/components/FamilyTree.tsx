@@ -28,7 +28,7 @@ import SearchBar from '@/components/SearchBar'
 import { applyDagreLayout } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
 import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
-import { DEFAULT_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID } from '@/constants/tree'
 
 /**
  * Minimal person summary used for the search bar and root selection.
@@ -49,50 +49,44 @@ const defaultEdgeOptions = {
   animated: false,
 }
 
-/**
- * Displays count of people and families currently visible in the tree,
- * along with depth controls and a fit-view button.
- * Hidden when no people are displayed.
- *
- * @param {number} personCount - Number of person nodes displayed
- * @param {number} unionCount - Number of union (family) nodes displayed
- * @param {string} rootName - Display name of the current root person
- * @param {number} hops - Current depth value between MIN_HOPS and MAX_HOPS
- * @param {Function} onHopsChange - Callback fired when user adjusts the depth
- * @param {Function} onFit - Callback fired when user clicks fit-view
- * @param {Node[]} nodes - All current ReactFlow nodes
- */
-function Toolbar({
-  personCount,
-  unionCount,
-  rootName: _rootName,
-  hops: _hops,
-  onHopsChange: _onHopsChange,
-  onFit: _onFit,
-  nodes: _nodes,
+export function Toolbar({
+  nodes,
+  rootName,
+  hops,
+  onHopsChange,
 }: {
-  personCount: number
-  unionCount: number
+  nodes: Node[]
   rootName: string
   hops: number
   onHopsChange: (hops: number) => void
-  onFit: () => void
-  nodes: Node[]
 }) {
+  const ancestors = nodes.filter(n => n.type === 'person' && typeof (n.data as PersonData).generation === 'number' && (n.data as PersonData).generation < 0).length
+  const descendants = nodes.filter(n => n.type === 'person' && typeof (n.data as PersonData).generation === 'number' && (n.data as PersonData).generation > 0).length
+  const personCount = nodes.filter(n => n.type === 'person').length
   if (personCount === 0) return null
   return (
     <div
       data-testid="toolbar"
       className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
     >
-      <span className="text-xs text-white/60 select-none">
-        <span className="text-white font-medium">{personCount}</span> people
+      <span data-testid="toolbar-ancestors" className="text-xs text-white/60 select-none">
+        <span className="text-white font-medium">{ancestors}</span> ancestors
       </span>
-      {unionCount > 0 && (
-        <span className="text-xs text-white/60 select-none">
-          <span className="text-white font-medium">{unionCount}</span> families
-        </span>
-      )}
+      <span data-testid="toolbar-descendants" className="text-xs text-white/60 select-none">
+        <span className="text-white font-medium">{descendants}</span> descendants
+      </span>
+      <span data-testid="toolbar-viewing" className="text-xs text-white/60 select-none">
+        Viewing <span className="text-white font-medium">{rootName}</span>
+      </span>
+      <input
+        type="range"
+        min={MIN_HOPS}
+        max={MAX_HOPS}
+        value={hops}
+        onChange={e => onHopsChange(Number(e.target.value))}
+        className="w-24"
+        aria-label="Depth"
+      />
     </div>
   )
 }
@@ -308,16 +302,6 @@ function FlowCanvas({
   const { setViewport, fitView } = useReactFlow()
   const abortRef = useRef<AbortController | null>(null)
 
-  /** Counts of person and union nodes currently rendered, derived from `nodes`. */
-  const { personCount, unionCount } = useMemo(() => {
-    let personCount = 0, unionCount = 0
-    for (const n of nodes) {
-      if (n.type === 'person') personCount++
-      else if (n.type === 'union') unionCount++
-    }
-    return { personCount, unionCount }
-  }, [nodes])
-
   /** Display name of the current root person, derived from `nodes` and `rootId`. */
   const rootName = useMemo(() => {
     const rootNode = nodes.find(n => n.type === 'person' && (n.data as PersonData).gedcomId === rootId)
@@ -427,13 +411,10 @@ function FlowCanvas({
     <>
       <SearchBar onSelect={onSelectRoot} persons={persons} />
       <Toolbar
-        personCount={personCount}
-        unionCount={unionCount}
+        nodes={nodes}
         rootName={rootName}
         hops={hops}
         onHopsChange={setHops}
-        onFit={fitView}
-        nodes={nodes}
       />
       {/* Loading/error overlays — ReactFlow stays mounted so its viewport is always initialized */}
       {loading && (

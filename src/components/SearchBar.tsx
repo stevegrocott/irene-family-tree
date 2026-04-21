@@ -33,7 +33,13 @@ export default function SearchBar({ onSelect, persons: personsProp }: Props) {
 
   useEffect(() => {
     if (personsProp) return
-    fetch('/api/persons').then(r => r.json()).then(setFetchedPersons)
+    fetch('/api/persons')
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then(setFetchedPersons)
+      .catch(err => { console.error('Failed to load persons for search', err) })
   }, [personsProp])
 
   const persons = personsProp ?? fetchedPersons

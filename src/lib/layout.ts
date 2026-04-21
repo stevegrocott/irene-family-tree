@@ -11,7 +11,7 @@ import { Node, Edge } from 'reactflow'
  *
  * Automatically calculates positions for all nodes in the family tree using a top-to-bottom
  * hierarchical layout algorithm. Person nodes are sized at 160x68, while union nodes are 12x12.
- * The layout respects rank separation (100) and node separation (60) for clear visual hierarchy.
+ * The layout respects rank separation (80) and node separation (40) for clear visual hierarchy.
  *
  * @param {Node[]} nodes - The React Flow nodes to position
  * @param {Edge[]} edges - The React Flow edges defining the graph structure
@@ -20,7 +20,7 @@ import { Node, Edge } from 'reactflow'
 export function applyDagreLayout(nodes: Node[], edges: Edge[]) {
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: 'TB', ranksep: 100, nodesep: 60 })
+  g.setGraph({ rankdir: 'TB', ranksep: 70, nodesep: 25 })
 
   nodes.forEach(n => {
     const w = n.type === 'union' ? 12 : 160
@@ -30,13 +30,24 @@ export function applyDagreLayout(nodes: Node[], edges: Edge[]) {
   edges.forEach(e => g.setEdge(e.source, e.target))
   dagre.layout(g)
 
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+
+  const positionedNodes = nodes.map(n => {
+    const { x, y } = g.node(n.id)
+    const w = n.type === 'union' ? 12 : 160
+    const h = n.type === 'union' ? 12 : 68
+    const px = x - w / 2
+    const py = y - h / 2
+    if (px < minX) minX = px
+    if (py < minY) minY = py
+    if (px + w > maxX) maxX = px + w
+    if (py + h > maxY) maxY = py + h
+    return { ...n, position: { x: px, y: py } }
+  })
+
   return {
-    nodes: nodes.map(n => {
-      const { x, y } = g.node(n.id)
-      const w = n.type === 'union' ? 12 : 160
-      const h = n.type === 'union' ? 12 : 68
-      return { ...n, position: { x: x - w / 2, y: y - h / 2 } }
-    }),
+    nodes: positionedNodes,
     edges,
+    bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
   }
 }

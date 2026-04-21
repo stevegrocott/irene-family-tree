@@ -22,6 +22,8 @@ import { applyDagreLayout } from '@/lib/layout'
 import type { TreeResponse, PersonData } from '@/types/tree'
 import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES } from '@/constants/tree'
 
+interface Person { gedcomId: string; name: string }
+
 const nodeTypes = { person: PersonNode, union: UnionNode }
 
 const defaultEdgeStyle: React.CSSProperties = { stroke: '#6366f1', strokeWidth: 1.5, opacity: 0.5 }
@@ -35,15 +37,6 @@ const depthBtnClass = 'w-6 h-6 flex items-center justify-center rounded-lg text-
 
 /**
  * DepthControl overlay component for adjusting graph traversal depth.
- *
- * Displays a control panel in the top-right corner with increment/decrement buttons
- * to adjust the number of relationship hops displayed in the family tree visualization.
- *
- * @component
- * @param {Object} props - Component props
- * @param {number} props.hops - Current hop depth value
- * @param {(hops: number) => void} props.onChange - Callback fired when user adjusts depth
- * @returns {React.ReactElement} Overlay control panel
  */
 function DepthControl({ hops, onChange }: { hops: number; onChange: (hops: number) => void }) {
   return (
@@ -73,46 +66,126 @@ function DepthControl({ hops, onChange }: { hops: number; onChange: (hops: numbe
 }
 
 /**
- * FlowCanvas component renders a React Flow visualization of the family tree.
- *
- * Manages fetching tree data from the API based on the selected root person,
- * applies Dagre layout for hierarchical positioning, and handles viewport
- * auto-centering. Supports adjustable traversal depth via the DepthControl overlay.
- *
- * @component
- * @param {Object} props - Component props
- * @param {string} props.rootId - GEDCOM ID of the focal person
- * @param {(id: string) => void} props.onSelectRoot - Callback when a new person is selected
- * @returns {React.ReactElement} React Flow canvas with tree visualization
+ * Toolbar overlay showing stats derived from currently laid-out nodes.
  */
-function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (id: string) => void }) {
+function Toolbar({ personCount, unionCount }: { personCount: number; unionCount: number }) {
+  if (personCount === 0) return null
+  return (
+    <div
+      data-testid="toolbar"
+      className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+    >
+      <span className="text-xs text-white/60 select-none">
+        <span className="text-white font-medium">{personCount}</span> people
+      </span>
+      {unionCount > 0 && (
+        <span className="text-xs text-white/60 select-none">
+          <span className="text-white font-medium">{unionCount}</span> families
+        </span>
+      )}
+    </div>
+  )
+}
+
+/**
+ * PersonDrawer side panel shown when a node is clicked.
+ * Displays the selected person's details and provides a re-root action.
+ */
+function PersonDrawer({
+  person,
+  onClose,
+  onReroot,
+}: {
+  person: PersonData
+  onClose: () => void
+  onReroot: (id: string) => void
+}) {
+  const dates = [
+    person.birthYear ? `b. ${person.birthYear}` : null,
+    person.deathYear ? `d. ${person.deathYear}` : null,
+  ]
+    .filter(Boolean)
+    .join('  ·  ')
+
+  return (
+    <div
+      data-testid="person-drawer"
+      className="absolute top-0 right-0 h-full w-72 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+        <h2 className="text-white font-semibold text-base truncate flex-1 mr-2">
+          {person.name || <span className="text-slate-500 italic">Unknown</span>}
+        </h2>
+        <button
+          data-testid="person-drawer-close"
+          onClick={onClose}
+          aria-label="Close panel"
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors text-lg leading-none"
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 px-5 py-4 space-y-3">
+        {dates && (
+          <p className="text-slate-400 text-sm">{dates}</p>
+        )}
+        <p className="text-slate-500 text-xs font-mono">{person.gedcomId}</p>
+      </div>
+
+      {/* Footer – re-root action */}
+      <div className="px-5 py-4 border-t border-white/10">
+        <button
+          data-testid="person-drawer-reroot"
+          onClick={() => { onReroot(person.gedcomId); onClose() }}
+          className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+        >
+          Re-root tree here
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * FlowCanvas component renders a React Flow visualization of the family tree.
+ */
+function FlowCanvas({
+  rootId,
+  onSelectRoot,
+  persons,
+}: {
+  rootId: string
+  onSelectRoot: (id: string) => void
+  persons: Person[]
+}) {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [treeBounds, setTreeBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hops, setHops] = useState(DEFAULT_HOPS)
+  const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(null)
   const { setViewport } = useReactFlow()
   const abortRef = useRef<AbortController | null>(null)
 
+  // Derive stats from the laid-out nodes
+  const personCount = nodes.filter(n => n.type === 'person').length
+  const unionCount  = nodes.filter(n => n.type === 'union').length
+
   /**
-   * Handles person node selection by updating the root person.
-   *
-   * @param {React.MouseEvent} _event - React mouse event (unused)
-   * @param {Node} node - Clicked React Flow node
+   * Opens the PersonDrawer for the clicked person node.
    */
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     if (node.type === 'person') {
-      onSelectRoot((node.data as PersonData).gedcomId)
+      setSelectedPerson(node.data as PersonData)
     }
-  }, [onSelectRoot])
+  }, [])
 
   /**
    * Fetches tree data from the API and updates graph visualization.
-   * Aborts previous requests if a new fetch is initiated.
-   *
-   * @async
-   * @returns {Promise<void>}
    */
   const fetchTree = useCallback(async () => {
     if (!rootId) return
@@ -175,10 +248,8 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
       )
 
       if (idealZoom >= MIN_ZOOM) {
-        // Tree fits at a readable zoom — center the full tree
         setViewport(getViewportForBounds(treeBounds, vw, vh, MIN_ZOOM, 2, PADDING), { duration: 300 })
       } else {
-        // Tree is wider than viewport at MIN_ZOOM — center on the root person instead
         const rootNode = nodes.find(
           n => n.type === 'person' && (n.data as PersonData).gedcomId === rootId
         )
@@ -196,8 +267,9 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
 
   return (
     <>
-      <SearchBar onSelect={onSelectRoot} />
+      <SearchBar onSelect={onSelectRoot} persons={persons} />
       <DepthControl hops={hops} onChange={setHops} />
+      <Toolbar personCount={personCount} unionCount={unionCount} />
       {/* Loading/error overlays — ReactFlow stays mounted so its viewport is always initialized */}
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center text-slate-400 z-10 pointer-events-none">
@@ -225,6 +297,13 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
         />
         <Controls />
       </ReactFlow>
+      {selectedPerson && (
+        <PersonDrawer
+          person={selectedPerson}
+          onClose={() => setSelectedPerson(null)}
+          onReroot={(id) => { onSelectRoot(id); setSelectedPerson(null) }}
+        />
+      )}
     </>
   )
 }
@@ -232,24 +311,27 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
 /**
  * FamilyTree page component.
  *
- * Main entry point for the family tree visualization. Initializes the root person
- * on mount by fetching the first available person from the persons API, then
- * renders the React Flow canvas wrapped in a provider.
+ * Main entry point for the family tree visualization. Fetches the persons list
+ * once and passes it to child components (SearchBar) to avoid redundant requests.
+ * Initializes the root person on mount from the fetched list.
  *
  * @component
  * @returns {React.ReactElement} Full-screen family tree visualization
  */
 export default function FamilyTree() {
   const [rootId, setRootId] = useState('')
+  const [persons, setPersons] = useState<Person[]>([])
 
   /**
-   * Load the first available person on mount to use as the initial root.
+   * Fetch the full persons list once. Use it to seed the initial root and
+   * share with SearchBar so it doesn't make a duplicate request.
    */
   useEffect(() => {
     fetch('/api/persons')
       .then(r => r.json())
-      .then((persons: Array<{ gedcomId: string; name: string }>) => {
-        const first = persons.find(p => p.name?.trim()) ?? persons[0]
+      .then((data: Person[]) => {
+        setPersons(data)
+        const first = data.find(p => p.name?.trim()) ?? data[0]
         if (first) setRootId(first.gedcomId)
       })
       .catch((err) => console.error('Failed to load persons', err))
@@ -258,7 +340,7 @@ export default function FamilyTree() {
   return (
     <div className="relative w-screen h-screen bg-[#050a18]">
       <ReactFlowProvider>
-        <FlowCanvas rootId={rootId} onSelectRoot={setRootId} />
+        <FlowCanvas rootId={rootId} onSelectRoot={setRootId} persons={persons} />
       </ReactFlowProvider>
     </div>
   )

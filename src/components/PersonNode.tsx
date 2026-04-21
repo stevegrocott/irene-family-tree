@@ -10,6 +10,9 @@ const SEX_GLOW: Record<string, string> = {
 
 export default function PersonNode({ data }: NodeProps<PersonData>) {
   const glow = SEX_GLOW[data.sex] ?? 'shadow-[0_0_20px_rgba(148,163,184,0.3)]'
+  const rootRing = data.isRoot
+    ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-transparent shadow-[0_0_28px_rgba(251,191,36,0.6)]'
+    : ''
 
   const dates = [
     data.birthYear ? `b. ${data.birthYear}` : null,
@@ -20,7 +23,7 @@ export default function PersonNode({ data }: NodeProps<PersonData>) {
 
   return (
     <div
-      className={`bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-4 py-3 min-w-[160px] ${glow} hover:bg-white/15 hover:scale-[1.03] transition-all duration-200`}
+      className={`bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-4 py-3 min-w-[160px] ${glow} ${rootRing} hover:bg-white/15 hover:scale-[1.03] transition-all duration-200`}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <div className="font-semibold text-white text-sm tracking-wide">{data.name}</div>

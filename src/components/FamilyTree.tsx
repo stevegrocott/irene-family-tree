@@ -46,7 +46,9 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
       const rawNodes: Node[] = data.nodes.map((n) => ({
         id: n.id,
         type: n.type,
-        data: n.data,
+        data: n.type === 'person'
+          ? { ...n.data, isRoot: (n.data as import('@/types/tree').PersonData).gedcomId === rootId }
+          : n.data,
         position: n.position,
       }))
 

@@ -258,7 +258,7 @@ function FlowCanvas({
         }
       })
 
-      const laid = applyDagreLayout(rawNodes, rawEdges)
+      const laid = applyDagreLayout(rawNodes, rawEdges, { rootId })
       setNodes(laid.nodes)
       setEdges(laid.edges)
       setTreeBounds(laid.bounds)

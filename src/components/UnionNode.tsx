@@ -1,24 +1,32 @@
-/**
- * @fileoverview UnionNode component for React Flow.
- * Renders a small connector node representing a relationship/union between two people in the family tree.
- */
-
 'use client'
-import { Handle, Position } from 'reactflow'
 
-/**
- * UnionNode component for React Flow
- *
- * Displays a small circular connector node that represents a union/relationship between two people.
- * This is a minimal visual element used to connect parent nodes to their children.
- * Handles are hidden (opacity: 0) to keep the visual clean while maintaining connections internally.
- *
- * @returns {React.ReactNode} A small circular div styled as a connection point with hidden handles
- */
-export default function UnionNode() {
+import { Handle, Position, type NodeProps } from 'reactflow'
+import type { UnionData } from '@/types/tree'
+
+export default function UnionNode({ data }: NodeProps<UnionData>) {
+  const year = data.marriageYear
+  const place = data.marriagePlace
+  const hasInfo = year || place
+  const title = hasInfo
+    ? `Married ${year ?? ''}${year && place ? ' · ' : ''}${place ?? ''}`
+    : 'Union'
+
   return (
-    <div className="w-3 h-3 rounded-full bg-white/25 border border-white/40 shadow-[0_0_10px_rgba(255,255,255,0.5)]">
+    <div
+      title={title}
+      className="relative flex items-center justify-center group"
+      style={{ width: 14, height: 14 }}
+    >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
+      <div
+        className="h-2 w-2 rounded-full bg-amber-300/70 group-hover:bg-amber-200 transition-colors"
+        style={{ boxShadow: '0 0 8px rgba(252, 211, 77, 0.45)' }}
+      />
+      {year && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] text-amber-200/70 whitespace-nowrap tabular-nums opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          ♥ {year}
+        </div>
+      )}
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>
   )

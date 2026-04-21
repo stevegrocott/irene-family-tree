@@ -3,20 +3,37 @@ import { FlowNode, FlowEdge, TreeResponse, PersonData, UnionData } from '@/types
 
 export const runtime = 'nodejs'
 
-const RELATIONSHIP_FILTER = 'UNION>|CHILD>'
-const MAX_TREE_DEPTH = 8
+const RELATIONSHIP_FILTER = 'UNION|CHILD'
+const DEFAULT_MAX_LEVEL = 8
 const MAX_NODES = 500
 const UNION_LABEL = 'Union'
 
-interface Neo4jNode {
+interface Neo4jPersonNode {
   _id: string
   _labels: string[]
-  name?: string
-  sex?: string
-  birthYear?: string | null
-  deathYear?: string | null
   gedcomId: string
+  name?: string
+  givenName?: string
+  surname?: string
+  sex?: string
+  birthDate?: string | null
+  birthYear?: string | null
+  birthPlace?: string | null
+  deathDate?: string | null
+  deathYear?: string | null
+  deathPlace?: string | null
+  occupation?: string | null
+  notes?: string | null
 }
+interface Neo4jUnionNode {
+  _id: string
+  _labels: string[]
+  gedcomId: string
+  marriageDate?: string | null
+  marriageYear?: string | null
+  marriagePlace?: string | null
+}
+type Neo4jNode = Neo4jPersonNode | Neo4jUnionNode
 
 interface Neo4jRel {
   _id: string
@@ -26,10 +43,15 @@ interface Neo4jRel {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ rootId: string }> }
 ) {
   const { rootId } = await params
+  const url = new URL(request.url)
+  const maxLevel = Math.min(
+    Math.max(parseInt(url.searchParams.get('depth') ?? String(DEFAULT_MAX_LEVEL), 10) || DEFAULT_MAX_LEVEL, 1),
+    12
+  )
 
   let rows: { nodes: Neo4jNode[]; rels: Neo4jRel[] }[]
   try {
@@ -42,10 +64,15 @@ export async function GET(
        WITH nodes[0..$maxNodes] AS nodes, relationships
        RETURN [n IN nodes | CASE
          WHEN 'Person' IN labels(n) THEN
-           {_id: elementId(n), _labels: labels(n), name: n.name, sex: n.sex,
-            birthYear: n.birthYear, deathYear: n.deathYear, gedcomId: n.gedcomId}
+           {_id: elementId(n), _labels: labels(n),
+            gedcomId: n.gedcomId, name: n.name,
+            givenName: n.givenName, surname: n.surname, sex: n.sex,
+            birthDate: n.birthDate, birthYear: n.birthYear, birthPlace: n.birthPlace,
+            deathDate: n.deathDate, deathYear: n.deathYear, deathPlace: n.deathPlace,
+            occupation: n.occupation, notes: n.notes}
          ELSE
-           {_id: elementId(n), _labels: labels(n), gedcomId: n.gedcomId}
+           {_id: elementId(n), _labels: labels(n), gedcomId: n.gedcomId,
+            marriageDate: n.marriageDate, marriageYear: n.marriageYear, marriagePlace: n.marriagePlace}
         END] AS nodes,
               [r IN relationships | {
                 _id:   elementId(r),
@@ -53,7 +80,7 @@ export async function GET(
                 start: elementId(startNode(r)),
                 end:   elementId(endNode(r))
               }] AS rels`,
-      { id: rootId, relationshipFilter: RELATIONSHIP_FILTER, maxLevel: MAX_TREE_DEPTH, maxNodes: MAX_NODES }
+      { id: rootId, relationshipFilter: RELATIONSHIP_FILTER, maxLevel, maxNodes: MAX_NODES }
     )
   } catch (err) {
     console.error('Neo4j query failed', err)
@@ -63,23 +90,46 @@ export async function GET(
   if (!rows.length) return Response.json({ error: 'Person not found' }, { status: 404 })
 
   const { nodes, rels } = rows[0]
+  const rootInternalId = nodes.find((n) => n.gedcomId === rootId)?._id
 
   const flowNodes: FlowNode[] = nodes.map((n) => {
     const isUnion = n._labels.includes(UNION_LABEL)
-    return isUnion
-      ? { id: n._id, type: 'union' as const, data: { gedcomId: n.gedcomId } as UnionData, position: { x: 0, y: 0 } }
-      : {
-          id: n._id,
-          type: 'person' as const,
-          data: {
-            gedcomId: n.gedcomId,
-            name: n.name ?? '',
-            sex: n.sex ?? '',
-            birthYear: n.birthYear ?? null,
-            deathYear: n.deathYear ?? null,
-          } as PersonData,
-          position: { x: 0, y: 0 },
-        }
+    if (isUnion) {
+      const u = n as Neo4jUnionNode
+      return {
+        id: u._id,
+        type: 'union' as const,
+        data: {
+          gedcomId: u.gedcomId,
+          marriageDate: u.marriageDate ?? null,
+          marriageYear: u.marriageYear ?? null,
+          marriagePlace: u.marriagePlace ?? null,
+        } as UnionData,
+        position: { x: 0, y: 0 },
+      }
+    }
+    const p = n as Neo4jPersonNode
+    return {
+      id: p._id,
+      type: 'person' as const,
+      data: {
+        gedcomId: p.gedcomId,
+        name: p.name ?? '',
+        givenName: p.givenName ?? '',
+        surname: p.surname ?? '',
+        sex: p.sex ?? '',
+        birthDate: p.birthDate ?? null,
+        birthYear: p.birthYear ?? null,
+        birthPlace: p.birthPlace ?? null,
+        deathDate: p.deathDate ?? null,
+        deathYear: p.deathYear ?? null,
+        deathPlace: p.deathPlace ?? null,
+        occupation: p.occupation ?? null,
+        notes: p.notes ?? null,
+        isRoot: p._id === rootInternalId,
+      } as PersonData,
+      position: { x: 0, y: 0 },
+    }
   })
 
   const flowEdges: FlowEdge[] = rels.map((r) => ({

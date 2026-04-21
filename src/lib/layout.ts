@@ -1,41 +1,79 @@
 /**
- * @fileoverview Layout algorithms for family tree visualization.
- * Uses the Dagre graph layout library to automatically position nodes in a hierarchical tree structure.
+ * Dagre layout with BFS-computed generation depth relative to the root.
+ * Generation is signed: negative for ancestors, positive for descendants.
  */
 
 import dagre from '@dagrejs/dagre'
 import { Node, Edge } from 'reactflow'
 
-/**
- * Applies a hierarchical dagre layout to family tree nodes and edges
- *
- * Automatically calculates positions for all nodes in the family tree using a top-to-bottom
- * hierarchical layout algorithm. Person nodes are sized at 160x68, while union nodes are 12x12.
- * The layout respects rank separation (100) and node separation (60) for clear visual hierarchy.
- *
- * @param {Node[]} nodes - The React Flow nodes to position
- * @param {Edge[]} edges - The React Flow edges defining the graph structure
- * @returns {{nodes: Node[], edges: Edge[]}} A new set of nodes with calculated positions and the same edges
- */
-export function applyDagreLayout(nodes: Node[], edges: Edge[]) {
+interface LayoutOptions {
+  rootId?: string | null
+}
+
+export function applyDagreLayout(nodes: Node[], edges: Edge[], opts: LayoutOptions = {}) {
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: 'TB', ranksep: 100, nodesep: 60 })
+  g.setGraph({ rankdir: 'TB', ranksep: 80, nodesep: 40, marginx: 40, marginy: 40 })
+
+  const nodeSize = (n: Node) =>
+    n.type === 'union' ? { w: 14, h: 14 } : { w: 200, h: 76 }
 
   nodes.forEach(n => {
-    const w = n.type === 'union' ? 12 : 160
-    const h = n.type === 'union' ? 12 : 68
+    const { w, h } = nodeSize(n)
     g.setNode(n.id, { width: w, height: h })
   })
-  edges.forEach(e => g.setEdge(e.source, e.target))
+
+  // CHILD goes child->union in the graph; reverse for TB layout so children rank below union.
+  edges.forEach(e => {
+    if (e.label === 'CHILD') g.setEdge(e.target, e.source)
+    else g.setEdge(e.source, e.target)
+  })
   dagre.layout(g)
+
+  // Compute generation via BFS from root, walking the undirected graph with
+  // per-edge-direction semantics: UNION edges are within-generation partners;
+  // stepping across CHILD is the only way to change generation.
+  const gen = new Map<string, number>()
+  if (opts.rootId) {
+    gen.set(opts.rootId, 0)
+    const adj = new Map<string, Array<{ to: string; kind: 'UNION' | 'CHILD-UP' | 'CHILD-DOWN' }>>()
+    const add = (from: string, to: string, kind: 'UNION' | 'CHILD-UP' | 'CHILD-DOWN') => {
+      if (!adj.has(from)) adj.set(from, [])
+      adj.get(from)!.push({ to, kind })
+    }
+    edges.forEach(e => {
+      if (e.label === 'UNION') {
+        add(e.source, e.target, 'UNION')
+        add(e.target, e.source, 'UNION')
+      } else if (e.label === 'CHILD') {
+        // stored as (child)-[CHILD]->(union). Moving child→union is going UP.
+        add(e.source, e.target, 'CHILD-UP')
+        add(e.target, e.source, 'CHILD-DOWN')
+      }
+    })
+    const queue: string[] = [opts.rootId]
+    while (queue.length) {
+      const id = queue.shift()!
+      const depth = gen.get(id)!
+      for (const { to, kind } of adj.get(id) ?? []) {
+        if (gen.has(to)) continue
+        const next =
+          kind === 'UNION' ? depth : kind === 'CHILD-UP' ? depth - 1 : depth + 1
+        gen.set(to, next)
+        queue.push(to)
+      }
+    }
+  }
 
   return {
     nodes: nodes.map(n => {
-      const { x, y } = g.node(n.id)
-      const w = n.type === 'union' ? 12 : 160
-      const h = n.type === 'union' ? 12 : 68
-      return { ...n, position: { x: x - w / 2, y: y - h / 2 } }
+      const pos = g.node(n.id)
+      const { w, h } = nodeSize(n)
+      return {
+        ...n,
+        data: { ...n.data, generation: gen.get(n.id) ?? 0 },
+        position: { x: pos.x - w / 2, y: pos.y - h / 2 },
+      }
     }),
     edges,
   }

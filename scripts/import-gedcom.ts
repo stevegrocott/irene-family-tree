@@ -1,16 +1,7 @@
 /**
  * GEDCOM Family Tree Importer
- *
- * Imports family tree data from a GEDCOM file into a Neo4j database.
- * Parses individual and family records, creating Person and Union nodes
- * with UNION and CHILD relationships representing spouse and parent-child connections.
- *
- * Environment variables required:
- * - NEO4J_URI: URL of Neo4j database instance
- * - NEO4J_USER: Neo4j username
- * - NEO4J_PASSWORD: Neo4j password
- *
- * The script clears all existing data before importing to ensure a clean state.
+ * Imports individuals and families from a GEDCOM file into Neo4j as Person and Union
+ * nodes with UNION (spouse) and CHILD (child-of) relationships.
  */
 
 import * as fs from 'fs'
@@ -18,7 +9,6 @@ import * as path from 'path'
 import { parse } from 'parse-gedcom'
 import neo4j from 'neo4j-driver'
 
-// Load .env.local for local dev (no dotenv dependency needed)
 const envPath = path.join(__dirname, '../.env.local')
 if (fs.existsSync(envPath)) {
   for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
@@ -27,45 +17,64 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-/**
- * Represents a node in the parsed GEDCOM structure.
- *
- * @interface GedNode
- * @property {string} type - The GEDCOM record type (e.g., 'INDI', 'FAM', 'NAME', 'BIRT')
- * @property {string} [xref_id] - Cross-reference identifier, direct property on INDI/FAM records
- * @property {string} [data] - For pointer records (HUSB/WIFE/CHIL), this IS the pointer string
- * @property {string} [value] - The value associated with this node
- * @property {GedNode[]} children - Child nodes in the GEDCOM hierarchy
- */
+interface GedData {
+  formal_name?: string
+  xref_id?: string
+  pointer?: string
+}
 interface GedNode {
   type: string
-  xref_id?: string
-  data?: string
+  data?: GedData
   value?: string
   children: GedNode[]
 }
 
-/**
- * Finds the first child node with the specified type.
- */
 function findChild(nodes: GedNode[], type: string): GedNode | undefined {
   return nodes.find(n => n.type === type)
 }
 
-/**
- * Extracts the value of a child node with the specified type.
- */
 function childValue(nodes: GedNode[], type: string): string {
   return findChild(nodes, type)?.value ?? ''
 }
 
-/**
- * Main entry point for the GEDCOM import process.
- *
- * @async
- * @returns {Promise<void>}
- * @throws {Error} If database connection fails or Neo4j operations error
- */
+function year(d: string): string | null {
+  return d.match(/\d{4}/)?.[0] ?? null
+}
+
+// GEDCOM PLAC is typically "town,county,state,country" with trailing commas.
+function cleanPlace(p: string): string | null {
+  if (!p) return null
+  const cleaned = p.split(',').map(s => s.trim()).filter(Boolean).join(', ')
+  return cleaned || null
+}
+
+// Occupation in this GEDCOM appears either as OCCU value, or as a PLAC child of OCCU.
+function extractOccupation(indi: GedNode): string | null {
+  const occus = indi.children.filter(n => n.type === 'OCCU')
+  for (const o of occus) {
+    if (o.value) return o.value
+    const plac = findChild(o.children, 'PLAC')?.value
+    if (plac) {
+      const cleaned = plac.split(',').map(s => s.trim()).filter(Boolean).join(', ')
+      if (cleaned) return cleaned
+    }
+  }
+  return null
+}
+
+// Full display name from "First Middle/Surname/" or GIVN+SURN.
+function extractName(nameNode: GedNode | undefined): { given: string; surname: string; full: string } {
+  if (!nameNode) return { given: '', surname: '', full: '' }
+  const given = childValue(nameNode.children, 'GIVN')
+  const surname = childValue(nameNode.children, 'SURN')
+  let full = ''
+  if (nameNode.value) {
+    full = nameNode.value.replace(/\//g, ' ').replace(/\s+/g, ' ').trim()
+  }
+  if (!full) full = [given, surname].filter(Boolean).join(' ')
+  return { given, surname, full }
+}
+
 async function main() {
   const filePath = path.join(__dirname, '../family-tree.ged')
   const content = fs.readFileSync(filePath, 'utf-8')
@@ -83,24 +92,46 @@ async function main() {
     await session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (p:Person) REQUIRE p.gedcomId IS UNIQUE')
     await session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (u:Union) REQUIRE u.gedcomId IS UNIQUE')
 
-    // Batch-build person rows
-    const personRows: { gedcomId: string; name: string; sex: string; birthYear: string | null; deathYear: string | null }[] = []
+    interface PersonRow {
+      gedcomId: string
+      name: string
+      givenName: string
+      surname: string
+      sex: string
+      birthDate: string | null
+      birthYear: string | null
+      birthPlace: string | null
+      deathDate: string | null
+      deathYear: string | null
+      deathPlace: string | null
+      occupation: string | null
+      notes: string | null
+    }
+
+    const personRows: PersonRow[] = []
     for (const indi of root.children.filter(r => r.type === 'INDI')) {
-      if (!indi.xref_id) {
-        console.warn('Skipping INDI record without xref_id')
-        continue
-      }
+      const xrefId = indi.data?.xref_id
+      if (!xrefId) continue
       const nameNode = findChild(indi.children, 'NAME')
+      const { given, surname, full } = extractName(nameNode)
       const birthNode = findChild(indi.children, 'BIRT')
       const deathNode = findChild(indi.children, 'DEAT')
-      const givenName = childValue(nameNode?.children ?? [], 'GIVN')
-      const surname = childValue(nameNode?.children ?? [], 'SURN')
+      const birthDate = childValue(birthNode?.children ?? [], 'DATE') || null
+      const deathDate = childValue(deathNode?.children ?? [], 'DATE') || null
       personRows.push({
-        gedcomId: indi.xref_id,
-        name: [givenName, surname].filter(Boolean).join(' '),
+        gedcomId: xrefId,
+        name: full,
+        givenName: given,
+        surname,
         sex: childValue(indi.children, 'SEX'),
-        birthYear: childValue(birthNode?.children ?? [], 'DATE').match(/\d{4}/)?.[0] ?? null,
-        deathYear: childValue(deathNode?.children ?? [], 'DATE').match(/\d{4}/)?.[0] ?? null,
+        birthDate,
+        birthYear: birthDate ? year(birthDate) : null,
+        birthPlace: cleanPlace(childValue(birthNode?.children ?? [], 'PLAC')),
+        deathDate,
+        deathYear: deathDate ? year(deathDate) : null,
+        deathPlace: cleanPlace(childValue(deathNode?.children ?? [], 'PLAC')),
+        occupation: extractOccupation(indi),
+        notes: childValue(indi.children, 'NOTE') || null,
       })
     }
 
@@ -109,38 +140,60 @@ async function main() {
         `UNWIND $rows AS row
          MERGE (p:Person {gedcomId: row.gedcomId})
          SET p.name = row.name,
+             p.givenName = row.givenName,
+             p.surname = row.surname,
              p.sex = row.sex,
+             p.birthDate = row.birthDate,
              p.birthYear = row.birthYear,
-             p.deathYear = row.deathYear`,
+             p.birthPlace = row.birthPlace,
+             p.deathDate = row.deathDate,
+             p.deathYear = row.deathYear,
+             p.deathPlace = row.deathPlace,
+             p.occupation = row.occupation,
+             p.notes = row.notes`,
         { rows: personRows }
       )
     )
 
-    // Batch-build union rows and relationship rows
     const families = root.children.filter(r => r.type === 'FAM')
-    const unionRows: { gedcomId: string }[] = []
+    interface UnionRow {
+      gedcomId: string
+      marriageDate: string | null
+      marriageYear: string | null
+      marriagePlace: string | null
+    }
+    const unionRows: UnionRow[] = []
     const spouseRows: { pid: string; uid: string }[] = []
     const childRows: { pid: string; uid: string }[] = []
 
     for (const fam of families) {
-      if (!fam.xref_id) {
-        console.warn('Skipping FAM record without xref_id')
-        continue
-      }
-      const uid = fam.xref_id
-      unionRows.push({ gedcomId: uid })
-      const husb = findChild(fam.children, 'HUSB')?.data
-      const wife = findChild(fam.children, 'WIFE')?.data
+      const uid = fam.data?.xref_id
+      if (!uid) continue
+      const marr = findChild(fam.children, 'MARR')
+      const marriageDate = childValue(marr?.children ?? [], 'DATE') || null
+      unionRows.push({
+        gedcomId: uid,
+        marriageDate,
+        marriageYear: marriageDate ? year(marriageDate) : null,
+        marriagePlace: cleanPlace(childValue(marr?.children ?? [], 'PLAC')),
+      })
+      const husb = findChild(fam.children, 'HUSB')?.data?.pointer
+      const wife = findChild(fam.children, 'WIFE')?.data?.pointer
       if (husb) spouseRows.push({ pid: husb, uid })
       if (wife) spouseRows.push({ pid: wife, uid })
       for (const chil of fam.children.filter(n => n.type === 'CHIL')) {
-        if (chil.data) childRows.push({ pid: chil.data, uid })
+        const pid = chil.data?.pointer
+        if (pid) childRows.push({ pid, uid })
       }
     }
 
     await session.executeWrite(tx =>
       tx.run(
-        'UNWIND $rows AS row MERGE (u:Union {gedcomId: row.gedcomId})',
+        `UNWIND $rows AS row
+         MERGE (u:Union {gedcomId: row.gedcomId})
+         SET u.marriageDate = row.marriageDate,
+             u.marriageYear = row.marriageYear,
+             u.marriagePlace = row.marriagePlace`,
         { rows: unionRows }
       )
     )
@@ -169,9 +222,7 @@ async function main() {
 
     const personResult = await session.run('MATCH (p:Person) RETURN count(p) AS n')
     const unionResult = await session.run('MATCH (u:Union) RETURN count(u) AS n')
-    const personCount = personResult.records[0].get('n')
-    const unionCount = unionResult.records[0].get('n')
-    console.log(`Imported ${personCount} people and ${unionCount} unions`)
+    console.log(`Imported ${personResult.records[0].get('n')} people and ${unionResult.records[0].get('n')} unions`)
   } finally {
     await session.close()
     await driver.close()

@@ -55,6 +55,15 @@ body {
 .search-results::-webkit-scrollbar-track { background: transparent; }
 .search-results::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
 
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+/* React Flow edge label backgrounds — we hide labels since we differentiate edges visually */
+.react-flow__edge-text { display: none; }
+.react-flow__edge-textbg { display: none; }
+
 .react-flow__controls {
   background: rgba(255,255,255,0.08) !important;
   backdrop-filter: blur(12px);

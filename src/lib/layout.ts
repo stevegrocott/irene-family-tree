@@ -28,33 +28,34 @@ function nodeSize(type: string | undefined) {
 }
 
 /**
- * Breadth-first search from rootId to compute generation number for each node.
- * Treats the edge graph as undirected for generation calculation.
+ * Derive signed generation numbers from laid-out y-positions.
+ * Clusters person nodes by y-coordinate rank; root person = generation 0,
+ * nodes above = negative (ancestors), nodes below = positive (descendants).
  *
- * @param {Edge[]} edges - ReactFlow edges defining graph connections
- * @param {string} rootId - GEDCOM ID of the root node (generation 0)
- * @returns {Map<string, number>} Map of nodeId to generation number
+ * @param positionedNodes - Nodes after dagre layout (position.y is top-left corner)
+ * @param gedcomRootId - GEDCOM ID of the root person (e.g. "@I85@")
  */
-function bfsGenerations(edges: Edge[], rootId: string): Map<string, number> {
+function generationsFromLayout(
+  positionedNodes: Array<Node & { position: { x: number; y: number } }>,
+  gedcomRootId: string,
+): Map<string, number> {
+  const rootNode = positionedNodes.find(
+    n => n.type === 'person' && (n.data as { gedcomId?: string }).gedcomId === gedcomRootId,
+  )
+  if (!rootNode) return new Map()
+
+  // Collect unique y-levels for person nodes (round to nearest 10px to absorb float drift)
+  const personNodes = positionedNodes.filter(n => n.type === 'person')
+  const yLevels = [...new Set(personNodes.map(n => Math.round(n.position.y / 10) * 10))].sort(
+    (a, b) => a - b,
+  )
+  const rootY = Math.round(rootNode.position.y / 10) * 10
+  const rootRank = yLevels.indexOf(rootY)
+
   const gen = new Map<string, number>()
-  const adj = new Map<string, string[]>()
-  for (const e of edges) {
-    if (!adj.has(e.source)) adj.set(e.source, [])
-    if (!adj.has(e.target)) adj.set(e.target, [])
-    adj.get(e.source)!.push(e.target)
-    adj.get(e.target)!.push(e.source)
-  }
-  gen.set(rootId, 0)
-  const queue = [rootId]
-  while (queue.length > 0) {
-    const cur = queue.shift()!
-    const curGen = gen.get(cur)!
-    for (const nb of adj.get(cur) ?? []) {
-      if (!gen.has(nb)) {
-        gen.set(nb, curGen + 1)
-        queue.push(nb)
-      }
-    }
+  for (const n of personNodes) {
+    const rank = yLevels.indexOf(Math.round(n.position.y / 10) * 10)
+    if (rank !== -1) gen.set(n.id, rank - rootRank)
   }
   return gen
 }
@@ -85,17 +86,15 @@ export function applyDagreLayout(
     g.setNode(n.id, { width: w, height: h })
   })
 
-  // Reverse CHILD edges so dagre places parents above children
+  // Edges arrive pre-transformed from FamilyTree.tsx:
+  //   CHILD  → union (source) → person (target)   [child is below union]
+  //   UNION  → person (source) → union (target)   [spouse is above their family union]
+  // Use them as-is so dagre places parents above unions above children.
   edges.forEach(e => {
-    const isChild = (e.data as { relType?: string } | undefined)?.relType === 'CHILD'
-    g.setEdge(isChild ? e.target : e.source, isChild ? e.source : e.target)
+    g.setEdge(e.source, e.target)
   })
 
   dagre.layout(g)
-
-  const generations = options?.rootId
-    ? bfsGenerations(edges, options.rootId)
-    : new Map<string, number>()
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
 
@@ -107,17 +106,21 @@ export function applyDagreLayout(
     if (py < minY) minY = py
     if (px + w > maxX) maxX = px + w
     if (py + h > maxY) maxY = py + h
+    return { ...n, position: { x: px, y: py } }
+  })
 
+  // Derive signed generations from laid-out y-positions (requires layout to be complete first)
+  const generations = options?.rootId
+    ? generationsFromLayout(positionedNodes, options.rootId)
+    : new Map<string, number>()
+
+  const finalNodes = positionedNodes.map(n => {
     const generation = generations.get(n.id)
-    return {
-      ...n,
-      position: { x: px, y: py },
-      data: generation !== undefined ? { ...n.data, generation } : n.data,
-    }
+    return generation !== undefined ? { ...n, data: { ...n.data, generation } } : n
   })
 
   return {
-    nodes: positionedNodes,
+    nodes: finalNodes,
     edges,
     bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
   }

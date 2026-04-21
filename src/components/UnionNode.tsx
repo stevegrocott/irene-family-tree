@@ -17,16 +17,18 @@ import { UnionData } from '@/types/tree'
  * @param {NodeProps<UnionData>} props - React Flow node props with union data
  * @returns {React.ReactNode} A small circular div styled as a connection point with hidden handles
  */
-export default function UnionNode({ data }: NodeProps<UnionData>) {
+export default function UnionNode({ data, marriageYear: propYear, marriagePlace: propPlace }: NodeProps<UnionData> & { marriageYear?: string | null; marriagePlace?: string | null }) {
+  const marriageYear = data?.marriageYear ?? propYear
+  const marriagePlace = data?.marriagePlace ?? propPlace
   const parts: string[] = []
-  if (data.marriageYear) parts.push(`m. ${data.marriageYear}`)
-  if (data.marriagePlace) parts.push(data.marriagePlace)
+  if (marriageYear) parts.push(`m. ${marriageYear}`)
+  if (marriagePlace) parts.push(marriagePlace)
   const tooltip = parts.join(' · ')
 
   return (
     <div
       className="group relative w-3 h-3 rounded-full bg-amber-400/60 border border-white/40 shadow-[0_0_10px_rgba(255,255,255,0.5)]"
-      title={tooltip}
+      title={tooltip || undefined}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />

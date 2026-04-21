@@ -49,6 +49,17 @@ const defaultEdgeOptions = {
   animated: false,
 }
 
+/**
+ * Floating toolbar displaying tree statistics and depth control.
+ * Shows ancestor/descendant counts and allows users to adjust the viewing depth (hops).
+ *
+ * @param {Object} props - Component props
+ * @param {Node[]} props.nodes - All nodes in the current tree visualization
+ * @param {string} props.rootName - Display name of the current root person
+ * @param {number} props.hops - Current viewing depth (hops)
+ * @param {Function} props.onHopsChange - Callback when user adjusts the depth slider
+ * @returns {React.ReactElement | null} Rendered toolbar or null if no persons are visible
+ */
 export function Toolbar({
   nodes,
   rootName,
@@ -91,6 +102,17 @@ export function Toolbar({
   )
 }
 
+/**
+ * A list row displaying a person with clickable actions to select or re-root the tree.
+ * Double-click to re-root, single-click to select. Shows name and birth year.
+ *
+ * @param {Object} props - Component props
+ * @param {PersonSummary} props.person - Person to display
+ * @param {Function} props.onSelect - Called with person's gedcomId on single click
+ * @param {Function} props.onReroot - Called with person's gedcomId on double click or focus button
+ * @param {boolean} [props.small=false] - Render in compact styling for nested lists
+ * @returns {React.ReactElement} Rendered person row
+ */
 function RelativeRow({
   person,
   onSelect,

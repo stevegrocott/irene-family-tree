@@ -37,6 +37,14 @@ jest.mock('@/constants/tree', () => ({
   DEFAULT_ROOT_GEDCOM_ID: '@I1@',
 }))
 
+/**
+ * Factory helper to create a mock PersonData node for testing.
+ *
+ * @param {string} id - Node ID (typically a GEDCOM ID like '@I0@')
+ * @param {number} generation - Generation level relative to root (negative=ancestors, positive=descendants)
+ * @param {string} name - Display name of the person
+ * @returns {Node<PersonData>} A fully-formed ReactFlow person node
+ */
 function makePersonNode(id: string, generation: number, name: string): Node<PersonData> {
   return {
     id,

@@ -1,9 +1,17 @@
+/**
+ * @module api/tree/[rootId]
+ * @description Next.js App Router route handler that returns a family-tree subgraph
+ * centred on a given GEDCOM person ID, formatted as React Flow nodes and edges.
+ */
+
 import { read } from '@/lib/neo4j'
 import { FlowNode, FlowEdge, TreeResponse, PersonData, UnionData } from '@/types/tree'
 import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, UNION_LABEL } from '@/constants/tree'
 
+/** Force Node.js runtime so the Neo4j driver can open TCP connections. */
 export const runtime = 'nodejs'
 
+/** Hard cap on the number of graph nodes returned per request to prevent oversized payloads. */
 const MAX_NODES = 500
 
 /**
@@ -17,6 +25,10 @@ const MAX_NODES = 500
  * @property {string} [sex] - Person's sex/gender (Person nodes only)
  * @property {string | null} [birthYear] - Birth year as string (Person nodes only)
  * @property {string | null} [deathYear] - Death year as string (Person nodes only)
+ * @property {string | null} [birthPlace] - Birth place (Person nodes only)
+ * @property {string | null} [deathPlace] - Death place (Person nodes only)
+ * @property {string | null} [occupation] - Occupation (Person nodes only)
+ * @property {string | null} [notes] - Free-text notes (Person nodes only)
  * @property {string} gedcomId - GEDCOM cross-reference identifier
  */
 interface Neo4jNode {
@@ -26,6 +38,10 @@ interface Neo4jNode {
   sex?: string
   birthYear?: string | null
   deathYear?: string | null
+  birthPlace?: string | null
+  deathPlace?: string | null
+  occupation?: string | null
+  notes?: string | null
   gedcomId: string
 }
 
@@ -101,7 +117,9 @@ export async function GET(
        RETURN [n IN allNodes | CASE
          WHEN 'Person' IN labels(n) THEN
            {_id: elementId(n), _labels: labels(n), name: n.name, sex: n.sex,
-            birthYear: n.birthYear, deathYear: n.deathYear, gedcomId: n.gedcomId}
+            birthYear: n.birthYear, deathYear: n.deathYear, birthPlace: n.birthPlace,
+            deathPlace: n.deathPlace, occupation: n.occupation, notes: n.notes,
+            gedcomId: n.gedcomId}
          ELSE
            {_id: elementId(n), _labels: labels(n), gedcomId: n.gedcomId}
         END] AS nodes,
@@ -135,6 +153,10 @@ export async function GET(
             sex: n.sex ?? '',
             birthYear: n.birthYear ?? null,
             deathYear: n.deathYear ?? null,
+            birthPlace: n.birthPlace ?? null,
+            deathPlace: n.deathPlace ?? null,
+            occupation: n.occupation ?? null,
+            notes: n.notes ?? null,
           } as PersonData,
           position: { x: 0, y: 0 },
         }

@@ -97,6 +97,10 @@ function childValue(nodes: GedNode[], type: string): string {
   return findChild(nodes, type)?.value ?? ''
 }
 
+function extractYear(dateString: string): string | null {
+  return dateString.match(/\d{4}/)?.[0] ?? null
+}
+
 /**
  * Main entry point for the GEDCOM import process.
  *
@@ -105,7 +109,15 @@ function childValue(nodes: GedNode[], type: string): string {
  * @throws {Error} If database connection fails or Neo4j operations error
  */
 async function main() {
+  const missingEnv = ['NEO4J_URI', 'NEO4J_USER', 'NEO4J_PASSWORD'].filter(k => !process.env[k])
+  if (missingEnv.length) {
+    throw new Error(`Missing required environment variables: ${missingEnv.join(', ')}`)
+  }
+
   const filePath = path.join(__dirname, '../family-tree.ged')
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`GEDCOM input file not found: ${filePath}`)
+  }
   const content = fs.readFileSync(filePath, 'utf-8')
   const root = parse(content) as unknown as { type: string; children: GedNode[] }
 
@@ -117,7 +129,6 @@ async function main() {
   const session = driver.session()
 
   try {
-    await session.run('MATCH (n) DETACH DELETE n')
     await session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (p:Person) REQUIRE p.gedcomId IS UNIQUE')
     await session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (u:Union) REQUIRE u.gedcomId IS UNIQUE')
 
@@ -148,12 +159,15 @@ async function main() {
       const occupation = childValue(indi.children, GEDCOM_TYPES.OCCUPATION) || null
       const noteNode = findChild(indi.children, GEDCOM_TYPES.NOTE)
       const notes = (noteNode?.value ?? noteNode?.data?.formal_name ?? null) as string | null
+      const composedName = [givenName, surname].filter(Boolean).join(' ')
+      const rawNameFallback = (nameNode?.value ?? '').replace(/\//g, '').trim()
+      const name = composedName || rawNameFallback || '[Unknown]'
       personRows.push({
         gedcomId: indi.data.xref_id,
-        name: [givenName, surname].filter(Boolean).join(' '),
+        name,
         sex: childValue(indi.children, GEDCOM_TYPES.SEX),
-        birthYear: childValue(birthNode?.children ?? [], GEDCOM_TYPES.DATE).match(/\d{4}/)?.[0] ?? null,
-        deathYear: childValue(deathNode?.children ?? [], GEDCOM_TYPES.DATE).match(/\d{4}/)?.[0] ?? null,
+        birthYear: extractYear(childValue(birthNode?.children ?? [], GEDCOM_TYPES.DATE)),
+        deathYear: extractYear(childValue(deathNode?.children ?? [], GEDCOM_TYPES.DATE)),
         birthPlace,
         deathPlace,
         occupation,
@@ -161,8 +175,9 @@ async function main() {
       })
     }
 
-    await session.executeWrite(tx =>
-      tx.run(
+    await session.executeWrite(async tx => {
+      await tx.run('MATCH (n) DETACH DELETE n')
+      await tx.run(
         `UNWIND $rows AS row
          MERGE (p:Person {gedcomId: row.gedcomId})
          SET p.name = row.name,
@@ -175,11 +190,11 @@ async function main() {
              p.notes = row.notes`,
         { rows: personRows }
       )
-    )
+    })
 
     // Batch-build union rows and relationship rows
     const families = root.children.filter(r => r.type === GEDCOM_TYPES.FAMILY)
-    const unionRows: { gedcomId: string; marriageDate: string | null; marriagePlace: string | null }[] = []
+    const unionRows: { gedcomId: string; marriageYear: string | null; marriagePlace: string | null }[] = []
     const spouseRows: { pid: string; uid: string }[] = []
     const childRows: { pid: string; uid: string }[] = []
 
@@ -190,9 +205,9 @@ async function main() {
       }
       const uid = fam.data.xref_id
       const marrNode = findChild(fam.children, GEDCOM_TYPES.MARRIAGE)
-      const marriageDate = childValue(marrNode?.children ?? [], GEDCOM_TYPES.DATE) || null
+      const marriageYear = extractYear(childValue(marrNode?.children ?? [], GEDCOM_TYPES.DATE))
       const marriagePlace = childValue(marrNode?.children ?? [], GEDCOM_TYPES.PLACE) || null
-      unionRows.push({ gedcomId: uid, marriageDate, marriagePlace })
+      unionRows.push({ gedcomId: uid, marriageYear, marriagePlace })
       const husb = findChild(fam.children, GEDCOM_TYPES.HUSBAND)?.data?.pointer
       const wife = findChild(fam.children, GEDCOM_TYPES.WIFE)?.data?.pointer
       if (husb) spouseRows.push({ pid: husb, uid })
@@ -206,7 +221,7 @@ async function main() {
       tx.run(
         `UNWIND $rows AS row
          MERGE (u:Union {gedcomId: row.gedcomId})
-         SET u.marriageDate = row.marriageDate,
+         SET u.marriageYear = row.marriageYear,
              u.marriagePlace = row.marriagePlace`,
         { rows: unionRows }
       )

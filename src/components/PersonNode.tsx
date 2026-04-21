@@ -2,12 +2,19 @@
 
 import { Handle, Position, type NodeProps } from 'reactflow'
 import type { PersonData } from '@/types/tree'
+import { SEX_GLOW } from '@/constants/tree'
 
-const SEX_GLOW: Record<string, string> = {
-  M: 'shadow-[0_0_20px_rgba(99,179,237,0.4)]',
-  F: 'shadow-[0_0_20px_rgba(237,100,166,0.4)]',
-}
-
+/**
+ * PersonNode renders a single person card within the React Flow canvas.
+ *
+ * Applies a sex-based glow shadow and, when the person is the current root,
+ * an amber ring highlight. Invisible top/bottom handles allow React Flow to
+ * connect edges while keeping the UI clean.
+ *
+ * @component
+ * @param {NodeProps<PersonData>} props - React Flow node props carrying PersonData
+ * @returns {React.ReactElement} Styled person card with name, birth/death years, and connection handles
+ */
 export default function PersonNode({ data }: NodeProps<PersonData>) {
   const glow = SEX_GLOW[data.sex] ?? 'shadow-[0_0_20px_rgba(148,163,184,0.3)]'
   const rootRing = data.isRoot
@@ -23,7 +30,7 @@ export default function PersonNode({ data }: NodeProps<PersonData>) {
 
   return (
     <div
-      className={`bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-4 py-3 min-w-[160px] ${glow} ${rootRing} hover:bg-white/15 hover:scale-[1.03] transition-all duration-200`}
+      className={`bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-4 py-3 min-w-[160px] ${glow} ${rootRing} hover:bg-white/15 hover:scale-[1.03] transition-all duration-200 cursor-pointer`}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <div className="font-semibold text-white text-sm tracking-wide">{data.name || <span className="text-slate-500 italic">Unknown</span>}</div>

@@ -27,7 +27,7 @@ import UnionNode from '@/components/UnionNode'
 import SearchBar from '@/components/SearchBar'
 import { applyDagreLayout } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
-import type { TreeResponse, PersonData, PersonDetailResponse } from '@/types/tree'
+import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
 import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID } from '@/constants/tree'
 
 /**
@@ -112,6 +112,47 @@ function Toolbar({ personCount, unionCount }: { personCount: number; unionCount:
   )
 }
 
+function RelativeRow({
+  person,
+  onSelect,
+  onReroot,
+  small = false,
+}: {
+  person: PersonSummary
+  onSelect: (id: string) => void
+  onReroot: (id: string) => void
+  small?: boolean
+}) {
+  return (
+    <div className="flex items-center group">
+      <button
+        className={`flex-1 text-left px-3 rounded-lg hover:bg-white/10 transition-colors ${small ? 'py-1.5 text-xs text-white/60 hover:text-white/80' : 'py-2 text-sm text-white/80 hover:text-white'}`}
+        onClick={() => onSelect(person.gedcomId)}
+        onDoubleClick={() => onReroot(person.gedcomId)}
+      >
+        <span className="font-medium">{person.name || 'Unknown'}</span>
+        {person.birthYear && (
+          <span className={`ml-2 text-xs ${small ? 'text-slate-600' : 'text-slate-500'}`}>{person.birthYear}</span>
+        )}
+      </button>
+      <button
+        data-testid="relative-focus"
+        aria-label={`Focus tree on ${person.name || 'person'}`}
+        onClick={() => onReroot(person.gedcomId)}
+        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 mr-1 rounded text-white/40 hover:text-indigo-400 hover:bg-white/10 flex-shrink-0"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" />
+          <line x1="12" y1="2" x2="12" y2="6" />
+          <line x1="12" y1="18" x2="12" y2="22" />
+          <line x1="2" y1="12" x2="6" y2="12" />
+          <line x1="18" y1="12" x2="22" y2="12" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
 /**
  * Side drawer panel showing details for a selected person.
  * Fetches and displays name, dates, GEDCOM ID, and immediate relatives
@@ -141,19 +182,20 @@ function PersonDrawer({
     setDetail(null)
     setDetailLoading(true)
     const ctrl = new AbortController()
+    let cancelled = false
     fetch(`/api/person/${encodeURIComponent(person.gedcomId)}`, { signal: ctrl.signal })
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json() as Promise<PersonDetailResponse>
       })
-      .then(data => setDetail(data))
+      .then(data => { if (!cancelled) setDetail(data) })
       .catch(err => {
         if (err instanceof Error && err.name !== 'AbortError') {
           console.error('Failed to fetch person detail', err)
         }
       })
-      .finally(() => setDetailLoading(false))
-    return () => ctrl.abort()
+      .finally(() => { if (!cancelled) setDetailLoading(false) })
+    return () => { cancelled = true; ctrl.abort() }
   }, [person.gedcomId])
 
   return (
@@ -183,7 +225,6 @@ function PersonDrawer({
         )}
         <p className="text-slate-500 text-xs font-mono">{person.gedcomId}</p>
 
-        {/* Loading spinner while fetching detail */}
         {detailLoading && (
           <div className="flex items-center justify-center py-6">
             <div
@@ -201,19 +242,7 @@ function PersonDrawer({
                 <p className="text-slate-600 text-xs italic">None recorded</p>
               ) : (
                 <ul className="space-y-1">
-                  {detail.parents.map(p => (
-                    <li key={p.gedcomId}>
-                      <button
-                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/10 transition-colors text-sm text-white/80 hover:text-white"
-                        onClick={() => onSelectPerson(p.gedcomId)}
-                      >
-                        <span className="font-medium">{p.name || 'Unknown'}</span>
-                        {p.birthYear && (
-                          <span className="text-slate-500 ml-2 text-xs">{p.birthYear}</span>
-                        )}
-                      </button>
-                    </li>
-                  ))}
+                  {detail.parents.map(p => <li key={p.gedcomId}><RelativeRow person={p} onSelect={onSelectPerson} onReroot={onReroot} /></li>)}
                 </ul>
               )}
             </section>
@@ -224,19 +253,7 @@ function PersonDrawer({
                 <p className="text-slate-600 text-xs italic">None recorded</p>
               ) : (
                 <ul className="space-y-1">
-                  {detail.siblings.map(s => (
-                    <li key={s.gedcomId}>
-                      <button
-                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/10 transition-colors text-sm text-white/80 hover:text-white"
-                        onClick={() => onSelectPerson(s.gedcomId)}
-                      >
-                        <span className="font-medium">{s.name || 'Unknown'}</span>
-                        {s.birthYear && (
-                          <span className="text-slate-500 ml-2 text-xs">{s.birthYear}</span>
-                        )}
-                      </button>
-                    </li>
-                  ))}
+                  {detail.siblings.map(s => <li key={s.gedcomId}><RelativeRow person={s} onSelect={onSelectPerson} onReroot={onReroot} /></li>)}
                 </ul>
               )}
             </section>
@@ -249,32 +266,10 @@ function PersonDrawer({
                 <ul className="space-y-3">
                   {detail.marriages.map(m => (
                     <li key={m.unionId} className="space-y-1">
-                      {m.spouse && (
-                        <button
-                          className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/10 transition-colors text-sm text-white/80 hover:text-white"
-                          onClick={() => onSelectPerson(m.spouse!.gedcomId)}
-                        >
-                          <span className="font-medium">{m.spouse.name || 'Unknown'}</span>
-                          {m.spouse.birthYear && (
-                            <span className="text-slate-500 ml-2 text-xs">{m.spouse.birthYear}</span>
-                          )}
-                        </button>
-                      )}
+                      {m.spouse && <RelativeRow person={m.spouse} onSelect={onSelectPerson} onReroot={onReroot} />}
                       {m.children.length > 0 && (
                         <ul className="pl-4 space-y-1">
-                          {m.children.map(c => (
-                            <li key={c.gedcomId}>
-                              <button
-                                className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors text-xs text-white/60 hover:text-white/80"
-                                onClick={() => onSelectPerson(c.gedcomId)}
-                              >
-                                {c.name || 'Unknown'}
-                                {c.birthYear && (
-                                  <span className="text-slate-600 ml-2">{c.birthYear}</span>
-                                )}
-                              </button>
-                            </li>
-                          ))}
+                          {m.children.map(c => <li key={c.gedcomId}><RelativeRow person={c} onSelect={onSelectPerson} onReroot={onReroot} small /></li>)}
                         </ul>
                       )}
                     </li>
@@ -475,7 +470,6 @@ function FlowCanvas({
           onClose={() => setSelectedPerson(null)}
           onReroot={(id) => { onSelectRoot(id); setSelectedPerson(null) }}
           onSelectPerson={(id) => {
-            // Find person in nodes and open their drawer, or fall back to creating a minimal PersonData
             const node = nodes.find(n => n.type === 'person' && (n.data as PersonData).gedcomId === id)
             if (node) {
               setSelectedPerson(node.data as PersonData)

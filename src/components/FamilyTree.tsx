@@ -142,6 +142,11 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         proOptions={{ hideAttribution: true }}
+        onNodeClick={(_event, node) => {
+          if (node.type === 'person') {
+            onSelectRoot((node.data as import('@/types/tree').PersonData).gedcomId)
+          }
+        }}
       >
         <Background variant={BackgroundVariant.Dots} color="#1e2a4a" gap={28} size={1} />
         <MiniMap

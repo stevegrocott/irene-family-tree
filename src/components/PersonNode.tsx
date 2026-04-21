@@ -24,6 +24,7 @@ export default function PersonNode({ data }: NodeProps<PersonData>) {
   return (
     <div
       className={`bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-4 py-3 min-w-[160px] ${glow} ${rootRing} hover:bg-white/15 hover:scale-[1.03] transition-all duration-200`}
+      style={{ cursor: 'pointer' }}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <div className="font-semibold text-white text-sm tracking-wide">{data.name || <span className="text-slate-500 italic">Unknown</span>}</div>

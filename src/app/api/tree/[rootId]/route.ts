@@ -26,6 +26,10 @@ interface Neo4jNode {
   sex?: string
   birthYear?: string | null
   deathYear?: string | null
+  birthPlace?: string | null
+  deathPlace?: string | null
+  occupation?: string | null
+  notes?: string | null
   gedcomId: string
 }
 
@@ -101,7 +105,9 @@ export async function GET(
        RETURN [n IN allNodes | CASE
          WHEN 'Person' IN labels(n) THEN
            {_id: elementId(n), _labels: labels(n), name: n.name, sex: n.sex,
-            birthYear: n.birthYear, deathYear: n.deathYear, gedcomId: n.gedcomId}
+            birthYear: n.birthYear, deathYear: n.deathYear, birthPlace: n.birthPlace,
+            deathPlace: n.deathPlace, occupation: n.occupation, notes: n.notes,
+            gedcomId: n.gedcomId}
          ELSE
            {_id: elementId(n), _labels: labels(n), gedcomId: n.gedcomId}
         END] AS nodes,
@@ -135,6 +141,10 @@ export async function GET(
             sex: n.sex ?? '',
             birthYear: n.birthYear ?? null,
             deathYear: n.deathYear ?? null,
+            birthPlace: n.birthPlace ?? null,
+            deathPlace: n.deathPlace ?? null,
+            occupation: n.occupation ?? null,
+            notes: n.notes ?? null,
           } as PersonData,
           position: { x: 0, y: 0 },
         }

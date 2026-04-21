@@ -4,6 +4,10 @@ export interface PersonData {
   sex: string
   birthYear: string | null
   deathYear: string | null
+  birthPlace: string | null
+  deathPlace: string | null
+  occupation: string | null
+  notes: string | null
   isRoot?: boolean
 }
 

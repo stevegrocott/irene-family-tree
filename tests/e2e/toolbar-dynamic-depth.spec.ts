@@ -51,11 +51,10 @@ test.describe('toolbar dynamic depth', () => {
     // Wait for the toolbar to appear (personCount > 0 is the render precondition)
     await expect(page.getByTestId('toolbar')).toBeVisible({ timeout: 15_000 });
 
-    // The ancestors span holds the visible person count for ancestor generations
-    const ancestorCountEl = page.getByTestId('toolbar-ancestors').locator('span').first();
-    await expect(ancestorCountEl).toBeVisible();
+    const personCountEl = page.getByTestId('toolbar-person-count').locator('span').first();
+    await expect(personCountEl).toBeVisible();
 
-    const countText = await ancestorCountEl.textContent();
+    const countText = await personCountEl.textContent();
     expect(Number(countText)).toBeGreaterThan(0);
   });
 });

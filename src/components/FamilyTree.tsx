@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import type React from 'react'
 import ReactFlow, {
   Background,
@@ -33,6 +33,18 @@ const defaultEdgeOptions = {
 
 const depthBtnClass = 'w-6 h-6 flex items-center justify-center rounded-lg text-white/80 hover:bg-white/15 hover:text-white transition-colors text-sm font-medium'
 
+/**
+ * DepthControl overlay component for adjusting graph traversal depth.
+ *
+ * Displays a control panel in the top-right corner with increment/decrement buttons
+ * to adjust the number of relationship hops displayed in the family tree visualization.
+ *
+ * @component
+ * @param {Object} props - Component props
+ * @param {number} props.hops - Current hop depth value
+ * @param {(hops: number) => void} props.onChange - Callback fired when user adjusts depth
+ * @returns {React.ReactElement} Overlay control panel
+ */
 function DepthControl({ hops, onChange }: { hops: number; onChange: (hops: number) => void }) {
   return (
     <div className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
@@ -60,6 +72,19 @@ function DepthControl({ hops, onChange }: { hops: number; onChange: (hops: numbe
   )
 }
 
+/**
+ * FlowCanvas component renders a React Flow visualization of the family tree.
+ *
+ * Manages fetching tree data from the API based on the selected root person,
+ * applies Dagre layout for hierarchical positioning, and handles viewport
+ * auto-centering. Supports adjustable traversal depth via the DepthControl overlay.
+ *
+ * @component
+ * @param {Object} props - Component props
+ * @param {string} props.rootId - GEDCOM ID of the focal person
+ * @param {(id: string) => void} props.onSelectRoot - Callback when a new person is selected
+ * @returns {React.ReactElement} React Flow canvas with tree visualization
+ */
 function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (id: string) => void }) {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
@@ -68,19 +93,35 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
   const [error, setError] = useState<string | null>(null)
   const [hops, setHops] = useState(DEFAULT_HOPS)
   const { setViewport } = useReactFlow()
+  const abortRef = useRef<AbortController | null>(null)
 
+  /**
+   * Handles person node selection by updating the root person.
+   *
+   * @param {React.MouseEvent} _event - React mouse event (unused)
+   * @param {Node} node - Clicked React Flow node
+   */
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     if (node.type === 'person') {
       onSelectRoot((node.data as PersonData).gedcomId)
     }
   }, [onSelectRoot])
 
+  /**
+   * Fetches tree data from the API and updates graph visualization.
+   * Aborts previous requests if a new fetch is initiated.
+   *
+   * @async
+   * @returns {Promise<void>}
+   */
   const fetchTree = useCallback(async () => {
     if (!rootId) return
+    abortRef.current?.abort()
+    abortRef.current = new AbortController()
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch(`/api/tree/${rootId}?hops=${hops}`)
+      const res = await fetch(`/api/tree/${rootId}?hops=${hops}`, { signal: abortRef.current.signal })
       if (!res.ok) throw new Error(`Failed to fetch tree: ${res.status}`)
       const data: TreeResponse = await res.json()
 
@@ -109,6 +150,7 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
       setEdges(laid.edges)
       setTreeBounds(laid.bounds)
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
       setLoading(false)
@@ -187,9 +229,22 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
   )
 }
 
+/**
+ * FamilyTree page component.
+ *
+ * Main entry point for the family tree visualization. Initializes the root person
+ * on mount by fetching the first available person from the persons API, then
+ * renders the React Flow canvas wrapped in a provider.
+ *
+ * @component
+ * @returns {React.ReactElement} Full-screen family tree visualization
+ */
 export default function FamilyTree() {
   const [rootId, setRootId] = useState('')
 
+  /**
+   * Load the first available person on mount to use as the initial root.
+   */
   useEffect(() => {
     fetch('/api/persons')
       .then(r => r.json())

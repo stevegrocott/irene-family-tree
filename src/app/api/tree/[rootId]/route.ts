@@ -1,20 +1,23 @@
 import { read } from '@/lib/neo4j'
 import { FlowNode, FlowEdge, TreeResponse, PersonData, UnionData } from '@/types/tree'
+import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, UNION_LABEL } from '@/constants/tree'
 
 export const runtime = 'nodejs'
 
-/** Maximum number of nodes returned per query to guard against unbounded graph traversal. */
 const MAX_NODES = 500
-/** Default relationship hop depth used when no `hops` query parameter is provided. */
-const DEFAULT_HOPS = 8
-/** Maximum allowed value for the `hops` query parameter. */
-const MAX_HOPS = 16
-/** Neo4j label used to identify Union (family) nodes. */
-const UNION_LABEL = 'Union'
 
 /**
  * Raw shape of a graph node as returned by the Neo4j bounce-traversal query.
  * Person nodes carry demographic fields; Union nodes carry only `gedcomId`.
+ *
+ * @interface Neo4jNode
+ * @property {string} _id - Unique Neo4j element ID
+ * @property {string[]} _labels - Node labels (e.g., ['Person'] or ['Union'])
+ * @property {string} [name] - Person's full name (Person nodes only)
+ * @property {string} [sex] - Person's sex/gender (Person nodes only)
+ * @property {string | null} [birthYear] - Birth year as string (Person nodes only)
+ * @property {string | null} [deathYear] - Death year as string (Person nodes only)
+ * @property {string} gedcomId - GEDCOM cross-reference identifier
  */
 interface Neo4jNode {
   _id: string
@@ -29,6 +32,12 @@ interface Neo4jNode {
 /**
  * Raw shape of a graph relationship as returned by the Neo4j query.
  * `start` and `end` are element IDs corresponding to `Neo4jNode._id`.
+ *
+ * @interface Neo4jRel
+ * @property {string} _id - Unique Neo4j element ID for the relationship
+ * @property {string} type - Relationship type (e.g., 'UNION', 'CHILD')
+ * @property {string} start - Element ID of the start node
+ * @property {string} end - Element ID of the end node
  */
 interface Neo4jRel {
   _id: string
@@ -45,9 +54,15 @@ interface Neo4jRel {
  * nodes, then maps the raw Neo4j result to React Flow `FlowNode` / `FlowEdge`
  * shapes with placeholder positions.
  *
- * @param request  - Incoming HTTP request; the optional `hops` query param controls traversal depth.
- * @param params   - Route segment params; `rootId` is the GEDCOM ID of the focal person.
- * @returns JSON `TreeResponse` on success, or a 404/500 error JSON on failure.
+ * Query Parameters:
+ * - `hops` (optional): Number of relationship hops to traverse from root person
+ *   (default: DEFAULT_HOPS, range: MIN_HOPS to MAX_HOPS, clamped if exceeds max)
+ *
+ * @async
+ * @param {Request} request - Incoming HTTP request; the optional `hops` query param controls traversal depth
+ * @param {Object} params - Route segment params object
+ * @param {Promise<{ rootId: string }>} params.params - Promise resolving to route params
+ * @returns {Promise<Response>} JSON `TreeResponse` on success, or error JSON with 400/404/500 status
  */
 export async function GET(
   request: Request,
@@ -55,20 +70,17 @@ export async function GET(
 ) {
   const { rootId } = await params
 
-  // Parse and validate the ?hops=N query parameter
   const url = new URL(request.url)
   const hopsParam = url.searchParams.get('hops')
   let hops: number
 
   if (hopsParam === null) {
     hops = DEFAULT_HOPS
+  } else if (!/^\d+$/.test(hopsParam)) {
+    return Response.json({ error: 'hops must be a positive integer' }, { status: 400 })
   } else {
-    // Must be a whole-number integer string (no decimals, no non-numeric chars)
-    if (!/^\d+$/.test(hopsParam)) {
-      return Response.json({ error: 'hops must be a positive integer' }, { status: 400 })
-    }
     hops = parseInt(hopsParam, 10)
-    if (hops < 1) {
+    if (hops < MIN_HOPS) {
       return Response.json({ error: 'hops must be at least 1' }, { status: 400 })
     }
     hops = Math.min(hops, MAX_HOPS)
@@ -79,14 +91,11 @@ export async function GET(
     rows = await read<{ nodes: Neo4jNode[]; rels: Neo4jRel[] }>(
       `MATCH (root:Person {gedcomId: $id})
 
-       // Walk the family graph in any direction — each generation costs 2 hops
-       // (Person→Union then Union←Person), so 8 hops covers 4 generations each way.
        OPTIONAL MATCH (root)-[:CHILD|UNION*1..${hops}]-(other)
        WHERE other:Person OR other:Union
 
        WITH root, ([root] + collect(DISTINCT other))[0..$maxNodes] AS allNodes
 
-       // Collect every edge that connects two nodes in the result set
        UNWIND allNodes AS n
        OPTIONAL MATCH (n)-[r:CHILD|UNION]-(m)
        WHERE m IN allNodes

@@ -67,10 +67,24 @@ export default function SearchBar({ onSelect, persons: personsProp }: Props) {
           {results.map(p => (
             <li
               key={p.gedcomId}
+              data-testid="search-result-item"
               onClick={() => { onSelect(p.gedcomId); setQuery('') }}
               className="px-3 py-2 rounded-lg text-sm text-white/80 cursor-pointer hover:bg-white/15 hover:text-white transition-colors"
             >
-              {p.name}
+              <span
+                className={`sex-dot w-2 h-2 rounded-full inline-block mr-1.5 ${
+                  p.sex === 'F' ? 'bg-pink-400' :
+                  p.sex === 'M' ? 'bg-blue-400' :
+                  'bg-slate-400'
+                }`}
+              />
+              <span className="font-medium">{p.name}</span>
+              {p.birthYear && (
+                <span className="text-white/50 text-xs ml-1.5">{p.birthYear}</span>
+              )}
+              {p.birthPlace && (
+                <span className="text-white/40 text-xs ml-1.5">{p.birthPlace.slice(0, 20)}</span>
+              )}
             </li>
           ))}
         </ul>

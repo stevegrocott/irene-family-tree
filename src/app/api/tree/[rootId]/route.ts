@@ -67,7 +67,7 @@ export async function GET(
   const flowNodes: FlowNode[] = nodes.map((n) => {
     const isUnion = n._labels.includes(UNION_LABEL)
     return isUnion
-      ? { id: n._id, type: 'union' as const, data: { gedcomId: n.gedcomId } as UnionData }
+      ? { id: n._id, type: 'union' as const, data: { gedcomId: n.gedcomId } as UnionData, position: { x: 0, y: 0 } }
       : {
           id: n._id,
           type: 'person' as const,
@@ -78,6 +78,7 @@ export async function GET(
             birthYear: n.birthYear ?? null,
             deathYear: n.deathYear ?? null,
           } as PersonData,
+          position: { x: 0, y: 0 },
         }
   })
 

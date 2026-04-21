@@ -65,11 +65,13 @@ export function Toolbar({
   rootName,
   hops,
   onHopsChange,
+  sliderMax = MAX_HOPS,
 }: {
   nodes: Node[]
   rootName: string
   hops: number
   onHopsChange: (hops: number) => void
+  sliderMax?: number
 }) {
   const ancestorGens = nodes.filter(n => n.type === 'person').map(n => (n.data as PersonData).generation).filter((g): g is number => typeof g === 'number' && g < 0)
   const ancestors = ancestorGens.length > 0 ? Math.abs(Math.min(...ancestorGens)) : 0
@@ -95,7 +97,7 @@ export function Toolbar({
         type="range"
         data-testid="toolbar-depth-slider"
         min={MIN_HOPS}
-        max={MAX_HOPS}
+        max={sliderMax}
         value={hops}
         onChange={e => onHopsChange(Number(e.target.value))}
         className="w-24"
@@ -323,6 +325,7 @@ function FlowCanvas({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hops, setHops] = useState(DEFAULT_HOPS)
+  const [actualMaxDepth, setActualMaxDepth] = useState<number>(MAX_HOPS)
   const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(null)
   const { setViewport } = useReactFlow()
   const abortRef = useRef<AbortController | null>(null)
@@ -382,6 +385,17 @@ function FlowCanvas({
 
       const laid = applyDagreLayout(rawNodes, rawEdges, { rootId })
       setNodes(laid.nodes)
+      const laidPersonGens = laid.nodes
+        .filter(n => n.type === 'person')
+        .map(n => (n.data as PersonData).generation)
+        .filter((g): g is number => typeof g === 'number')
+      const laidAncestorGens = laidPersonGens.filter(g => g < 0)
+      const laidDescendantGens = laidPersonGens.filter(g => g > 0)
+      setActualMaxDepth(Math.max(
+        1,
+        laidAncestorGens.length > 0 ? Math.abs(Math.min(...laidAncestorGens)) : 0,
+        laidDescendantGens.length > 0 ? Math.max(...laidDescendantGens) : 0,
+      ))
       setEdges(laid.edges)
       setTreeBounds(laid.bounds)
     } catch (err) {
@@ -440,6 +454,7 @@ function FlowCanvas({
         rootName={rootName}
         hops={hops}
         onHopsChange={setHops}
+        sliderMax={actualMaxDepth}
       />
       {/* Loading/error overlays — ReactFlow stays mounted so its viewport is always initialized */}
       {loading && (

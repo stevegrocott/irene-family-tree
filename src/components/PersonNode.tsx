@@ -46,7 +46,7 @@ export default function PersonNode({ data }: NodeProps<PersonData>) {
 
   return (
     <div
-      className={`bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-4 py-3 min-w-[160px] ${glow} ${rootRing} hover:bg-white/15 hover:scale-[1.03] transition-all duration-200 cursor-pointer`}
+      className={`bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-4 py-3 w-[240px] overflow-hidden ${glow} ${rootRing} hover:bg-white/15 hover:scale-[1.03] transition-all duration-200 cursor-pointer`}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <div className="flex items-center gap-2">
@@ -54,7 +54,7 @@ export default function PersonNode({ data }: NodeProps<PersonData>) {
           {initials}
         </div>
         <div>
-          <div className="font-semibold text-white text-sm tracking-wide">{data.name || <span className="text-slate-500 italic">Unknown</span>}</div>
+          <div className="font-semibold text-white text-sm tracking-wide overflow-hidden whitespace-nowrap text-ellipsis" title={data.name ?? ''}>{data.name || <span className="text-slate-500 italic">Unknown</span>}</div>
           {dates && <div className="text-slate-400 text-xs mt-1">{dates}</div>}
         </div>
       </div>

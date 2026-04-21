@@ -5,6 +5,7 @@
 
 import dagre from '@dagrejs/dagre'
 import { Node, Edge } from 'reactflow'
+import { REL } from '@/types/tree'
 
 interface LayoutOptions {
   rootId?: string | null
@@ -25,7 +26,7 @@ export function applyDagreLayout(nodes: Node[], edges: Edge[], opts: LayoutOptio
 
   // CHILD goes child->union in the graph; reverse for TB layout so children rank below union.
   edges.forEach(e => {
-    if (e.label === 'CHILD') g.setEdge(e.target, e.source)
+    if (e.label === REL.CHILD) g.setEdge(e.target, e.source)
     else g.setEdge(e.source, e.target)
   })
   dagre.layout(g)
@@ -42,10 +43,10 @@ export function applyDagreLayout(nodes: Node[], edges: Edge[], opts: LayoutOptio
       adj.get(from)!.push({ to, kind })
     }
     edges.forEach(e => {
-      if (e.label === 'UNION') {
+      if (e.label === REL.UNION) {
         add(e.source, e.target, 'UNION')
         add(e.target, e.source, 'UNION')
-      } else if (e.label === 'CHILD') {
+      } else if (e.label === REL.CHILD) {
         // stored as (child)-[CHILD]->(union). Moving child→union is going UP.
         add(e.source, e.target, 'CHILD-UP')
         add(e.target, e.source, 'CHILD-DOWN')

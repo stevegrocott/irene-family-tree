@@ -50,14 +50,10 @@ function cleanPlace(p: string): string | null {
 
 // Occupation in this GEDCOM appears either as OCCU value, or as a PLAC child of OCCU.
 function extractOccupation(indi: GedNode): string | null {
-  const occus = indi.children.filter(n => n.type === 'OCCU')
-  for (const o of occus) {
+  for (const o of indi.children.filter(n => n.type === 'OCCU')) {
     if (o.value) return o.value
-    const plac = findChild(o.children, 'PLAC')?.value
-    if (plac) {
-      const cleaned = plac.split(',').map(s => s.trim()).filter(Boolean).join(', ')
-      if (cleaned) return cleaned
-    }
+    const cleaned = cleanPlace(findChild(o.children, 'PLAC')?.value ?? '')
+    if (cleaned) return cleaned
   }
   return null
 }

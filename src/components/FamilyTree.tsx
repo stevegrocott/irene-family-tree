@@ -15,28 +15,56 @@ import 'reactflow/dist/style.css'
 
 import PersonNode from '@/components/PersonNode'
 import UnionNode from '@/components/UnionNode'
-import SearchBar from '@/components/SearchBar'
+import SearchBar, { type Person } from '@/components/SearchBar'
 import PersonDrawer from '@/components/PersonDrawer'
 import Toolbar from '@/components/Toolbar'
 import { applyDagreLayout } from '@/lib/layout'
-import type { TreeResponse, PersonData } from '@/types/tree'
+import { REL, type TreeResponse, type PersonData } from '@/types/tree'
 
 const nodeTypes = { person: PersonNode, union: UnionNode }
 
-const edgeStyleChild = {
+const baseEdge = {
   type: 'smoothstep' as const,
-  style: { stroke: '#64748b', strokeWidth: 1.25, opacity: 0.55 },
   animated: false,
 }
+const edgeStyleChild = {
+  ...baseEdge,
+  style: { stroke: '#64748b', strokeWidth: 1.25, opacity: 0.55 },
+}
 const edgeStyleUnion = {
-  type: 'smoothstep' as const,
-  style: {
-    stroke: '#fbbf24',
-    strokeWidth: 1.25,
-    opacity: 0.45,
-    strokeDasharray: '4 3',
-  },
-  animated: false,
+  ...baseEdge,
+  style: { stroke: '#fbbf24', strokeWidth: 1.25, opacity: 0.45, strokeDasharray: '4 3' },
+}
+
+interface Stats {
+  personCount: number
+  unionCount: number
+  ancestorGens: number
+  descendantGens: number
+  nodeCount: number
+  rootName: string
+}
+
+const PERSON_NODE_CENTER_X = 100
+const PERSON_NODE_CENTER_Y = 38
+
+function pickDefaultRoot(persons: Person[]): Person | undefined {
+  return (
+    persons.find(p => p.birthYear && p.deathYear && p.birthPlace) ??
+    persons.find(p => p.birthYear || p.deathYear) ??
+    persons.find(p => p.name && p.name.trim().length > 2) ??
+    persons[0]
+  )
+}
+
+function minimapNodeColor(n: Node) {
+  const d = n.data as PersonData | undefined
+  if (n.type !== 'person') return '#fbbf24'
+  if (d?.isRoot) return '#fde68a'
+  const g = d?.generation ?? 0
+  if (g < 0) return '#818cf8'
+  if (g > 0) return '#34d399'
+  return '#94a3b8'
 }
 
 function FlowCanvas({
@@ -45,7 +73,7 @@ function FlowCanvas({
   depth,
   selectedPersonId,
   onSelectPerson,
-  exposeStats,
+  onStats,
   fitSignal,
 }: {
   rootId: string
@@ -53,7 +81,7 @@ function FlowCanvas({
   depth: number
   selectedPersonId: string | null
   onSelectPerson: (id: string | null) => void
-  exposeStats: (stats: { personCount: number; unionCount: number; ancestorGens: number; descendantGens: number; nodeCount: number; rootName: string }) => void
+  onStats: (stats: Stats) => void
   fitSignal: number
 }) {
   const [nodes, setNodes] = useState<Node[]>([])
@@ -61,105 +89,114 @@ function FlowCanvas({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { fitView, setCenter, getNode } = useReactFlow()
-
-  const fetchTree = useCallback(async () => {
-    if (!rootId) return
-    try {
-      setLoading(true)
-      setError(null)
-      const res = await fetch(`/api/tree/${encodeURIComponent(rootId)}?depth=${depth}`)
-      if (!res.ok) throw new Error(`Failed to fetch tree: ${res.status}`)
-      const data: TreeResponse = await res.json()
-
-      const rootInternal =
-        data.nodes.find(n => n.type === 'person' && (n.data as PersonData).gedcomId === rootId)?.id ??
-        null
-
-      const rawNodes: Node[] = data.nodes.map(n => ({
-        id: n.id,
-        type: n.type,
-        data: n.data,
-        position: n.position,
-      }))
-
-      const rawEdges: Edge[] = data.edges.map(e => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        data: { kind: e.label },
-        label: e.label, // consumed by layout for CHILD detection, hidden via CSS
-        ...(e.label === 'CHILD' ? edgeStyleChild : edgeStyleUnion),
-      }))
-
-      const laid = applyDagreLayout(rawNodes, rawEdges, { rootId: rootInternal })
-
-      let personCount = 0
-      let unionCount = 0
-      let minGen = 0
-      let maxGen = 0
-      let rootName = ''
-      for (const n of laid.nodes) {
-        if (n.type === 'person') {
-          personCount++
-          const pd = n.data as PersonData
-          if (pd.isRoot) rootName = pd.name
-          const g = pd.generation ?? 0
-          if (g < minGen) minGen = g
-          if (g > maxGen) maxGen = g
-        } else unionCount++
-      }
-
-      setNodes(laid.nodes)
-      setEdges(laid.edges)
-      exposeStats({
-        personCount,
-        unionCount,
-        ancestorGens: -minGen,
-        descendantGens: maxGen,
-        nodeCount: laid.nodes.length,
-        rootName,
-      })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
-    } finally {
-      setLoading(false)
-    }
-  }, [rootId, depth, exposeStats])
+  const onStatsRef = useRef(onStats)
+  onStatsRef.current = onStats
+  const nodesRef = useRef(nodes)
+  nodesRef.current = nodes
 
   useEffect(() => {
-    fetchTree()
-  }, [fetchTree])
+    if (!rootId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const res = await fetch(`/api/tree/${encodeURIComponent(rootId)}?depth=${depth}`)
+        if (!res.ok) throw new Error(`Failed to fetch tree: ${res.status}`)
+        const data: TreeResponse = await res.json()
+        if (cancelled) return
+
+        const rootInternal =
+          data.nodes.find(n => n.type === 'person' && (n.data as PersonData).gedcomId === rootId)?.id ??
+          null
+
+        const rawNodes: Node[] = data.nodes.map(n => ({
+          id: n.id,
+          type: n.type,
+          data: n.data,
+          position: n.position,
+        }))
+
+        const rawEdges: Edge[] = data.edges.map(e => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          data: { kind: e.label },
+          label: e.label,
+          ...(e.label === REL.CHILD ? edgeStyleChild : edgeStyleUnion),
+        }))
+
+        const laid = applyDagreLayout(rawNodes, rawEdges, { rootId: rootInternal })
+
+        let personCount = 0
+        let unionCount = 0
+        let minGen = 0
+        let maxGen = 0
+        let rootName = ''
+        for (const n of laid.nodes) {
+          if (n.type === 'person') {
+            personCount++
+            const pd = n.data as PersonData
+            if (pd.isRoot) rootName = pd.name
+            const g = pd.generation ?? 0
+            if (g < minGen) minGen = g
+            if (g > maxGen) maxGen = g
+          } else unionCount++
+        }
+
+        setNodes(laid.nodes)
+        setEdges(laid.edges)
+        onStatsRef.current({
+          personCount,
+          unionCount,
+          ancestorGens: -minGen,
+          descendantGens: maxGen,
+          nodeCount: laid.nodes.length,
+          rootName,
+        })
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Unknown error')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [rootId, depth])
 
   useEffect(() => {
     if (nodes.length === 0) return
     const root = nodes.find(n => (n.data as PersonData)?.isRoot)
-    if (root) {
-      // Center and zoom on root initially.
-      setTimeout(() => setCenter(root.position.x + 100, root.position.y + 38, { zoom: 1, duration: 600 }), 80)
-    } else {
+    if (!root) {
       fitView({ duration: 500, padding: 0.15 })
+      return
     }
+    const t = setTimeout(
+      () => setCenter(root.position.x + PERSON_NODE_CENTER_X, root.position.y + PERSON_NODE_CENTER_Y, { zoom: 1, duration: 600 }),
+      80,
+    )
+    return () => clearTimeout(t)
   }, [nodes, fitView, setCenter])
 
   useEffect(() => {
     if (fitSignal > 0) fitView({ duration: 500, padding: 0.15 })
   }, [fitSignal, fitView])
 
-  // Focus-scroll to the currently selected person when drawer opens
   useEffect(() => {
     if (!selectedPersonId) return
-    const n = nodes.find(x => (x.data as PersonData)?.gedcomId === selectedPersonId)
-    if (n) {
-      setCenter(n.position.x + 100, n.position.y + 38, { zoom: 1.2, duration: 500 })
+    // Intentionally not depending on `nodes`: we only want to recenter when the
+    // selection changes, not on every tree refetch.
+    const match = getNode(selectedPersonId)
+    const direct = match
+      ? match
+      : (nodesRef.current.find(x => (x.data as PersonData)?.gedcomId === selectedPersonId) ?? null)
+    if (direct) {
+      setCenter(direct.position.x + PERSON_NODE_CENTER_X, direct.position.y + PERSON_NODE_CENTER_Y, { zoom: 1.2, duration: 500 })
     }
-  }, [selectedPersonId, nodes, setCenter, getNode])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPersonId])
 
   if (error) {
-    return (
-      <div className="flex items-center justify-center h-full text-rose-300">
-        {error}
-      </div>
-    )
+    return <div className="flex items-center justify-center h-full text-rose-300">{error}</div>
   }
 
   return (
@@ -173,14 +210,10 @@ function FlowCanvas({
         maxZoom={2.5}
         proOptions={{ hideAttribution: true }}
         onNodeClick={(_, node) => {
-          if (node.type === 'person') {
-            onSelectPerson((node.data as PersonData).gedcomId)
-          }
+          if (node.type === 'person') onSelectPerson((node.data as PersonData).gedcomId)
         }}
         onNodeDoubleClick={(_, node) => {
-          if (node.type === 'person') {
-            setRootId((node.data as PersonData).gedcomId)
-          }
+          if (node.type === 'person') setRootId((node.data as PersonData).gedcomId)
         }}
         onPaneClick={() => onSelectPerson(null)}
       >
@@ -194,15 +227,7 @@ function FlowCanvas({
             borderRadius: 8,
           }}
           maskColor="rgba(3, 7, 18, 0.75)"
-          nodeColor={(n) => {
-            const d = n.data as PersonData | undefined
-            if (n.type !== 'person') return '#fbbf24'
-            if (d?.isRoot) return '#fde68a'
-            const g = d?.generation ?? 0
-            if (g < 0) return '#818cf8'
-            if (g > 0) return '#34d399'
-            return '#94a3b8'
-          }}
+          nodeColor={minimapNodeColor}
         />
         <Controls
           className="!bg-slate-900/80 !backdrop-blur !border !border-white/10 !rounded-lg !shadow-lg"
@@ -219,11 +244,12 @@ function FlowCanvas({
 }
 
 export default function FamilyTree() {
+  const [persons, setPersons] = useState<Person[]>([])
   const [rootId, setRootIdState] = useState('')
   const [history, setHistory] = useState<string[]>([])
   const [depth, setDepth] = useState(6)
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<Stats>({
     personCount: 0,
     unionCount: 0,
     ancestorGens: 0,
@@ -234,18 +260,16 @@ export default function FamilyTree() {
   const [fitSignal, setFitSignal] = useState(0)
   const didInit = useRef(false)
 
-  // Initial root selection — prefer someone with both birth and death year and a place
   useEffect(() => {
-    if (didInit.current) return
-    didInit.current = true
     fetch('/api/persons')
-      .then(r => r.json())
-      .then((persons: Array<{ gedcomId: string; name: string; birthYear: string | null; deathYear: string | null; birthPlace: string | null }>) => {
-        const richest = persons.find(p => p.birthYear && p.deathYear && p.birthPlace)
-        const withDates = persons.find(p => p.birthYear || p.deathYear)
-        const withName = persons.find(p => p.name && p.name.trim().length > 2)
-        const chosen = richest ?? withDates ?? withName ?? persons[0]
-        if (chosen) setRootIdState(chosen.gedcomId)
+      .then(r => r.json() as Promise<Person[]>)
+      .then(list => {
+        setPersons(list)
+        if (!didInit.current) {
+          didInit.current = true
+          const chosen = pickDefaultRoot(list)
+          if (chosen) setRootIdState(chosen.gedcomId)
+        }
       })
   }, [])
 
@@ -260,13 +284,12 @@ export default function FamilyTree() {
   const goBack = useCallback(() => {
     setHistory(h => {
       if (h.length === 0) return h
-      const prev = h[h.length - 1]
-      setRootIdState(prev)
+      setRootIdState(h[h.length - 1])
       return h.slice(0, -1)
     })
   }, [])
 
-  const exposeStats = useCallback((s: typeof stats) => setStats(s), [])
+  const onFit = useCallback(() => setFitSignal(x => x + 1), [])
 
   const toolbarProps = useMemo(() => ({
     rootId,
@@ -280,12 +303,11 @@ export default function FamilyTree() {
     onDepth: setDepth,
     canGoBack: history.length > 0,
     onBack: goBack,
-    onFit: () => setFitSignal(x => x + 1),
-  }), [rootId, stats, depth, history.length, goBack])
+    onFit,
+  }), [rootId, stats, depth, history.length, goBack, onFit])
 
   return (
     <div className="relative w-screen h-screen bg-[radial-gradient(ellipse_at_center,_#0a1124_0%,_#030711_70%)] overflow-hidden">
-      {/* Soft aurora backdrop */}
       <div className="pointer-events-none absolute inset-0 opacity-50">
         <div className="absolute -top-32 -left-32 h-80 w-80 rounded-full bg-indigo-500/10 blur-3xl" />
         <div className="absolute top-1/4 right-0 h-80 w-80 rounded-full bg-amber-500/10 blur-3xl" />
@@ -293,7 +315,10 @@ export default function FamilyTree() {
       </div>
 
       <ReactFlowProvider>
-        <SearchBar onSelect={(id) => { setRootId(id); setSelectedPersonId(id) }} />
+        <SearchBar
+          persons={persons}
+          onSelect={(id) => { setRootId(id); setSelectedPersonId(id) }}
+        />
         <Toolbar {...toolbarProps} />
         <FlowCanvas
           rootId={rootId}
@@ -301,14 +326,14 @@ export default function FamilyTree() {
           depth={depth}
           selectedPersonId={selectedPersonId}
           onSelectPerson={setSelectedPersonId}
-          exposeStats={exposeStats}
+          onStats={setStats}
           fitSignal={fitSignal}
         />
         <PersonDrawer
           personId={selectedPersonId}
           onClose={() => setSelectedPersonId(null)}
           onFocus={(id) => { setRootId(id); setSelectedPersonId(id) }}
-          onSelect={(id) => setSelectedPersonId(id)}
+          onSelect={setSelectedPersonId}
         />
         <Legend />
       </ReactFlowProvider>

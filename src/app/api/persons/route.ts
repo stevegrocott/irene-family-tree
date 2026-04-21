@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server'
 import { read } from '@/lib/neo4j'
 
 export const runtime = 'nodejs'
@@ -23,5 +22,5 @@ export async function GET() {
             p.birthPlace AS birthPlace
      ORDER BY p.surname, p.givenName, p.name`
   )
-  return NextResponse.json(persons)
+  return Response.json(persons)
 }

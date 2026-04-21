@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { PersonDetail, Relative } from '@/types/tree'
+import { sexDotClass, formatLifespan } from '@/lib/person'
 
 interface Props {
   personId: string | null
@@ -19,13 +20,11 @@ function RelativeRow({
   onClick: (id: string) => void
   onFocus: (id: string) => void
 }) {
-  const sexDot =
-    r.sex === 'M' ? 'bg-sky-400' : r.sex === 'F' ? 'bg-pink-400' : 'bg-slate-400'
-  const dates = [r.birthYear, r.deathYear].filter(Boolean).join('–')
+  const dates = formatLifespan(r)
   return (
     <li className="group flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/[0.06] cursor-pointer"
         onClick={() => onClick(r.gedcomId)}>
-      <span className={`h-1.5 w-1.5 rounded-full ${sexDot}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${sexDotClass(r.sex)}`} />
       <div className="min-w-0 flex-1">
         <div className="text-[13px] text-white truncate">{r.name || '(unknown)'}</div>
         {dates && <div className="text-[11px] text-white/50 tabular-nums">{dates}</div>}
@@ -179,21 +178,18 @@ export default function PersonDrawer({
                 </Field>
               </div>
 
-              <Section title="Parents" count={data.parents.length}>
-                <ul className="space-y-0.5">
-                  {data.parents.map(r => (
-                    <RelativeRow key={r.gedcomId} r={r} onClick={onSelect} onFocus={onFocus} />
-                  ))}
-                </ul>
-              </Section>
-
-              <Section title="Siblings" count={data.siblings.length}>
-                <ul className="space-y-0.5">
-                  {data.siblings.map(r => (
-                    <RelativeRow key={r.gedcomId} r={r} onClick={onSelect} onFocus={onFocus} />
-                  ))}
-                </ul>
-              </Section>
+              {([
+                ['Parents', data.parents],
+                ['Siblings', data.siblings],
+              ] as const).map(([title, list]) => (
+                <Section key={title} title={title} count={list.length}>
+                  <ul className="space-y-0.5">
+                    {list.map(r => (
+                      <RelativeRow key={r.gedcomId} r={r} onClick={onSelect} onFocus={onFocus} />
+                    ))}
+                  </ul>
+                </Section>
+              ))}
 
               {data.marriages.length > 0 && (
                 <div className="mb-4">

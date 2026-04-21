@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+
 interface Props {
   rootName: string
   rootId: string
@@ -29,6 +31,9 @@ export default function Toolbar({
   onBack,
   onFit,
 }: Props) {
+  const [localDepth, setLocalDepth] = useState(depth)
+  useEffect(() => { setLocalDepth(depth) }, [depth])
+
   return (
     <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
       <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.5)]">
@@ -63,11 +68,13 @@ export default function Toolbar({
             type="range"
             min={1}
             max={12}
-            value={depth}
-            onChange={e => onDepth(parseInt(e.target.value, 10))}
+            value={localDepth}
+            onChange={e => setLocalDepth(parseInt(e.target.value, 10))}
+            onPointerUp={() => { if (localDepth !== depth) onDepth(localDepth) }}
+            onKeyUp={() => { if (localDepth !== depth) onDepth(localDepth) }}
             className="w-24 accent-amber-300"
           />
-          <span className="text-[11px] text-white/70 tabular-nums w-4 text-right">{depth}</span>
+          <span className="text-[11px] text-white/70 tabular-nums w-4 text-right">{localDepth}</span>
         </div>
         <div className="w-px h-5 bg-white/10" />
         <button

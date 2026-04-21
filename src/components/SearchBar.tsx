@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { sexDotClass, formatLifespan } from '@/lib/person'
 
-interface Person {
+export interface Person {
   gedcomId: string
   name: string
   sex: string | null
@@ -10,18 +11,14 @@ interface Person {
   birthPlace: string | null
 }
 interface Props {
+  persons: Person[]
   onSelect: (gedcomId: string) => void
 }
 
-export default function SearchBar({ onSelect }: Props) {
-  const [persons, setPersons] = useState<Person[]>([])
+export default function SearchBar({ persons, onSelect }: Props) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    fetch('/api/persons').then(r => r.json()).then(setPersons)
-  }, [])
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -74,20 +71,14 @@ export default function SearchBar({ onSelect }: Props) {
         {open && results.length > 0 && (
           <ul className="mt-2 space-y-0.5 max-h-80 overflow-y-auto pr-1 custom-scrollbar">
             {results.map(p => {
-              const dates = [p.birthYear, p.deathYear].filter(Boolean).join('–')
-              const sexDot =
-                p.sex === 'M'
-                  ? 'bg-sky-400'
-                  : p.sex === 'F'
-                  ? 'bg-pink-400'
-                  : 'bg-slate-400'
+              const dates = formatLifespan(p)
               return (
                 <li
                   key={p.gedcomId}
                   onClick={() => pick(p.gedcomId)}
                   className="group px-2 py-2 rounded-lg cursor-pointer hover:bg-white/[0.08] transition-colors flex items-start gap-2"
                 >
-                  <span className={`mt-1.5 h-1.5 w-1.5 rounded-full ${sexDot}`} />
+                  <span className={`mt-1.5 h-1.5 w-1.5 rounded-full ${sexDotClass(p.sex)}`} />
                   <div className="min-w-0 flex-1">
                     <div className="text-[13px] font-medium text-white truncate">
                       {p.name}

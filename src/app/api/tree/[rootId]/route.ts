@@ -1,9 +1,9 @@
 import { read } from '@/lib/neo4j'
-import { FlowNode, FlowEdge, TreeResponse, PersonData, UnionData } from '@/types/tree'
+import { FlowNode, FlowEdge, TreeResponse, PersonData, UnionData, REL } from '@/types/tree'
 
 export const runtime = 'nodejs'
 
-const RELATIONSHIP_FILTER = 'UNION|CHILD'
+const RELATIONSHIP_FILTER = `${REL.UNION}|${REL.CHILD}`
 const DEFAULT_MAX_LEVEL = 8
 const MAX_NODES = 500
 const UNION_LABEL = 'Union'

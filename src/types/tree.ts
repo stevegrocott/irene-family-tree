@@ -1,3 +1,9 @@
+export const REL = {
+  CHILD: 'CHILD',
+  UNION: 'UNION',
+} as const
+export type RelKind = typeof REL[keyof typeof REL]
+
 export interface PersonData {
   gedcomId: string
   name: string

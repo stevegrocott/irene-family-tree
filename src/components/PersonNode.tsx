@@ -2,6 +2,7 @@
 
 import { Handle, Position, type NodeProps } from 'reactflow'
 import type { PersonData } from '@/types/tree'
+import { sexDotClass } from '@/lib/person'
 
 const initialsOf = (data: PersonData) => {
   const src = data.name || `${data.givenName ?? ''} ${data.surname ?? ''}`.trim()
@@ -26,8 +27,7 @@ export default function PersonNode({ data, selected }: NodeProps<PersonData>) {
       ? 'from-pink-500/80 to-rose-600/80'
       : 'from-slate-500/80 to-slate-700/80'
 
-  const accentLine =
-    sex === 'M' ? 'bg-sky-400' : sex === 'F' ? 'bg-pink-400' : 'bg-slate-400'
+  const accentLine = sexDotClass(sex)
 
   const ring = isRoot
     ? 'ring-2 ring-amber-300/90 shadow-[0_0_35px_rgba(252,211,77,0.35)]'

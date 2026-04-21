@@ -155,6 +155,13 @@ head -50 family-tree.ged
 
 Confirm records start with `0 @I<n>@ INDI` (individuals) and `0 @F<n>@ FAM` (families).
 
+> **Finding (Task 1 spike):** `family-tree.ged` uses **both** NAME formats simultaneously.
+> Each `INDI` record has:
+> - `1 NAME GivenName/Surname/` — slash-delimited primary NAME tag (GEDCOM 5.5.1 slash format)
+> - `2 GIVN GivenName` + `2 SURN Surname` — structured GIVN/SURN subtags
+>
+> The importer should use `GIVN`/`SURN` subtags (already done in the script below) as they are structured and reliable. The slash format is a display fallback only.
+
 **Step 2: Write the importer script**
 
 Create `scripts/import-gedcom.ts`:

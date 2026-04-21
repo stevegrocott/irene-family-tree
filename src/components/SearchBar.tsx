@@ -2,15 +2,18 @@
 import { useState, useEffect } from 'react'
 
 interface Person { gedcomId: string; name: string }
-interface Props { onSelect: (gedcomId: string) => void }
+interface Props { onSelect: (gedcomId: string) => void; persons?: Person[] }
 
-export default function SearchBar({ onSelect }: Props) {
-  const [persons, setPersons] = useState<Person[]>([])
-  const [query, setQuery]     = useState('')
+export default function SearchBar({ onSelect, persons: personsProp }: Props) {
+  const [fetchedPersons, setFetchedPersons] = useState<Person[]>([])
+  const [query, setQuery]                   = useState('')
 
   useEffect(() => {
-    fetch('/api/persons').then(r => r.json()).then(setPersons)
-  }, [])
+    if (personsProp) return
+    fetch('/api/persons').then(r => r.json()).then(setFetchedPersons)
+  }, [personsProp])
+
+  const persons = personsProp ?? fetchedPersons
 
   const results = query.length > 1
     ? persons.filter(p => p.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8)

@@ -34,12 +34,40 @@ const defaultEdgeOptions = {
   animated: false,
 }
 
+function DepthControl({ hops, onChange }: { hops: number; onChange: (hops: number) => void }) {
+  return (
+    <div className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+      <span className="text-xs text-white/60 select-none">Depth</span>
+      <button
+        data-testid="hops-decrease"
+        onClick={() => onChange(Math.max(1, hops - 1))}
+        className="w-6 h-6 flex items-center justify-center rounded-lg text-white/80 hover:bg-white/15 hover:text-white transition-colors text-sm font-medium"
+        aria-label="Decrease depth"
+      >
+        −
+      </button>
+      <span data-testid="hops-value" className="text-sm text-white font-medium w-4 text-center select-none">
+        {hops}
+      </span>
+      <button
+        data-testid="hops-increase"
+        onClick={() => onChange(Math.min(16, hops + 1))}
+        className="w-6 h-6 flex items-center justify-center rounded-lg text-white/80 hover:bg-white/15 hover:text-white transition-colors text-sm font-medium"
+        aria-label="Increase depth"
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
 function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (id: string) => void }) {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [treeBounds, setTreeBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [hops, setHops] = useState(8)
   const { setViewport } = useReactFlow()
 
   const fetchTree = useCallback(async () => {
@@ -47,7 +75,7 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch(`/api/tree/${rootId}`)
+      const res = await fetch(`/api/tree/${rootId}?hops=${hops}`)
       if (!res.ok) throw new Error(`Failed to fetch tree: ${res.status}`)
       const data: TreeResponse = await res.json()
 
@@ -82,7 +110,7 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
     } finally {
       setLoading(false)
     }
-  }, [rootId])
+  }, [rootId, hops])
 
   useEffect(() => {
     fetchTree()
@@ -125,6 +153,7 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
   return (
     <>
       <SearchBar onSelect={onSelectRoot} />
+      <DepthControl hops={hops} onChange={setHops} />
       {/* Loading/error overlays — ReactFlow stays mounted so its viewport is always initialized */}
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center text-slate-400 z-10 pointer-events-none">

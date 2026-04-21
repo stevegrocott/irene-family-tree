@@ -35,6 +35,10 @@ const GEDCOM_TYPES = {
   HUSBAND: 'HUSB',
   WIFE: 'WIFE',
   CHILD: 'CHIL',
+  PLACE: 'PLAC',
+  OCCUPATION: 'OCCU',
+  NOTE: 'NOTE',
+  MARRIAGE: 'MARR',
 }
 
 // Load .env.local for local dev (no dotenv dependency needed)
@@ -118,7 +122,17 @@ async function main() {
     await session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (u:Union) REQUIRE u.gedcomId IS UNIQUE')
 
     // Batch-build person rows
-    const personRows: { gedcomId: string; name: string; sex: string; birthYear: string | null; deathYear: string | null }[] = []
+    const personRows: {
+      gedcomId: string
+      name: string
+      sex: string
+      birthYear: string | null
+      deathYear: string | null
+      birthPlace: string | null
+      deathPlace: string | null
+      occupation: string | null
+      notes: string | null
+    }[] = []
     for (const indi of root.children.filter(r => r.type === GEDCOM_TYPES.INDIVIDUAL)) {
       if (!indi.data?.xref_id) {
         console.warn('Skipping INDI record without xref_id')
@@ -129,12 +143,21 @@ async function main() {
       const deathNode = findChild(indi.children, GEDCOM_TYPES.DEATH)
       const givenName = childValue(nameNode?.children ?? [], GEDCOM_TYPES.GIVEN_NAME)
       const surname = childValue(nameNode?.children ?? [], GEDCOM_TYPES.SURNAME)
+      const birthPlace = childValue(birthNode?.children ?? [], GEDCOM_TYPES.PLACE) || null
+      const deathPlace = childValue(deathNode?.children ?? [], GEDCOM_TYPES.PLACE) || null
+      const occupation = childValue(indi.children, GEDCOM_TYPES.OCCUPATION) || null
+      const noteNode = findChild(indi.children, GEDCOM_TYPES.NOTE)
+      const notes = (noteNode?.value ?? noteNode?.data?.formal_name ?? null) as string | null
       personRows.push({
         gedcomId: indi.data.xref_id,
         name: [givenName, surname].filter(Boolean).join(' '),
         sex: childValue(indi.children, GEDCOM_TYPES.SEX),
         birthYear: childValue(birthNode?.children ?? [], GEDCOM_TYPES.DATE).match(/\d{4}/)?.[0] ?? null,
         deathYear: childValue(deathNode?.children ?? [], GEDCOM_TYPES.DATE).match(/\d{4}/)?.[0] ?? null,
+        birthPlace,
+        deathPlace,
+        occupation,
+        notes,
       })
     }
 
@@ -145,14 +168,18 @@ async function main() {
          SET p.name = row.name,
              p.sex = row.sex,
              p.birthYear = row.birthYear,
-             p.deathYear = row.deathYear`,
+             p.deathYear = row.deathYear,
+             p.birthPlace = row.birthPlace,
+             p.deathPlace = row.deathPlace,
+             p.occupation = row.occupation,
+             p.notes = row.notes`,
         { rows: personRows }
       )
     )
 
     // Batch-build union rows and relationship rows
     const families = root.children.filter(r => r.type === GEDCOM_TYPES.FAMILY)
-    const unionRows: { gedcomId: string }[] = []
+    const unionRows: { gedcomId: string; marriageDate: string | null; marriagePlace: string | null }[] = []
     const spouseRows: { pid: string; uid: string }[] = []
     const childRows: { pid: string; uid: string }[] = []
 
@@ -162,7 +189,10 @@ async function main() {
         continue
       }
       const uid = fam.data.xref_id
-      unionRows.push({ gedcomId: uid })
+      const marrNode = findChild(fam.children, GEDCOM_TYPES.MARRIAGE)
+      const marriageDate = childValue(marrNode?.children ?? [], GEDCOM_TYPES.DATE) || null
+      const marriagePlace = childValue(marrNode?.children ?? [], GEDCOM_TYPES.PLACE) || null
+      unionRows.push({ gedcomId: uid, marriageDate, marriagePlace })
       const husb = findChild(fam.children, GEDCOM_TYPES.HUSBAND)?.data?.pointer
       const wife = findChild(fam.children, GEDCOM_TYPES.WIFE)?.data?.pointer
       if (husb) spouseRows.push({ pid: husb, uid })
@@ -174,7 +204,10 @@ async function main() {
 
     await session.executeWrite(tx =>
       tx.run(
-        'UNWIND $rows AS row MERGE (u:Union {gedcomId: row.gedcomId})',
+        `UNWIND $rows AS row
+         MERGE (u:Union {gedcomId: row.gedcomId})
+         SET u.marriageDate = row.marriageDate,
+             u.marriagePlace = row.marriagePlace`,
         { rows: unionRows }
       )
     )

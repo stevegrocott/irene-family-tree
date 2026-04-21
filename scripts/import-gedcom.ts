@@ -1,3 +1,18 @@
+/**
+ * GEDCOM Family Tree Importer
+ *
+ * Imports family tree data from a GEDCOM file into a Neo4j database.
+ * Parses individual and family records, creating Person and Family nodes
+ * with relationships representing spouse and parent-child connections.
+ *
+ * Environment variables required:
+ * - NEO4J_URI: URL of Neo4j database instance
+ * - NEO4J_USER: Neo4j username
+ * - NEO4J_PASSWORD: Neo4j password
+ *
+ * The script clears all existing data before importing to ensure a clean state.
+ */
+
 import * as fs from 'fs'
 import * as path from 'path'
 import { parse } from 'parse-gedcom'
@@ -12,6 +27,18 @@ if (fs.existsSync(envPath)) {
   }
 }
 
+/**
+ * Represents a node in the parsed GEDCOM structure.
+ * The GEDCOM format is hierarchical where records contain nested properties.
+ *
+ * @interface GedNode
+ * @property {string} type - The GEDCOM record type (e.g., 'INDI', 'FAM', 'NAME', 'BIRT')
+ * @property {Object} [data] - Optional metadata about the record
+ * @property {string} [data.xref_id] - Cross-reference identifier for the record
+ * @property {string} [data.pointer] - Reference pointer to another record
+ * @property {string} [value] - The value associated with this node
+ * @property {GedNode[]} children - Child nodes in the GEDCOM hierarchy
+ */
 interface GedNode {
   type: string
   data?: { xref_id?: string; pointer?: string }
@@ -19,14 +46,44 @@ interface GedNode {
   children: GedNode[]
 }
 
+/**
+ * Finds the first child node with the specified type.
+ *
+ * @param {GedNode[]} nodes - Array of nodes to search
+ * @param {string} type - The GEDCOM type to find
+ * @returns {GedNode | undefined} The first matching child node, or undefined if not found
+ */
 function findChild(nodes: GedNode[], type: string): GedNode | undefined {
   return nodes.find(n => n.type === type)
 }
 
+/**
+ * Extracts the value of a child node with the specified type.
+ * Returns an empty string if the node or its value is not found.
+ *
+ * @param {GedNode[]} nodes - Array of nodes to search
+ * @param {string} type - The GEDCOM type to find
+ * @returns {string} The node's value, or empty string if not found
+ */
 function childValue(nodes: GedNode[], type: string): string {
   return findChild(nodes, type)?.value ?? ''
 }
 
+/**
+ * Main entry point for the GEDCOM import process.
+ *
+ * Performs the following steps:
+ * 1. Reads and parses the GEDCOM file
+ * 2. Connects to Neo4j database
+ * 3. Clears existing data and creates unique constraints
+ * 4. Imports all individuals as Person nodes with biographical data
+ * 5. Imports all families as Family nodes and creates relationship links
+ * 6. Reports counts of imported records
+ *
+ * @async
+ * @returns {Promise<void>}
+ * @throws {Error} If database connection fails or Neo4j operations error
+ */
 async function main() {
   const filePath = path.join(__dirname, '../family-tree.ged')
   const content = fs.readFileSync(filePath, 'utf-8')

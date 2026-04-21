@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "jest"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
@@ -17,6 +18,11 @@
     "react-dom": "19.2.4",
     "reactflow": "^11.11.4"
   },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": ["**/*.test.ts"]
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/dagre": "^0.7.54",
@@ -26,6 +32,9 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
+    "@types/jest": "^29",
+    "jest": "^29",
+    "ts-jest": "^29",
     "ts-node": "^10.9.2",
     "typescript": "^5"
   }

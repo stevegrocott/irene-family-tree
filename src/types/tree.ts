@@ -54,36 +54,6 @@ export interface UnionData {
   marriagePlace?: string | null
 }
 
-/** Relationship kind between a focal person and a relative. */
-export type RelKind = 'parent' | 'child' | 'spouse' | 'sibling'
-
-/**
- * A person related to a focal individual, including the relationship kind.
- */
-export interface Relative {
-  /** GEDCOM identifier of the relative. */
-  gedcomId: string
-  /** Full display name of the relative. */
-  name: string
-  /** Sex code of the relative: `'M'`, `'F'`, or `'U'`. */
-  sex: string
-  /** Four-digit birth year of the relative, or `null` if unknown. */
-  birthYear: string | null
-  /** Four-digit death year of the relative, or `null` if unknown. */
-  deathYear: string | null
-  /** How this person is related to the focal individual. */
-  relKind: RelKind
-}
-
-/**
- * Extended person record that includes all immediate relatives.
- * Returned by the `GET /api/person/[id]` endpoint.
- */
-export interface PersonDetail extends PersonData {
-  /** Immediate relatives (parents, children, spouses, siblings). */
-  relatives: Relative[]
-}
-
 /**
  * A node in the ReactFlow family tree graph as serialised by the API.
  */

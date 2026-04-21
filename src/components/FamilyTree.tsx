@@ -28,7 +28,7 @@ import SearchBar from '@/components/SearchBar'
 import { applyDagreLayout } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
 import type { TreeResponse, PersonData, PersonDetailResponse } from '@/types/tree'
-import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES } from '@/constants/tree'
+import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID } from '@/constants/tree'
 
 /**
  * Minimal person summary used for the search bar and root selection.
@@ -195,7 +195,6 @@ function PersonDrawer({
 
         {detail && (
           <>
-            {/* PARENTS */}
             <section data-testid="person-drawer-parents">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Parents</h3>
               {detail.parents.length === 0 ? (
@@ -219,7 +218,6 @@ function PersonDrawer({
               )}
             </section>
 
-            {/* SIBLINGS */}
             <section data-testid="person-drawer-siblings">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Siblings</h3>
               {detail.siblings.length === 0 ? (
@@ -243,7 +241,6 @@ function PersonDrawer({
               )}
             </section>
 
-            {/* MARRIAGES */}
             <section data-testid="person-drawer-marriages">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Marriages</h3>
               {detail.marriages.length === 0 ? (
@@ -255,7 +252,7 @@ function PersonDrawer({
                       {m.spouse && (
                         <button
                           className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/10 transition-colors text-sm text-white/80 hover:text-white"
-                          onClick={() => m.spouse && onSelectPerson(m.spouse.gedcomId)}
+                          onClick={() => onSelectPerson(m.spouse!.gedcomId)}
                         >
                           <span className="font-medium">{m.spouse.name || 'Unknown'}</span>
                           {m.spouse.birthYear && (
@@ -511,7 +508,7 @@ export default function FamilyTree() {
       })
       .then((data: Person[]) => {
         setPersons(data)
-        const defaultPerson = data.find(p => p.gedcomId === '@I85@') ?? data.find(p => p.name?.trim()) ?? data[0]
+        const defaultPerson = data.find(p => p.gedcomId === DEFAULT_ROOT_GEDCOM_ID) ?? data.find(p => p.name?.trim()) ?? data[0]
         if (defaultPerson) setRootId(defaultPerson.gedcomId)
       })
       .catch((err) => {

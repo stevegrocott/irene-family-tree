@@ -6,6 +6,8 @@ import ReactFlow, {
   BackgroundVariant,
   Controls,
   MiniMap,
+  ReactFlowProvider,
+  useReactFlow,
   type Node,
   type Edge,
 } from 'reactflow'
@@ -13,6 +15,7 @@ import 'reactflow/dist/style.css'
 
 import PersonNode from '@/components/PersonNode'
 import UnionNode from '@/components/UnionNode'
+import SearchBar from '@/components/SearchBar'
 import { applyDagreLayout } from '@/lib/layout'
 import type { TreeResponse } from '@/types/tree'
 
@@ -24,17 +27,15 @@ const defaultEdgeOptions = {
   animated: false,
 }
 
-interface FamilyTreeProps {
-  rootId?: string
-}
-
-export default function FamilyTree({ rootId = '' }: FamilyTreeProps) {
+function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (id: string) => void }) {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { fitView } = useReactFlow()
 
   const fetchTree = useCallback(async () => {
+    if (!rootId) return
     try {
       setLoading(true)
       setError(null)
@@ -70,6 +71,12 @@ export default function FamilyTree({ rootId = '' }: FamilyTreeProps) {
     fetchTree()
   }, [fetchTree])
 
+  useEffect(() => {
+    if (nodes.length > 0) {
+      fitView()
+    }
+  }, [nodes, fitView])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full text-slate-400">
@@ -87,7 +94,8 @@ export default function FamilyTree({ rootId = '' }: FamilyTreeProps) {
   }
 
   return (
-    <div className="w-screen h-screen bg-[#050a18]">
+    <>
+      <SearchBar onSelect={onSelectRoot} />
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -104,6 +112,26 @@ export default function FamilyTree({ rootId = '' }: FamilyTreeProps) {
         />
         <Controls />
       </ReactFlow>
+    </>
+  )
+}
+
+export default function FamilyTree() {
+  const [rootId, setRootId] = useState('')
+
+  useEffect(() => {
+    fetch('/api/persons')
+      .then(r => r.json())
+      .then((persons: Array<{ gedcomId: string; name: string }>) => {
+        if (persons.length > 0) setRootId(persons[0].gedcomId)
+      })
+  }, [])
+
+  return (
+    <div className="relative w-screen h-screen bg-[#050a18]">
+      <ReactFlowProvider>
+        <FlowCanvas rootId={rootId} onSelectRoot={setRootId} />
+      </ReactFlowProvider>
     </div>
   )
 }

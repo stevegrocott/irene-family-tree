@@ -141,30 +141,50 @@ describe('GET /api/tree/[rootId]', () => {
   })
 
   it('returns parents and children for a root with known family connections', async () => {
-    const root    = { _id: 'n:1', _labels: ['Person'], gedcomId: 'I001', name: 'Root', sex: 'M', birthYear: '1950', deathYear: null }
+    const root    = { _id: 'n:1', _labels: ['Person'], gedcomId: 'I001', name: 'Root',   sex: 'M', birthYear: '1950', deathYear: null }
     const father  = { _id: 'n:2', _labels: ['Person'], gedcomId: 'I002', name: 'Father', sex: 'M', birthYear: '1920', deathYear: null }
     const mother  = { _id: 'n:3', _labels: ['Person'], gedcomId: 'I003', name: 'Mother', sex: 'F', birthYear: '1922', deathYear: null }
-    const birth   = { _id: 'n:4', _labels: ['Union'], gedcomId: 'F001' }
+    const birth   = { _id: 'n:4', _labels: ['Union'],  gedcomId: 'F001' }
     const spouse  = { _id: 'n:5', _labels: ['Person'], gedcomId: 'I004', name: 'Spouse', sex: 'F', birthYear: '1952', deathYear: null }
-    const marriage= { _id: 'n:6', _labels: ['Union'], gedcomId: 'F002' }
-    const child   = { _id: 'n:7', _labels: ['Person'], gedcomId: 'I005', name: 'Child', sex: 'M', birthYear: '1975', deathYear: null }
+    const marriage = { _id: 'n:6', _labels: ['Union'], gedcomId: 'F002' }
+    const child   = { _id: 'n:7', _labels: ['Person'], gedcomId: 'I005', name: 'Child',  sex: 'M', birthYear: '1975', deathYear: null }
+
+    // Relationships reflecting the bounce-traversal query structure:
+    // Person -[CHILD]-> Union  (person was born into this union)
+    // Person -[UNION]-> Union  (person is a parent/spouse in this union)
+    const rels = [
+      { _id: 'rel:1', type: 'CHILD', start: 'n:1', end: 'n:4' },  // root -CHILD-> birthUnion
+      { _id: 'rel:2', type: 'UNION', start: 'n:2', end: 'n:4' },  // father -UNION-> birthUnion
+      { _id: 'rel:3', type: 'UNION', start: 'n:3', end: 'n:4' },  // mother -UNION-> birthUnion
+      { _id: 'rel:4', type: 'UNION', start: 'n:1', end: 'n:6' },  // root -UNION-> marriageUnion
+      { _id: 'rel:5', type: 'UNION', start: 'n:5', end: 'n:6' },  // spouse -UNION-> marriageUnion
+      { _id: 'rel:6', type: 'CHILD', start: 'n:7', end: 'n:6' },  // child -CHILD-> marriageUnion
+    ]
 
     mockRead.mockResolvedValue([{
       nodes: [root, father, mother, birth, spouse, marriage, child],
-      rels: [],
+      rels,
     }])
 
     const response = await GET(makeRequest(), makeParams('I001'))
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    const gedcomIds = body.nodes.map((n: { data: { gedcomId: string } }) => n.data.gedcomId)
-    expect(gedcomIds).toContain('I001')
-    expect(gedcomIds).toContain('I002')
-    expect(gedcomIds).toContain('I003')
-    expect(gedcomIds).toContain('I004')
-    expect(gedcomIds).toContain('I005')
-    expect(gedcomIds).toContain('F001')
-    expect(gedcomIds).toContain('F002')
+
+    // All seven nodes (4 people + 2 unions + root) must be present
+    expect(
+      body.nodes.map((n: { data: { gedcomId: string } }) => n.data.gedcomId)
+    ).toEqual(expect.arrayContaining(['I001', 'I002', 'I003', 'I004', 'I005', 'F001', 'F002']))
+
+    // Six edges must be present with correct directions
+    expect(body.edges).toHaveLength(6)
+    expect(body.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'rel:1', source: 'n:1', target: 'n:4', label: 'CHILD' }),
+      expect.objectContaining({ id: 'rel:2', source: 'n:2', target: 'n:4', label: 'UNION' }),
+      expect.objectContaining({ id: 'rel:3', source: 'n:3', target: 'n:4', label: 'UNION' }),
+      expect.objectContaining({ id: 'rel:4', source: 'n:1', target: 'n:6', label: 'UNION' }),
+      expect.objectContaining({ id: 'rel:5', source: 'n:5', target: 'n:6', label: 'UNION' }),
+      expect.objectContaining({ id: 'rel:6', source: 'n:7', target: 'n:6', label: 'CHILD' }),
+    ]))
   })
 })

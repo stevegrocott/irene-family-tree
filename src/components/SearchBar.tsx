@@ -1,9 +1,32 @@
+/**
+ * @module SearchBar
+ * @description Client-side search widget that filters a person list by name and
+ * notifies the parent when a result is selected. Falls back to fetching
+ * `/api/persons` when no `persons` prop is supplied.
+ */
+
 'use client'
 import { useState, useEffect } from 'react'
 
+/** Minimal person record used for search filtering. */
 interface Person { gedcomId: string; name: string }
+
+/**
+ * Props for the {@link SearchBar} component.
+ *
+ * @property {(gedcomId: string) => void} onSelect - Called with the selected person's GEDCOM ID.
+ * @property {Person[]} [persons] - Optional pre-fetched person list; omit to fetch from `/api/persons`.
+ */
 interface Props { onSelect: (gedcomId: string) => void; persons?: Person[] }
 
+/**
+ * Floating search bar that filters persons by name and triggers selection.
+ *
+ * @param {Props} props - Component props.
+ * @param {(gedcomId: string) => void} props.onSelect - Callback fired when a result is clicked.
+ * @param {Person[]} [props.persons] - Optional person list; fetched from API when omitted.
+ * @returns {JSX.Element} Positioned search input with a dropdown results list.
+ */
 export default function SearchBar({ onSelect, persons: personsProp }: Props) {
   const [fetchedPersons, setFetchedPersons] = useState<Person[]>([])
   const [query, setQuery]                   = useState('')

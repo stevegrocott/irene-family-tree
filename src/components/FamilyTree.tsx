@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Interactive family tree visualisation component.
+ * Renders a ReactFlow canvas that fetches person/relationship data from the API,
+ * applies a dagre hierarchical layout, and supports search, depth control,
+ * node selection, and re-rooting the tree at any person.
+ */
+
 'use client'
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
@@ -23,21 +30,34 @@ import { formatLifespan } from '@/lib/person'
 import type { TreeResponse, PersonData } from '@/types/tree'
 import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES } from '@/constants/tree'
 
+/**
+ * Minimal person summary used for the search bar and root selection.
+ * @property gedcomId - GEDCOM identifier of the person
+ * @property name - Display name of the person
+ */
 interface Person { gedcomId: string; name: string }
 
+/** Map of custom node types for ReactFlow visualization. */
 const nodeTypes = { person: PersonNode, union: UnionNode }
 
+/** Default edge styling applied to all edges. */
 const defaultEdgeStyle: React.CSSProperties = { stroke: '#6366f1', strokeWidth: 1.5, opacity: 0.5 }
 
+/** Default configuration for all edges in the flow. */
 const defaultEdgeOptions = {
   type: 'smoothstep',
   animated: false,
 }
 
+/** Tailwind classes applied to depth control buttons. */
 const depthBtnClass = 'w-6 h-6 flex items-center justify-center rounded-lg text-white/80 hover:bg-white/15 hover:text-white transition-colors text-sm font-medium'
 
 /**
- * DepthControl overlay component for adjusting graph traversal depth.
+ * Control for adjusting tree depth (number of hops from root).
+ * Allows user to expand or collapse the family tree visualization.
+ *
+ * @param {number} hops - Current depth value between MIN_HOPS and MAX_HOPS
+ * @param {Function} onChange - Callback fired when user adjusts the depth
  */
 function DepthControl({ hops, onChange }: { hops: number; onChange: (hops: number) => void }) {
   return (
@@ -67,7 +87,11 @@ function DepthControl({ hops, onChange }: { hops: number; onChange: (hops: numbe
 }
 
 /**
- * Toolbar overlay showing stats derived from currently laid-out nodes.
+ * Displays count of people and families currently visible in the tree.
+ * Hidden when no people are displayed.
+ *
+ * @param {number} personCount - Number of person nodes displayed
+ * @param {number} unionCount - Number of union (family) nodes displayed
  */
 function Toolbar({ personCount, unionCount }: { personCount: number; unionCount: number }) {
   if (personCount === 0) return null
@@ -89,8 +113,12 @@ function Toolbar({ personCount, unionCount }: { personCount: number; unionCount:
 }
 
 /**
- * PersonDrawer side panel shown when a node is clicked.
- * Displays the selected person's details and provides a re-root action.
+ * Side drawer panel showing details for a selected person.
+ * Displays name, dates, and GEDCOM ID. Allows re-rooting the tree at this person.
+ *
+ * @param {PersonData} person - Person to display details for
+ * @param {Function} onClose - Called when user closes the drawer
+ * @param {Function} onReroot - Called with person's gedcomId to re-root the tree
  */
 function PersonDrawer({
   person,
@@ -146,7 +174,13 @@ function PersonDrawer({
 }
 
 /**
- * FlowCanvas component renders a React Flow visualization of the family tree.
+ * Main canvas for rendering the family tree using ReactFlow.
+ * Fetches tree data from API, applies hierarchical layout, and handles user interactions
+ * (node selection, depth adjustment, pan/zoom).
+ *
+ * @param {string} rootId - GEDCOM ID of the tree root person
+ * @param {Function} onSelectRoot - Called when user selects a new root person
+ * @param {Person[]} persons - Available people for search/selection
  */
 function FlowCanvas({
   rootId,
@@ -167,11 +201,21 @@ function FlowCanvas({
   const { setViewport } = useReactFlow()
   const abortRef = useRef<AbortController | null>(null)
 
-  const personCount = useMemo(() => nodes.filter(n => n.type === 'person').length, [nodes])
-  const unionCount  = useMemo(() => nodes.filter(n => n.type === 'union').length, [nodes])
+  /** Counts of person and union nodes currently rendered, derived from `nodes`. */
+  const { personCount, unionCount } = useMemo(() => {
+    let personCount = 0, unionCount = 0
+    for (const n of nodes) {
+      if (n.type === 'person') personCount++
+      else if (n.type === 'union') unionCount++
+    }
+    return { personCount, unionCount }
+  }, [nodes])
 
   /**
-   * Opens the PersonDrawer for the clicked person node.
+   * Opens the person drawer when a person node is clicked.
+   *
+   * @param _event - Unused mouse event from ReactFlow
+   * @param node - The clicked ReactFlow node
    */
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     if (node.type === 'person') {
@@ -180,7 +224,8 @@ function FlowCanvas({
   }, [])
 
   /**
-   * Fetches tree data from the API and updates graph visualization.
+   * Fetches tree data for the current `rootId` and `hops` depth, applies dagre
+   * layout, and updates the node/edge state. Aborts any in-flight request first.
    */
   const fetchTree = useCallback(async () => {
     if (!rootId) return
@@ -225,10 +270,15 @@ function FlowCanvas({
     }
   }, [rootId, hops])
 
+  /** Re-fetches the tree whenever `rootId` or `hops` changes. */
   useEffect(() => {
     fetchTree()
   }, [fetchTree])
 
+  /**
+   * Fits the viewport to the tree bounds after layout completes.
+   * Falls back to centering on the root node when the tree is too large to fit at MIN_ZOOM.
+   */
   useEffect(() => {
     if (!treeBounds || nodes.length === 0) return
     const id = setTimeout(() => {
@@ -304,26 +354,17 @@ function FlowCanvas({
 }
 
 /**
- * FamilyTree page component.
- *
- * Main entry point for the family tree visualization. Fetches the persons list
- * once and passes it to child components (SearchBar) to avoid redundant requests.
- * Initializes the root person on mount from the fetched list.
- *
- * @component
- * @returns {React.ReactElement} Full-screen family tree visualization
+ * Root component for the interactive family tree visualization.
+ * Fetches available people and renders the tree canvas with search and navigation.
  */
 export default function FamilyTree() {
   const [rootId, setRootId] = useState('')
   const [persons, setPersons] = useState<Person[]>([])
   const [personsError, setPersonsError] = useState<string | null>(null)
 
-  /**
-   * Fetch the full persons list once. Use it to seed the initial root and
-   * share with SearchBar so it doesn't make a duplicate request.
-   */
   useEffect(() => {
-    fetch('/api/persons')
+    const ctrl = new AbortController()
+    fetch('/api/persons', { signal: ctrl.signal })
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
@@ -334,9 +375,11 @@ export default function FamilyTree() {
         if (first) setRootId(first.gedcomId)
       })
       .catch((err) => {
+        if (err.name === 'AbortError') return
         console.error('Failed to load persons', err)
         setPersonsError('Could not load family members. Please check your database connection and refresh.')
       })
+    return () => ctrl.abort()
   }, [])
 
   if (personsError) {

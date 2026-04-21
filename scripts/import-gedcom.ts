@@ -51,14 +51,12 @@ if (fs.existsSync(envPath)) {
 }
 
 /**
- * Represents a node in the parsed GEDCOM structure.
+ * Typed metadata attached to a parsed GEDCOM node's `data` property.
+ * Fields are optional because not all node types carry all fields.
  *
- * @interface GedNode
- * @property {string} type - The GEDCOM record type (e.g., 'INDI', 'FAM', 'NAME', 'BIRT')
- * @property {string} [xref_id] - Cross-reference identifier, direct property on INDI/FAM records
- * @property {string} [data] - For pointer records (HUSB/WIFE/CHIL), this IS the pointer string
- * @property {string} [value] - The value associated with this node
- * @property {GedNode[]} children - Child nodes in the GEDCOM hierarchy
+ * @property {string} [xref_id] - Cross-reference ID present on top-level INDI/FAM records
+ * @property {string} [pointer] - Pointer to another record, present on HUSB/WIFE/CHIL nodes
+ * @property {string} [formal_name] - Formal name string, used by NOTE nodes
  */
 interface GedNodeData {
   xref_id?: string
@@ -67,6 +65,14 @@ interface GedNodeData {
   [key: string]: unknown
 }
 
+/**
+ * Represents a single node in the parsed GEDCOM tree structure.
+ *
+ * @property {string} type - GEDCOM tag for this node (e.g. 'INDI', 'FAM', 'NAME', 'BIRT')
+ * @property {GedNodeData} [data] - Structured metadata for this node (xref_id, pointer, etc.)
+ * @property {string} [value] - Inline text value of the node
+ * @property {GedNode[]} children - Subordinate nodes in the GEDCOM hierarchy
+ */
 interface GedNode {
   type: string
   data?: GedNodeData
@@ -97,6 +103,12 @@ function childValue(nodes: GedNode[], type: string): string {
   return findChild(nodes, type)?.value ?? ''
 }
 
+/**
+ * Extracts a four-digit year from a GEDCOM date string.
+ *
+ * @param {string} dateString - Raw GEDCOM date value (e.g. 'ABT 1900', '15 JAN 1900')
+ * @returns {string | null} The first four-digit year found, or null if none present
+ */
 function extractYear(dateString: string): string | null {
   return dateString.match(/\d{4}/)?.[0] ?? null
 }

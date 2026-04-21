@@ -6,11 +6,21 @@
 import dagre from '@dagrejs/dagre'
 import { Node, Edge } from 'reactflow'
 
+/** Width of a person node in pixels. */
 const PERSON_W = 200
+/** Height of a person node in pixels. */
 const PERSON_H = 76
+/** Width of a union (marriage) node in pixels. */
 const UNION_W = 14
+/** Height of a union (marriage) node in pixels. */
 const UNION_H = 14
 
+/**
+ * Returns the width and height dimensions for a given node type.
+ *
+ * @param {string | undefined} type - Node type ('person', 'union', or undefined)
+ * @returns {{w: number, h: number}} Width and height for the node type
+ */
 function nodeSize(type: string | undefined) {
   return type === 'union'
     ? { w: UNION_W, h: UNION_H }
@@ -18,20 +28,22 @@ function nodeSize(type: string | undefined) {
 }
 
 /**
- * BFS from rootId over the adjacency implied by the edges (undirected),
- * returning a Map<nodeId, generation> where generation 0 = root.
+ * Breadth-first search from rootId to compute generation number for each node.
+ * Treats the edge graph as undirected for generation calculation.
+ *
+ * @param {Edge[]} edges - ReactFlow edges defining graph connections
+ * @param {string} rootId - GEDCOM ID of the root node (generation 0)
+ * @returns {Map<string, number>} Map of nodeId to generation number
  */
-function bfsGenerations(nodeIds: string[], edges: Edge[], rootId?: string): Map<string, number> {
+function bfsGenerations(edges: Edge[], rootId: string): Map<string, number> {
   const gen = new Map<string, number>()
-  if (!rootId) return gen
-
   const adj = new Map<string, string[]>()
-  for (const id of nodeIds) adj.set(id, [])
   for (const e of edges) {
-    adj.get(e.source)?.push(e.target)
-    adj.get(e.target)?.push(e.source)
+    if (!adj.has(e.source)) adj.set(e.source, [])
+    if (!adj.has(e.target)) adj.set(e.target, [])
+    adj.get(e.source)!.push(e.target)
+    adj.get(e.target)!.push(e.source)
   }
-
   gen.set(rootId, 0)
   const queue = [rootId]
   while (queue.length > 0) {
@@ -81,17 +93,14 @@ export function applyDagreLayout(
 
   dagre.layout(g)
 
-  const generations = bfsGenerations(
-    nodes.map(n => n.id),
-    edges,
-    options?.rootId,
-  )
+  const generations = options?.rootId
+    ? bfsGenerations(edges, options.rootId)
+    : new Map<string, number>()
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
 
   const positionedNodes = nodes.map(n => {
-    const { x, y } = g.node(n.id)
-    const { w, h } = nodeSize(n.type)
+    const { x, y, width: w, height: h } = g.node(n.id)
     const px = x - w / 2
     const py = y - h / 2
     if (px < minX) minX = px

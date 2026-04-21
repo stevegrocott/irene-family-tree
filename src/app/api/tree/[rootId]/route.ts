@@ -1,9 +1,17 @@
+/**
+ * @module api/tree/[rootId]
+ * @description Next.js App Router route handler that returns a family-tree subgraph
+ * centred on a given GEDCOM person ID, formatted as React Flow nodes and edges.
+ */
+
 import { read } from '@/lib/neo4j'
 import { FlowNode, FlowEdge, TreeResponse, PersonData, UnionData } from '@/types/tree'
 import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, UNION_LABEL } from '@/constants/tree'
 
+/** Force Node.js runtime so the Neo4j driver can open TCP connections. */
 export const runtime = 'nodejs'
 
+/** Hard cap on the number of graph nodes returned per request to prevent oversized payloads. */
 const MAX_NODES = 500
 
 /**
@@ -17,6 +25,10 @@ const MAX_NODES = 500
  * @property {string} [sex] - Person's sex/gender (Person nodes only)
  * @property {string | null} [birthYear] - Birth year as string (Person nodes only)
  * @property {string | null} [deathYear] - Death year as string (Person nodes only)
+ * @property {string | null} [birthPlace] - Birth place (Person nodes only)
+ * @property {string | null} [deathPlace] - Death place (Person nodes only)
+ * @property {string | null} [occupation] - Occupation (Person nodes only)
+ * @property {string | null} [notes] - Free-text notes (Person nodes only)
  * @property {string} gedcomId - GEDCOM cross-reference identifier
  */
 interface Neo4jNode {

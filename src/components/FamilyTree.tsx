@@ -371,8 +371,8 @@ export default function FamilyTree() {
       })
       .then((data: Person[]) => {
         setPersons(data)
-        const first = data.find(p => p.name?.trim()) ?? data[0]
-        if (first) setRootId(first.gedcomId)
+        const defaultPerson = data.find(p => p.gedcomId === '@I85@') ?? data.find(p => p.name?.trim()) ?? data[0]
+        if (defaultPerson) setRootId(defaultPerson.gedcomId)
       })
       .catch((err) => {
         if (err.name === 'AbortError') return

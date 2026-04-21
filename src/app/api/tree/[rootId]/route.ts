@@ -38,6 +38,8 @@ export async function GET(
        OPTIONAL MATCH (parent:Person)-[rPar:UNION]->(birthUnion)
 
        OPTIONAL MATCH (root)-[rMU:UNION]->(marriageUnion:Union)
+       OPTIONAL MATCH (coSpouse:Person)-[rCS:UNION]->(marriageUnion)
+       WHERE coSpouse <> root
        OPTIONAL MATCH (marriageUnion)<-[rChild:CHILD]-(child:Person)
 
        OPTIONAL MATCH (parent)-[rGPU:CHILD]->(gpUnion:Union)
@@ -50,6 +52,7 @@ export async function GET(
             collect(DISTINCT birthUnion) AS birthUnions,
             collect(DISTINCT parent) AS parents,
             collect(DISTINCT marriageUnion) AS marriageUnions,
+            collect(DISTINCT coSpouse) AS coSpouses,
             collect(DISTINCT child) AS children,
             collect(DISTINCT gpUnion) AS gpUnions,
             collect(DISTINCT grandparent) AS grandparents,
@@ -58,16 +61,17 @@ export async function GET(
             collect(DISTINCT rBU) AS relsBU,
             collect(DISTINCT rPar) AS relsPar,
             collect(DISTINCT rMU) AS relsMU,
+            collect(DISTINCT rCS) AS relsCS,
             collect(DISTINCT rChild) AS relsChild,
             collect(DISTINCT rGPU) AS relsGPU,
             collect(DISTINCT rGP) AS relsGP,
             collect(DISTINCT rGCMU) AS relsGCMU,
             collect(DISTINCT rGC) AS relsGC
 
-       WITH [n IN ([root] + birthUnions + parents + marriageUnions + children +
+       WITH [n IN ([root] + birthUnions + parents + marriageUnions + coSpouses + children +
                    gpUnions + grandparents + gcUnions + grandchildren)
              WHERE n IS NOT NULL][0..$maxNodes] AS allNodes,
-            relsBU + relsPar + relsMU + relsChild + relsGPU + relsGP + relsGCMU + relsGC AS allRels
+            relsBU + relsPar + relsMU + relsCS + relsChild + relsGPU + relsGP + relsGCMU + relsGC AS allRels
 
        RETURN [n IN allNodes | CASE
          WHEN 'Person' IN labels(n) THEN
@@ -76,7 +80,7 @@ export async function GET(
          ELSE
            {_id: elementId(n), _labels: labels(n), gedcomId: n.gedcomId}
         END] AS nodes,
-       [r IN allRels WHERE r IS NOT NULL | {
+       [r IN allRels | {
          _id:   elementId(r),
          type:  type(r),
          start: elementId(startNode(r)),

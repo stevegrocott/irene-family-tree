@@ -56,44 +56,19 @@ export async function GET(
     rows = await read<{ nodes: Neo4jNode[]; rels: Neo4jRel[] }>(
       `MATCH (root:Person {gedcomId: $id})
 
-       OPTIONAL MATCH (root)-[rBU:CHILD]->(birthUnion:Union)
-       OPTIONAL MATCH (parent:Person)-[rPar:UNION]->(birthUnion)
+       // Walk the family graph in any direction — each generation costs 2 hops
+       // (Person→Union then Union←Person), so 8 hops covers 4 generations each way.
+       OPTIONAL MATCH (root)-[:CHILD|UNION*1..8]-(other)
+       WHERE other:Person OR other:Union
 
-       OPTIONAL MATCH (root)-[rMU:UNION]->(marriageUnion:Union)
-       OPTIONAL MATCH (coSpouse:Person)-[rCS:UNION]->(marriageUnion)
-       WHERE coSpouse <> root
-       OPTIONAL MATCH (marriageUnion)<-[rChild:CHILD]-(child:Person)
+       WITH root, ([root] + collect(DISTINCT other))[0..$maxNodes] AS allNodes
 
-       OPTIONAL MATCH (parent)-[rGPU:CHILD]->(gpUnion:Union)
-       OPTIONAL MATCH (grandparent:Person)-[rGP:UNION]->(gpUnion)
+       // Collect every edge that connects two nodes in the result set
+       UNWIND allNodes AS n
+       OPTIONAL MATCH (n)-[r:CHILD|UNION]-(m)
+       WHERE m IN allNodes
 
-       OPTIONAL MATCH (child)-[rGCMU:UNION]->(gcUnion:Union)
-       OPTIONAL MATCH (gcUnion)<-[rGC:CHILD]-(grandchild:Person)
-
-       WITH root,
-            collect(DISTINCT birthUnion) AS birthUnions,
-            collect(DISTINCT parent) AS parents,
-            collect(DISTINCT marriageUnion) AS marriageUnions,
-            collect(DISTINCT coSpouse) AS coSpouses,
-            collect(DISTINCT child) AS children,
-            collect(DISTINCT gpUnion) AS gpUnions,
-            collect(DISTINCT grandparent) AS grandparents,
-            collect(DISTINCT gcUnion) AS gcUnions,
-            collect(DISTINCT grandchild) AS grandchildren,
-            collect(DISTINCT rBU) AS relsBU,
-            collect(DISTINCT rPar) AS relsPar,
-            collect(DISTINCT rMU) AS relsMU,
-            collect(DISTINCT rCS) AS relsCS,
-            collect(DISTINCT rChild) AS relsChild,
-            collect(DISTINCT rGPU) AS relsGPU,
-            collect(DISTINCT rGP) AS relsGP,
-            collect(DISTINCT rGCMU) AS relsGCMU,
-            collect(DISTINCT rGC) AS relsGC
-
-       WITH [n IN ([root] + birthUnions + parents + marriageUnions + coSpouses + children +
-                   gpUnions + grandparents + gcUnions + grandchildren)
-             WHERE n IS NOT NULL][0..$maxNodes] AS allNodes,
-            relsBU + relsPar + relsMU + relsCS + relsChild + relsGPU + relsGP + relsGCMU + relsGC AS allRels
+       WITH allNodes, collect(DISTINCT r) AS allRels
 
        RETURN [n IN allNodes | CASE
          WHEN 'Person' IN labels(n) THEN

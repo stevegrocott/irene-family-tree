@@ -28,13 +28,36 @@ export default function PersonNode({ data }: NodeProps<PersonData>) {
     .filter(Boolean)
     .join('  ')
 
+  const initials = data.name
+    ? data.name
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0].toUpperCase())
+        .join('')
+    : '?'
+
+  const avatarBg =
+    (data.generation ?? 0) < 0
+      ? 'bg-indigo-900/40'
+      : (data.generation ?? 0) > 0
+        ? 'bg-emerald-900/40'
+        : 'bg-white/10'
+
   return (
     <div
       className={`bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-4 py-3 min-w-[160px] ${glow} ${rootRing} hover:bg-white/15 hover:scale-[1.03] transition-all duration-200 cursor-pointer`}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-      <div className="font-semibold text-white text-sm tracking-wide">{data.name || <span className="text-slate-500 italic">Unknown</span>}</div>
-      {dates && <div className="text-slate-400 text-xs mt-1">{dates}</div>}
+      <div className="flex items-center gap-2">
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${avatarBg}`}>
+          {initials}
+        </div>
+        <div>
+          <div className="font-semibold text-white text-sm tracking-wide">{data.name || <span className="text-slate-500 italic">Unknown</span>}</div>
+          {dates && <div className="text-slate-400 text-xs mt-1">{dates}</div>}
+        </div>
+      </div>
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>
   )

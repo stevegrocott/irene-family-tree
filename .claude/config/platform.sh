@@ -22,9 +22,9 @@ MERGE_STYLE="${MERGE_STYLE:-squash}"      # squash | merge | rebase
 AUTO_MERGE="${AUTO_MERGE:-0}"             # 0 = manual merge | 1 = auto-merge when checks pass
 
 # Test commands (set during /adapt based on project stack)
-TEST_UNIT_CMD="${TEST_UNIT_CMD:-}"        # e.g., "npm test", "vendor/bin/phpunit", "pytest"
-TEST_E2E_CMD="${TEST_E2E_CMD:-}"          # e.g., "npx playwright test" — empty if no E2E
-TEST_E2E_BASE_URL="${TEST_E2E_BASE_URL:-}"
+TEST_UNIT_CMD="${TEST_UNIT_CMD:-npm test}"        # e.g., "npm test", "vendor/bin/phpunit", "pytest"
+TEST_E2E_CMD="${TEST_E2E_CMD:-npx playwright test}"          # e.g., "npx playwright test" — empty if no E2E
+TEST_E2E_BASE_URL="${TEST_E2E_BASE_URL:-http://localhost:3000}"
 # TDD reordering for E2E: default true when TEST_E2E_CMD is set; set false to keep smoke tests only without TDD reordering
 if [[ -z "${E2E_TDD_ENABLED:-}" ]]; then
   [[ -n "${TEST_E2E_CMD:-}" ]] && E2E_TDD_ENABLED=true || E2E_TDD_ENABLED=false

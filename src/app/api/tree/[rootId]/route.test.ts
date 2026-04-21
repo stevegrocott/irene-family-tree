@@ -194,4 +194,69 @@ describe('GET /api/tree/[rootId]', () => {
       expect.objectContaining({ id: 'rel:6', source: 'n:7', target: 'n:6', label: 'CHILD' }),
     ]))
   })
+
+  describe('hops query parameter', () => {
+    it('uses default hops of 8 when no hops param is provided', async () => {
+      mockRead.mockResolvedValue([{ nodes: [], rels: [] }])
+
+      const request = new Request('http://localhost/api/tree/I001')
+      await GET(request, makeParams('I001'))
+
+      expect(mockRead).toHaveBeenCalledWith(
+        expect.stringContaining('*1..8'),
+        expect.any(Object)
+      )
+    })
+
+    it('substitutes the provided hops value into the Cypher query', async () => {
+      mockRead.mockResolvedValue([{ nodes: [], rels: [] }])
+
+      const request = new Request('http://localhost/api/tree/I001?hops=4')
+      await GET(request, makeParams('I001'))
+
+      expect(mockRead).toHaveBeenCalledWith(
+        expect.stringContaining('*1..4'),
+        expect.any(Object)
+      )
+    })
+
+    it('clamps hops to 16 when a value greater than 16 is provided', async () => {
+      mockRead.mockResolvedValue([{ nodes: [], rels: [] }])
+
+      const request = new Request('http://localhost/api/tree/I001?hops=20')
+      await GET(request, makeParams('I001'))
+
+      expect(mockRead).toHaveBeenCalledWith(
+        expect.stringContaining('*1..16'),
+        expect.any(Object)
+      )
+    })
+
+    it('returns 400 when hops is not a valid integer string', async () => {
+      const request = new Request('http://localhost/api/tree/I001?hops=abc')
+      const response = await GET(request, makeParams('I001'))
+      const body = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(body).toHaveProperty('error')
+    })
+
+    it('returns 400 when hops is a float', async () => {
+      const request = new Request('http://localhost/api/tree/I001?hops=2.5')
+      const response = await GET(request, makeParams('I001'))
+      const body = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(body).toHaveProperty('error')
+    })
+
+    it('returns 400 when hops is less than 1', async () => {
+      const request = new Request('http://localhost/api/tree/I001?hops=0')
+      const response = await GET(request, makeParams('I001'))
+      const body = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(body).toHaveProperty('error')
+    })
+  })
 })

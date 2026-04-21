@@ -5,6 +5,10 @@ export const runtime = 'nodejs'
 
 /** Maximum number of nodes returned per query to guard against unbounded graph traversal. */
 const MAX_NODES = 500
+/** Default relationship hop depth used when no `hops` query parameter is provided. */
+const DEFAULT_HOPS = 8
+/** Maximum allowed value for the `hops` query parameter. */
+const MAX_HOPS = 16
 /** Neo4j label used to identify Union (family) nodes. */
 const UNION_LABEL = 'Union'
 
@@ -41,15 +45,34 @@ interface Neo4jRel {
  * nodes, then maps the raw Neo4j result to React Flow `FlowNode` / `FlowEdge`
  * shapes with placeholder positions.
  *
- * @param _request - Incoming HTTP request (unused; path param carries all input).
+ * @param request  - Incoming HTTP request; the optional `hops` query param controls traversal depth.
  * @param params   - Route segment params; `rootId` is the GEDCOM ID of the focal person.
  * @returns JSON `TreeResponse` on success, or a 404/500 error JSON on failure.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ rootId: string }> }
 ) {
   const { rootId } = await params
+
+  // Parse and validate the ?hops=N query parameter
+  const url = new URL(request.url)
+  const hopsParam = url.searchParams.get('hops')
+  let hops: number
+
+  if (hopsParam === null) {
+    hops = DEFAULT_HOPS
+  } else {
+    // Must be a whole-number integer string (no decimals, no non-numeric chars)
+    if (!/^\d+$/.test(hopsParam)) {
+      return Response.json({ error: 'hops must be a positive integer' }, { status: 400 })
+    }
+    hops = parseInt(hopsParam, 10)
+    if (hops < 1) {
+      return Response.json({ error: 'hops must be at least 1' }, { status: 400 })
+    }
+    hops = Math.min(hops, MAX_HOPS)
+  }
 
   let rows: { nodes: Neo4jNode[]; rels: Neo4jRel[] }[]
   try {
@@ -58,7 +81,7 @@ export async function GET(
 
        // Walk the family graph in any direction — each generation costs 2 hops
        // (Person→Union then Union←Person), so 8 hops covers 4 generations each way.
-       OPTIONAL MATCH (root)-[:CHILD|UNION*1..8]-(other)
+       OPTIONAL MATCH (root)-[:CHILD|UNION*1..${hops}]-(other)
        WHERE other:Person OR other:Union
 
        WITH root, ([root] + collect(DISTINCT other))[0..$maxNodes] AS allNodes

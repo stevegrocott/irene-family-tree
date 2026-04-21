@@ -63,6 +63,7 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
         source: e.source,
         target: e.target,
         style: EDGE_STYLES[e.label] ?? defaultEdgeStyle,
+        data: { relType: e.label },
       }))
 
       const laid = applyDagreLayout(rawNodes, rawEdges)

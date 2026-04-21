@@ -27,7 +27,15 @@ export function applyDagreLayout(nodes: Node[], edges: Edge[]) {
     const h = n.type === 'union' ? 12 : 68
     g.setNode(n.id, { width: w, height: h })
   })
-  edges.forEach(e => g.setEdge(e.source, e.target))
+  // CHILD edges in Neo4j point child→union; reverse them so Dagre places
+  // union nodes above their children in the TB hierarchy.
+  edges.forEach(e => {
+    if (e.data?.relType === 'CHILD') {
+      g.setEdge(e.target, e.source)
+    } else {
+      g.setEdge(e.source, e.target)
+    }
+  })
   dagre.layout(g)
 
   return {

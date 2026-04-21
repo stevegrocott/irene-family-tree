@@ -11,7 +11,7 @@ import { Node, Edge } from 'reactflow'
  *
  * Automatically calculates positions for all nodes in the family tree using a top-to-bottom
  * hierarchical layout algorithm. Person nodes are sized at 160x68, while union nodes are 12x12.
- * The layout respects rank separation (100) and node separation (60) for clear visual hierarchy.
+ * The layout respects rank separation (80) and node separation (40) for clear visual hierarchy.
  *
  * @param {Node[]} nodes - The React Flow nodes to position
  * @param {Edge[]} edges - The React Flow edges defining the graph structure
@@ -20,7 +20,7 @@ import { Node, Edge } from 'reactflow'
 export function applyDagreLayout(nodes: Node[], edges: Edge[]) {
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: 'TB', ranksep: 100, nodesep: 60 })
+  g.setGraph({ rankdir: 'TB', ranksep: 80, nodesep: 40 })
 
   nodes.forEach(n => {
     const w = n.type === 'union' ? 12 : 160

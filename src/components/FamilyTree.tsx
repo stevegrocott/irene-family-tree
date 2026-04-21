@@ -84,6 +84,9 @@ export function Toolbar({
       data-testid="toolbar"
       className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
     >
+      <span data-testid="toolbar-person-count" className="text-xs text-white/60 select-none">
+        <span className="text-white font-medium">{personCount}</span> people
+      </span>
       <span data-testid="toolbar-ancestors" className="text-xs text-white/60 select-none">
         <span className="text-white font-medium">{ancestors}</span> ancestors
       </span>

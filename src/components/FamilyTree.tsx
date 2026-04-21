@@ -139,7 +139,8 @@ export default function FamilyTree() {
     fetch('/api/persons')
       .then(r => r.json())
       .then((persons: Array<{ gedcomId: string; name: string }>) => {
-        if (persons.length > 0) setRootId(persons[0].gedcomId)
+        const first = persons.find(p => p.name?.trim()) ?? persons[0]
+        if (first) setRootId(first.gedcomId)
       })
   }, [])
 

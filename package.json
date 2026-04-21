@@ -1,0 +1,32 @@
+{
+  "name": "ged-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^3.0.0",
+    "neo4j-driver": "^6.0.1",
+    "next": "16.2.4",
+    "parse-gedcom": "^2.0.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "reactflow": "^11.11.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/dagre": "^0.7.54",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.4",
+    "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5"
+  }
+}

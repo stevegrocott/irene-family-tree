@@ -71,8 +71,10 @@ export function Toolbar({
   hops: number
   onHopsChange: (hops: number) => void
 }) {
-  const ancestors = nodes.filter(n => n.type === 'person' && typeof (n.data as PersonData).generation === 'number' && (n.data as PersonData).generation < 0).length
-  const descendants = nodes.filter(n => n.type === 'person' && typeof (n.data as PersonData).generation === 'number' && (n.data as PersonData).generation > 0).length
+  const ancestorGens = nodes.filter(n => n.type === 'person' && typeof (n.data as PersonData).generation === 'number' && (n.data as PersonData).generation < 0).map(n => (n.data as PersonData).generation ?? 0)
+  const ancestors = ancestorGens.length > 0 ? Math.abs(Math.min(...ancestorGens)) : 0
+  const descendantGens = nodes.filter(n => n.type === 'person' && typeof (n.data as PersonData).generation === 'number' && (n.data as PersonData).generation > 0).map(n => (n.data as PersonData).generation ?? 0)
+  const descendants = descendantGens.length > 0 ? Math.max(...descendantGens) : 0
   const personCount = nodes.filter(n => n.type === 'person').length
   if (personCount === 0) return null
   return (
@@ -87,10 +89,11 @@ export function Toolbar({
         <span className="text-white font-medium">{descendants}</span> descendants
       </span>
       <span data-testid="toolbar-viewing" className="text-xs text-white/60 select-none">
-        Viewing <span className="text-white font-medium">{rootName}</span>
+        VIEWING: <span className="text-white font-medium">{rootName}</span>
       </span>
       <input
         type="range"
+        data-testid="toolbar-depth-slider"
         min={MIN_HOPS}
         max={MAX_HOPS}
         value={hops}
@@ -321,7 +324,7 @@ function FlowCanvas({
   const [error, setError] = useState<string | null>(null)
   const [hops, setHops] = useState(DEFAULT_HOPS)
   const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(null)
-  const { setViewport, fitView } = useReactFlow()
+  const { setViewport } = useReactFlow()
   const abortRef = useRef<AbortController | null>(null)
 
   /** Display name of the current root person, derived from `nodes` and `rootId`. */

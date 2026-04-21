@@ -115,7 +115,7 @@ describe('Toolbar', () => {
     expect(viewing).not.toBeNull()
     expect(viewing!.textContent).toContain('Root Person')
 
-    const slider = container.querySelector('input[type="range"]')
+    const slider = container.querySelector('[data-testid="toolbar-depth-slider"]')
     expect(slider).not.toBeNull()
   })
 })

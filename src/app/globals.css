@@ -50,6 +50,11 @@ body {
   scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
 }
 
+/* Thin dark scrollbar for search results */
+.search-results::-webkit-scrollbar { width: 4px; }
+.search-results::-webkit-scrollbar-track { background: transparent; }
+.search-results::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+
 .react-flow__controls {
   background: rgba(255,255,255,0.08) !important;
   backdrop-filter: blur(12px);

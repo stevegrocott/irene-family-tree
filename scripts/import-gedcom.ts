@@ -23,7 +23,7 @@ const envPath = path.join(__dirname, '../.env.local')
 if (fs.existsSync(envPath)) {
   for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
     const m = line.match(/^([^#=]+)=(.*)$/)
-    if (m) process.env[m[1].trim()] = m[2].trim()
+    if (m) process.env[m[1].trim()] = m[2]
   }
 }
 
@@ -84,24 +84,25 @@ async function main() {
     await session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (u:Union) REQUIRE u.gedcomId IS UNIQUE')
 
     // Batch-build person rows
-    const personRows = root.children
-      .filter(r => r.type === 'INDI')
-      .map(indi => {
-        const nameNode = findChild(indi.children, 'NAME')
-        const birthNode = findChild(indi.children, 'BIRT')
-        const deathNode = findChild(indi.children, 'DEAT')
-        const givenName = childValue(nameNode?.children ?? [], 'GIVN')
-        const surname = childValue(nameNode?.children ?? [], 'SURN')
-        return {
-          gedcomId: indi.xref_id ?? '',
-          name: [givenName, surname].filter(Boolean).join(' '),
-          sex: childValue(indi.children, 'SEX'),
-          birthDate: childValue(birthNode?.children ?? [], 'DATE'),
-          birthPlace: childValue(birthNode?.children ?? [], 'PLAC'),
-          deathDate: childValue(deathNode?.children ?? [], 'DATE'),
-          deathPlace: childValue(deathNode?.children ?? [], 'PLAC'),
-        }
+    const personRows: { gedcomId: string; name: string; sex: string; birthYear: string | null; deathYear: string | null }[] = []
+    for (const indi of root.children.filter(r => r.type === 'INDI')) {
+      if (!indi.xref_id) {
+        console.warn('Skipping INDI record without xref_id')
+        continue
+      }
+      const nameNode = findChild(indi.children, 'NAME')
+      const birthNode = findChild(indi.children, 'BIRT')
+      const deathNode = findChild(indi.children, 'DEAT')
+      const givenName = childValue(nameNode?.children ?? [], 'GIVN')
+      const surname = childValue(nameNode?.children ?? [], 'SURN')
+      personRows.push({
+        gedcomId: indi.xref_id,
+        name: [givenName, surname].filter(Boolean).join(' '),
+        sex: childValue(indi.children, 'SEX'),
+        birthYear: childValue(birthNode?.children ?? [], 'DATE').match(/\d{4}/)?.[0] ?? null,
+        deathYear: childValue(deathNode?.children ?? [], 'DATE').match(/\d{4}/)?.[0] ?? null,
       })
+    }
 
     await session.executeWrite(tx =>
       tx.run(
@@ -109,23 +110,25 @@ async function main() {
          MERGE (p:Person {gedcomId: row.gedcomId})
          SET p.name = row.name,
              p.sex = row.sex,
-             p.birthDate = row.birthDate,
-             p.birthPlace = row.birthPlace,
-             p.deathDate = row.deathDate,
-             p.deathPlace = row.deathPlace`,
+             p.birthYear = row.birthYear,
+             p.deathYear = row.deathYear`,
         { rows: personRows }
       )
     )
 
     // Batch-build union rows and relationship rows
     const families = root.children.filter(r => r.type === 'FAM')
-    const unionRows = families.map(fam => ({ gedcomId: fam.xref_id ?? '' }))
-
+    const unionRows: { gedcomId: string }[] = []
     const spouseRows: { pid: string; uid: string }[] = []
     const childRows: { pid: string; uid: string }[] = []
 
     for (const fam of families) {
-      const uid = fam.xref_id ?? ''
+      if (!fam.xref_id) {
+        console.warn('Skipping FAM record without xref_id')
+        continue
+      }
+      const uid = fam.xref_id
+      unionRows.push({ gedcomId: uid })
       const husb = findChild(fam.children, 'HUSB')?.data
       const wife = findChild(fam.children, 'WIFE')?.data
       if (husb) spouseRows.push({ pid: husb, uid })

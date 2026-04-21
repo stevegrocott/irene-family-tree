@@ -114,7 +114,7 @@ describe('GET /api/tree/[rootId]', () => {
       id: 'rel:1',
       source: 'node:1',
       target: 'node:2',
-      label: 'CHILD',
+      relType: 'CHILD',
     })
   })
 

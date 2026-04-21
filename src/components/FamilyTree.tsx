@@ -163,7 +163,7 @@ function RelativeRow({
  * @param {Function} onReroot - Called with person's gedcomId to re-root the tree
  * @param {Function} onSelectPerson - Called with gedcomId to open another person's drawer
  */
-function PersonDrawer({
+export function PersonDrawer({
   person,
   onClose,
   onReroot,

@@ -7,41 +7,10 @@
 
 import { NextResponse } from 'next/server'
 import { read } from '@/lib/neo4j'
+import type { PersonSummary, MarriageDetail } from '@/types/tree'
 
 /** Forces the route to run in the Node.js runtime (required for Neo4j driver). */
 export const runtime = 'nodejs'
-
-/**
- * Lightweight summary of a related person, used in parent, sibling, spouse, and child lists.
- */
-interface PersonSummary {
-  /** GEDCOM identifier for the person (e.g. "I0001"). */
-  gedcomId: string
-  /** Full display name. */
-  name: string
-  /** Biological sex recorded in GEDCOM ("M", "F", or null). */
-  sex: string | null
-  /** Four-digit birth year, or null if unknown. */
-  birthYear: string | null
-  /** Four-digit death year, or null if still living or unknown. */
-  deathYear: string | null
-}
-
-/**
- * Details of a single marriage/union, including the spouse and children of that union.
- */
-interface MarriageDetail {
-  /** GEDCOM identifier for the Union node. */
-  unionId: string
-  /** Four-digit year the marriage took place, or null if unknown. */
-  marriageYear: string | null
-  /** Place name where the marriage occurred, or null if unknown. */
-  marriagePlace: string | null
-  /** The other partner in this union, or null if no spouse is recorded. */
-  spouse: PersonSummary | null
-  /** Children born of this union. */
-  children: PersonSummary[]
-}
 
 /**
  * Full detail row returned by the Cypher query for a single person.

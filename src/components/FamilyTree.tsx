@@ -27,8 +27,8 @@ import UnionNode from '@/components/UnionNode'
 import SearchBar from '@/components/SearchBar'
 import { applyDagreLayout } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
-import type { TreeResponse, PersonData } from '@/types/tree'
-import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES } from '@/constants/tree'
+import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
+import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID } from '@/constants/tree'
 
 /**
  * Minimal person summary used for the search bar and root selection.
@@ -112,29 +112,96 @@ function Toolbar({ personCount, unionCount }: { personCount: number; unionCount:
   )
 }
 
+function RelativeRow({
+  person,
+  onSelect,
+  onReroot,
+  small = false,
+}: {
+  person: PersonSummary
+  onSelect: (id: string) => void
+  onReroot: (id: string) => void
+  small?: boolean
+}) {
+  return (
+    <div className="flex items-center group">
+      <button
+        className={`flex-1 text-left px-3 rounded-lg hover:bg-white/10 transition-colors ${small ? 'py-1.5 text-xs text-white/60 hover:text-white/80' : 'py-2 text-sm text-white/80 hover:text-white'}`}
+        onClick={() => onSelect(person.gedcomId)}
+        onDoubleClick={() => onReroot(person.gedcomId)}
+      >
+        <span className="font-medium">{person.name || 'Unknown'}</span>
+        {person.birthYear && (
+          <span className={`ml-2 text-xs ${small ? 'text-slate-600' : 'text-slate-500'}`}>{person.birthYear}</span>
+        )}
+      </button>
+      <button
+        data-testid="relative-focus"
+        aria-label={`Focus tree on ${person.name || 'person'}`}
+        onClick={() => onReroot(person.gedcomId)}
+        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 mr-1 rounded text-white/40 hover:text-indigo-400 hover:bg-white/10 flex-shrink-0"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" />
+          <line x1="12" y1="2" x2="12" y2="6" />
+          <line x1="12" y1="18" x2="12" y2="22" />
+          <line x1="2" y1="12" x2="6" y2="12" />
+          <line x1="18" y1="12" x2="22" y2="12" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
 /**
  * Side drawer panel showing details for a selected person.
- * Displays name, dates, and GEDCOM ID. Allows re-rooting the tree at this person.
+ * Fetches and displays name, dates, GEDCOM ID, and immediate relatives
+ * (parents, siblings, marriages). Allows re-rooting or navigating to relatives.
  *
  * @param {PersonData} person - Person to display details for
  * @param {Function} onClose - Called when user closes the drawer
  * @param {Function} onReroot - Called with person's gedcomId to re-root the tree
+ * @param {Function} onSelectPerson - Called with gedcomId to open another person's drawer
  */
-function PersonDrawer({
+export function PersonDrawer({
   person,
   onClose,
   onReroot,
+  onSelectPerson,
 }: {
   person: PersonData
   onClose: () => void
   onReroot: (id: string) => void
+  onSelectPerson: (id: string) => void
 }) {
   const dates = formatLifespan(person)
+  const [detail, setDetail] = useState<PersonDetailResponse | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  useEffect(() => {
+    setDetail(null)
+    setDetailLoading(true)
+    const ctrl = new AbortController()
+    let cancelled = false
+    fetch(`/api/person/${encodeURIComponent(person.gedcomId)}`, { signal: ctrl.signal })
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json() as Promise<PersonDetailResponse>
+      })
+      .then(data => { if (!cancelled) setDetail(data) })
+      .catch(err => {
+        if (err instanceof Error && err.name !== 'AbortError') {
+          console.error('Failed to fetch person detail', err)
+        }
+      })
+      .finally(() => { if (!cancelled) setDetailLoading(false) })
+    return () => { cancelled = true; ctrl.abort() }
+  }, [person.gedcomId])
 
   return (
     <div
       data-testid="person-drawer"
-      className="absolute top-0 right-0 h-full w-72 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
+      className="absolute top-0 right-0 h-full w-80 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
@@ -152,11 +219,66 @@ function PersonDrawer({
       </div>
 
       {/* Body */}
-      <div className="flex-1 px-5 py-4 space-y-3">
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
         {dates && (
           <p className="text-slate-400 text-sm">{dates}</p>
         )}
         <p className="text-slate-500 text-xs font-mono">{person.gedcomId}</p>
+
+        {detailLoading && (
+          <div className="flex items-center justify-center py-6">
+            <div
+              className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"
+              aria-label="Loading"
+            />
+          </div>
+        )}
+
+        {detail && (
+          <>
+            <section data-testid="person-drawer-parents">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Parents</h3>
+              {detail.parents.length === 0 ? (
+                <p className="text-slate-600 text-xs italic">None recorded</p>
+              ) : (
+                <ul className="space-y-1">
+                  {detail.parents.map(p => <li key={p.gedcomId}><RelativeRow person={p} onSelect={onSelectPerson} onReroot={onReroot} /></li>)}
+                </ul>
+              )}
+            </section>
+
+            <section data-testid="person-drawer-siblings">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Siblings</h3>
+              {detail.siblings.length === 0 ? (
+                <p className="text-slate-600 text-xs italic">None recorded</p>
+              ) : (
+                <ul className="space-y-1">
+                  {detail.siblings.map(s => <li key={s.gedcomId}><RelativeRow person={s} onSelect={onSelectPerson} onReroot={onReroot} /></li>)}
+                </ul>
+              )}
+            </section>
+
+            <section data-testid="person-drawer-marriages">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Marriages</h3>
+              {detail.marriages.length === 0 ? (
+                <p className="text-slate-600 text-xs italic">None recorded</p>
+              ) : (
+                <ul className="space-y-3">
+                  {detail.marriages.map(m => (
+                    <li key={m.unionId} className="space-y-1">
+                      {m.spouse && <RelativeRow person={m.spouse} onSelect={onSelectPerson} onReroot={onReroot} />}
+                      {m.children.length > 0 && (
+                        <ul className="pl-4 space-y-1">
+                          {m.children.map(c => <li key={c.gedcomId}><RelativeRow person={c} onSelect={onSelectPerson} onReroot={onReroot} small /></li>)}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </>
+        )}
       </div>
 
       {/* Footer – re-root action */}
@@ -164,9 +286,9 @@ function PersonDrawer({
         <button
           data-testid="person-drawer-reroot"
           onClick={() => { onReroot(person.gedcomId); onClose() }}
-          className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+          className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors uppercase tracking-wide"
         >
-          Re-root tree here
+          FOCUS TREE ON {(person.name || 'PERSON').toUpperCase()}
         </button>
       </div>
     </div>
@@ -347,6 +469,15 @@ function FlowCanvas({
           person={selectedPerson}
           onClose={() => setSelectedPerson(null)}
           onReroot={(id) => { onSelectRoot(id); setSelectedPerson(null) }}
+          onSelectPerson={(id) => {
+            const node = nodes.find(n => n.type === 'person' && (n.data as PersonData).gedcomId === id)
+            if (node) {
+              setSelectedPerson(node.data as PersonData)
+            } else {
+              // Person may not be in the current tree view — create minimal stub so drawer can fetch detail
+              setSelectedPerson({ gedcomId: id, name: '', sex: 'U', birthYear: null, deathYear: null, birthPlace: null, deathPlace: null, occupation: null, notes: null })
+            }
+          }}
         />
       )}
     </>
@@ -371,7 +502,7 @@ export default function FamilyTree() {
       })
       .then((data: Person[]) => {
         setPersons(data)
-        const defaultPerson = data.find(p => p.gedcomId === '@I85@') ?? data.find(p => p.name?.trim()) ?? data[0]
+        const defaultPerson = data.find(p => p.gedcomId === DEFAULT_ROOT_GEDCOM_ID) ?? data.find(p => p.name?.trim()) ?? data[0]
         if (defaultPerson) setRootId(defaultPerson.gedcomId)
       })
       .catch((err) => {

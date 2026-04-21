@@ -54,36 +54,6 @@ export interface UnionData {
   marriagePlace?: string | null
 }
 
-/** Relationship kind between a focal person and a relative. */
-export type RelKind = 'parent' | 'child' | 'spouse' | 'sibling'
-
-/**
- * A person related to a focal individual, including the relationship kind.
- */
-export interface Relative {
-  /** GEDCOM identifier of the relative. */
-  gedcomId: string
-  /** Full display name of the relative. */
-  name: string
-  /** Sex code of the relative: `'M'`, `'F'`, or `'U'`. */
-  sex: string
-  /** Four-digit birth year of the relative, or `null` if unknown. */
-  birthYear: string | null
-  /** Four-digit death year of the relative, or `null` if unknown. */
-  deathYear: string | null
-  /** How this person is related to the focal individual. */
-  relKind: RelKind
-}
-
-/**
- * Extended person record that includes all immediate relatives.
- * Returned by the `GET /api/person/[id]` endpoint.
- */
-export interface PersonDetail extends PersonData {
-  /** Immediate relatives (parents, children, spouses, siblings). */
-  relatives: Relative[]
-}
-
 /**
  * A node in the ReactFlow family tree graph as serialised by the API.
  */
@@ -110,6 +80,70 @@ export interface FlowEdge {
   target: string
   /** Relationship label (e.g. `'CHILD'`, `'SPOUSE'`). */
   label: string
+}
+
+/**
+ * Lightweight summary of a related person, used in parent, sibling, spouse, and child lists.
+ * Returned as part of {@link PersonDetailResponse}.
+ */
+export interface PersonSummary {
+  /** GEDCOM identifier (e.g. `@I1@`). */
+  gedcomId: string
+  /** Full display name. */
+  name: string
+  /** Sex code: `'M'`, `'F'`, or `null`. */
+  sex: string | null
+  /** Four-digit birth year, or `null` if unknown. */
+  birthYear: string | null
+  /** Four-digit death year, or `null` if unknown. */
+  deathYear: string | null
+}
+
+/**
+ * Details of a single marriage/union, including the spouse and children of that union.
+ */
+export interface MarriageDetail {
+  /** GEDCOM identifier for the Union node. */
+  unionId: string
+  /** Four-digit marriage year, or `null` if unknown. */
+  marriageYear: string | null
+  /** Place name where the marriage occurred, or `null` if unknown. */
+  marriagePlace: string | null
+  /** The other partner in this union, or `null` if no spouse is recorded. */
+  spouse: PersonSummary | null
+  /** Children born of this union. */
+  children: PersonSummary[]
+}
+
+/**
+ * Full person detail response returned by `GET /api/person/[id]`.
+ * Includes the person's own data plus their immediate relatives.
+ */
+export interface PersonDetailResponse {
+  /** GEDCOM identifier (e.g. `@I1@`). */
+  gedcomId: string
+  /** Full display name. */
+  name: string
+  /** Sex code: `'M'`, `'F'`, or `null`. */
+  sex: string | null
+  /** Four-digit birth year, or `null` if unknown. */
+  birthYear: string | null
+  /** Four-digit death year, or `null` if unknown. */
+  deathYear: string | null
+  /** Place of birth, or `null` if unknown. */
+  birthPlace: string | null
+  /** Place of death, or `null` if unknown. */
+  deathPlace: string | null
+  /** Occupation string, or `null` if unknown. */
+  occupation: string | null
+  /** Free-text notes, or `null` if none. */
+  notes: string | null
+  /** Biological or adoptive parents. */
+  parents: PersonSummary[]
+  /** Siblings sharing at least one common parent union. */
+  siblings: PersonSummary[]
+  /** All recorded marriages with spouse and children. */
+  marriages: MarriageDetail[]
 }
 
 /**

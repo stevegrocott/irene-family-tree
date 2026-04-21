@@ -1,5 +1,8 @@
 import type React from 'react'
 
+/** Default root person GEDCOM ID used when no explicit root has been selected. */
+export const DEFAULT_ROOT_GEDCOM_ID = '@I85@'
+
 export const MIN_HOPS = 1
 export const DEFAULT_HOPS = 8
 export const MAX_HOPS = 16

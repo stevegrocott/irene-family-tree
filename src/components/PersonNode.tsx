@@ -1,35 +1,15 @@
-/**
- * @fileoverview PersonNode component for React Flow.
- * Renders a node representing a person in the family tree with their name and life dates.
- */
-
 'use client'
 
 import { Handle, Position, type NodeProps } from 'reactflow'
 import type { PersonData } from '@/types/tree'
 
-/**
- * Background colors for person nodes based on biological sex
- * @type {Record<string, string>}
- */
-const SEX_BG: Record<string, string> = {
-  M: '#dbeafe', // Light blue for males
-  F: '#fce7f3', // Light pink for females
+const SEX_GLOW: Record<string, string> = {
+  M: 'shadow-[0_0_20px_rgba(99,179,237,0.4)]',
+  F: 'shadow-[0_0_20px_rgba(237,100,166,0.4)]',
 }
 
-/**
- * PersonNode component for React Flow
- *
- * Displays an individual person in the family tree visualization.
- * The node shows the person's name and their birth/death years if available.
- * The background color is determined by biological sex (blue for male, pink for female).
- *
- * @param {NodeProps<PersonData>} props - React Flow node properties
- * @param {PersonData} props.data - The person's data including name, sex, birth and death years
- * @returns {React.ReactNode} A styled div containing the person's information with React Flow handles
- */
 export default function PersonNode({ data }: NodeProps<PersonData>) {
-  const bg = SEX_BG[data.sex] ?? '#f3f4f6'
+  const glow = SEX_GLOW[data.sex] ?? 'shadow-[0_0_20px_rgba(148,163,184,0.3)]'
 
   const dates = [
     data.birthYear ? `b. ${data.birthYear}` : null,
@@ -40,19 +20,12 @@ export default function PersonNode({ data }: NodeProps<PersonData>) {
 
   return (
     <div
-      style={{
-        background: bg,
-        border: '1px solid #ccc',
-        borderRadius: 8,
-        padding: '6px 10px',
-        fontSize: 12,
-        minWidth: 140,
-      }}
+      className={`bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-4 py-3 min-w-[160px] ${glow} hover:bg-white/15 hover:scale-[1.03] transition-all duration-200`}
     >
-      <Handle type="target" position={Position.Top} />
-      <div style={{ fontWeight: 600 }}>{data.name}</div>
-      {dates && <div style={{ color: '#666', marginTop: 2 }}>{dates}</div>}
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
+      <div className="font-semibold text-white text-sm">{data.name}</div>
+      {dates && <div className="text-slate-400 text-xs mt-1">{dates}</div>}
+      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>
   )
 }

@@ -1,3 +1,10 @@
+/**
+ * Unit tests for GET /api/tree/[rootId].
+ *
+ * The Neo4j `read` helper is mocked so tests verify the route's response-shaping
+ * logic in isolation: HTTP status codes, FlowNode / FlowEdge mapping, default
+ * values for optional fields, and the bounce-traversal relationship directions.
+ */
 import { GET } from './route'
 
 jest.mock('@/lib/neo4j', () => ({

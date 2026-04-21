@@ -3,9 +3,15 @@ import { FlowNode, FlowEdge, TreeResponse, PersonData, UnionData } from '@/types
 
 export const runtime = 'nodejs'
 
+/** Maximum number of nodes returned per query to guard against unbounded graph traversal. */
 const MAX_NODES = 500
+/** Neo4j label used to identify Union (family) nodes. */
 const UNION_LABEL = 'Union'
 
+/**
+ * Raw shape of a graph node as returned by the Neo4j bounce-traversal query.
+ * Person nodes carry demographic fields; Union nodes carry only `gedcomId`.
+ */
 interface Neo4jNode {
   _id: string
   _labels: string[]
@@ -16,6 +22,10 @@ interface Neo4jNode {
   gedcomId: string
 }
 
+/**
+ * Raw shape of a graph relationship as returned by the Neo4j query.
+ * `start` and `end` are element IDs corresponding to `Neo4jNode._id`.
+ */
 interface Neo4jRel {
   _id: string
   type: string
@@ -23,6 +33,18 @@ interface Neo4jRel {
   end: string
 }
 
+/**
+ * Returns a family-tree subgraph centred on the given person.
+ *
+ * Uses a "bounce-traversal" Cypher query that walks outward two generations in
+ * both directions (grandparents → root → grandchildren) via Union intermediary
+ * nodes, then maps the raw Neo4j result to React Flow `FlowNode` / `FlowEdge`
+ * shapes with placeholder positions.
+ *
+ * @param _request - Incoming HTTP request (unused; path param carries all input).
+ * @param params   - Route segment params; `rootId` is the GEDCOM ID of the focal person.
+ * @returns JSON `TreeResponse` on success, or a 404/500 error JSON on failure.
+ */
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ rootId: string }> }

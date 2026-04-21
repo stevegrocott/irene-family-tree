@@ -9,18 +9,18 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import SearchBar from './SearchBar'
 
-interface TestPerson {
+interface Person {
   gedcomId: string
   name: string
-  birthPlace?: string | null
-  birthYear?: string | null
-  sex?: string
+  sex: string | null
+  birthYear: string | null
+  birthPlace: string | null
 }
 
-const persons: TestPerson[] = [
-  { gedcomId: '@I1@', name: 'Alice Brown',   birthPlace: 'Sheffield', sex: 'F' },
-  { gedcomId: '@I2@', name: 'Bob Green',     birthYear: '1920',       sex: 'M' },
-  { gedcomId: '@I3@', name: 'Charlie White',                          sex: 'U' },
+const persons: Person[] = [
+  { gedcomId: '@I1@', name: 'Alice Brown',   birthPlace: 'Sheffield', birthYear: null, sex: 'F' },
+  { gedcomId: '@I2@', name: 'Bob Green',     birthYear: '1920',       birthPlace: null, sex: 'M' },
+  { gedcomId: '@I3@', name: 'Charlie White', birthYear: null,         birthPlace: null, sex: 'U' },
 ]
 
 // Simulate typing into a controlled React input
@@ -48,7 +48,7 @@ describe('SearchBar', () => {
       root.render(
         <SearchBar
           onSelect={onSelect}
-          persons={persons as unknown as { gedcomId: string; name: string }[]}
+          persons={persons}
         />,
       )
     })

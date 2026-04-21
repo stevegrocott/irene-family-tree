@@ -139,4 +139,32 @@ describe('GET /api/tree/[rootId]', () => {
     expect(body.nodes[0].data.birthYear).toBeNull()
     expect(body.nodes[0].data.deathYear).toBeNull()
   })
+
+  it('returns parents and children for a root with known family connections', async () => {
+    const root    = { _id: 'n:1', _labels: ['Person'], gedcomId: 'I001', name: 'Root', sex: 'M', birthYear: '1950', deathYear: null }
+    const father  = { _id: 'n:2', _labels: ['Person'], gedcomId: 'I002', name: 'Father', sex: 'M', birthYear: '1920', deathYear: null }
+    const mother  = { _id: 'n:3', _labels: ['Person'], gedcomId: 'I003', name: 'Mother', sex: 'F', birthYear: '1922', deathYear: null }
+    const birth   = { _id: 'n:4', _labels: ['Union'], gedcomId: 'F001' }
+    const spouse  = { _id: 'n:5', _labels: ['Person'], gedcomId: 'I004', name: 'Spouse', sex: 'F', birthYear: '1952', deathYear: null }
+    const marriage= { _id: 'n:6', _labels: ['Union'], gedcomId: 'F002' }
+    const child   = { _id: 'n:7', _labels: ['Person'], gedcomId: 'I005', name: 'Child', sex: 'M', birthYear: '1975', deathYear: null }
+
+    mockRead.mockResolvedValue([{
+      nodes: [root, father, mother, birth, spouse, marriage, child],
+      rels: [],
+    }])
+
+    const response = await GET(makeRequest(), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    const gedcomIds = body.nodes.map((n: { data: { gedcomId: string } }) => n.data.gedcomId)
+    expect(gedcomIds).toContain('I001')
+    expect(gedcomIds).toContain('I002')
+    expect(gedcomIds).toContain('I003')
+    expect(gedcomIds).toContain('I004')
+    expect(gedcomIds).toContain('I005')
+    expect(gedcomIds).toContain('F001')
+    expect(gedcomIds).toContain('F002')
+  })
 })

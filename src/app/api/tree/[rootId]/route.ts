@@ -34,17 +34,17 @@ export async function GET(
     rows = await read<{ nodes: Neo4jNode[]; rels: Neo4jRel[] }>(
       `MATCH (root:Person {gedcomId: $id})
 
-       OPTIONAL MATCH (birthUnion:Union)-[rBU:CHILD]->(root)
+       OPTIONAL MATCH (root)-[rBU:CHILD]->(birthUnion:Union)
        OPTIONAL MATCH (parent:Person)-[rPar:UNION]->(birthUnion)
 
        OPTIONAL MATCH (root)-[rMU:UNION]->(marriageUnion:Union)
-       OPTIONAL MATCH (marriageUnion)-[rChild:CHILD]->(child:Person)
+       OPTIONAL MATCH (marriageUnion)<-[rChild:CHILD]-(child:Person)
 
-       OPTIONAL MATCH (gpUnion:Union)-[rGPU:CHILD]->(parent)
+       OPTIONAL MATCH (parent)-[rGPU:CHILD]->(gpUnion:Union)
        OPTIONAL MATCH (grandparent:Person)-[rGP:UNION]->(gpUnion)
 
        OPTIONAL MATCH (child)-[rGCMU:UNION]->(gcUnion:Union)
-       OPTIONAL MATCH (gcUnion)-[rGC:CHILD]->(grandchild:Person)
+       OPTIONAL MATCH (gcUnion)<-[rGC:CHILD]-(grandchild:Person)
 
        WITH root,
             collect(DISTINCT birthUnion) AS birthUnions,

@@ -7,7 +7,7 @@ import dagre from '@dagrejs/dagre'
 import { Node, Edge } from 'reactflow'
 
 /** Width of a person node in pixels. */
-const PERSON_W = 200
+const PERSON_W = 240
 /** Height of a person node in pixels. */
 const PERSON_H = 76
 /** Width of a union (marriage) node in pixels. */
@@ -79,7 +79,7 @@ export function applyDagreLayout(
 ) {
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: 'TB', ranksep: 70, nodesep: 25 })
+  g.setGraph({ rankdir: 'TB', ranksep: 70, nodesep: 30 })
 
   nodes.forEach(n => {
     const { w, h } = nodeSize(n.type)

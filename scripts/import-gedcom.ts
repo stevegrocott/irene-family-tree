@@ -272,6 +272,8 @@ async function main() {
   }
 }
 
+// Last re-import: 2026-04-22 against Aura (586 persons, 177 unions; 275 persons have birthPlace)
+
 main().catch(err => {
   console.error(err)
   process.exit(1)

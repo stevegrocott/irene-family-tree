@@ -23,7 +23,7 @@ export default function PersonNode({ data }: NodeProps<PersonData>) {
       className={`bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-4 py-3 min-w-[160px] ${glow} hover:bg-white/15 hover:scale-[1.03] transition-all duration-200`}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-      <div className="font-semibold text-white text-sm">{data.name}</div>
+      <div className="font-semibold text-white text-sm tracking-wide">{data.name}</div>
       {dates && <div className="text-slate-400 text-xs mt-1">{dates}</div>}
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>

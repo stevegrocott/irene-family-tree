@@ -9,36 +9,19 @@ import ReactFlow, {
   type Node,
   type Edge,
 } from 'reactflow'
-import dagre from '@dagrejs/dagre'
 import 'reactflow/dist/style.css'
 
 import PersonNode from '@/components/PersonNode'
+import UnionNode from '@/components/UnionNode'
+import { applyDagreLayout } from '@/lib/layout'
 import type { TreeResponse } from '@/types/tree'
 
-const nodeTypes = { person: PersonNode }
+const nodeTypes = { person: PersonNode, union: UnionNode }
 
 const defaultEdgeOptions = {
-  style: { stroke: '#94a3b8', strokeWidth: 1.5 },
+  type: 'smoothstep',
+  style: { stroke: '#6366f1', strokeWidth: 1.5, opacity: 0.5 },
   animated: false,
-}
-
-const NODE_WIDTH = 180
-const NODE_HEIGHT = 70
-
-function applyDagreLayout(nodes: Node[], edges: Edge[]): Node[] {
-  const g = new dagre.graphlib.Graph()
-  g.setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: 'TB', nodesep: 40, ranksep: 80 })
-
-  nodes.forEach((n) => g.setNode(n.id, { width: NODE_WIDTH, height: NODE_HEIGHT }))
-  edges.forEach((e) => g.setEdge(e.source, e.target))
-
-  dagre.layout(g)
-
-  return nodes.map((n) => {
-    const { x, y } = g.node(n.id)
-    return { ...n, position: { x: x - NODE_WIDTH / 2, y: y - NODE_HEIGHT / 2 } }
-  })
 }
 
 interface FamilyTreeProps {
@@ -73,8 +56,9 @@ export default function FamilyTree({ rootId = '' }: FamilyTreeProps) {
         label: e.label,
       }))
 
-      setNodes(applyDagreLayout(rawNodes, rawEdges))
-      setEdges(rawEdges)
+      const laid = applyDagreLayout(rawNodes, rawEdges)
+      setNodes(laid.nodes)
+      setEdges(laid.edges)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
@@ -103,21 +87,23 @@ export default function FamilyTree({ rootId = '' }: FamilyTreeProps) {
   }
 
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      nodeTypes={nodeTypes}
-      defaultEdgeOptions={defaultEdgeOptions}
-      fitView
-      proOptions={{ hideAttribution: true }}
-    >
-      <Background variant={BackgroundVariant.Dots} color="#1e2a4a" gap={20} size={1.5} />
-      <MiniMap
-        style={{ background: '#0f172a' }}
-        nodeColor="#334155"
-        maskColor="rgba(0,0,0,0.6)"
-      />
-      <Controls />
-    </ReactFlow>
+    <div className="w-screen h-screen bg-[#050a18]">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        defaultEdgeOptions={defaultEdgeOptions}
+        fitView
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background variant={BackgroundVariant.Dots} color="#1e2a4a" gap={28} size={1} />
+        <MiniMap
+          style={{ background: '#0f172a' }}
+          nodeColor="#6366f1"
+          maskColor="rgba(0,0,0,0.6)"
+        />
+        <Controls />
+      </ReactFlow>
+    </div>
   )
 }

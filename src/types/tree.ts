@@ -4,6 +4,7 @@ export interface PersonData {
   sex: string
   birthYear: string | null
   deathYear: string | null
+  isRoot?: boolean
 }
 
 export interface UnionData {

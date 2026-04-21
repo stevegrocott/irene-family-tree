@@ -1,4 +1,3 @@
-import { describe, it, expect, afterAll } from 'vitest'
 import { driver, read } from './neo4j'
 
 describe('neo4j connection', () => {

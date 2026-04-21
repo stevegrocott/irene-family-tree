@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import type React from 'react'
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -21,9 +22,14 @@ import type { TreeResponse } from '@/types/tree'
 
 const nodeTypes = { person: PersonNode, union: UnionNode }
 
+const EDGE_STYLES: Record<string, React.CSSProperties> = {
+  UNION: { stroke: '#6366f1', strokeWidth: 1.5, opacity: 0.6 },
+  CHILD: { stroke: '#a78bfa', strokeWidth: 1, opacity: 0.45 },
+}
+const defaultEdgeStyle = { stroke: '#6366f1', strokeWidth: 1.5, opacity: 0.5 }
+
 const defaultEdgeOptions = {
   type: 'smoothstep',
-  style: { stroke: '#6366f1', strokeWidth: 1.5, opacity: 0.5 },
   animated: false,
 }
 
@@ -56,7 +62,7 @@ function FlowCanvas({ rootId, onSelectRoot }: { rootId: string; onSelectRoot: (i
         id: e.id,
         source: e.source,
         target: e.target,
-        label: e.label,
+        style: EDGE_STYLES[e.relType] ?? defaultEdgeStyle,
       }))
 
       const laid = applyDagreLayout(rawNodes, rawEdges)

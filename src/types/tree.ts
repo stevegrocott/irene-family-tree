@@ -22,7 +22,7 @@ export interface FlowEdge {
   id: string
   source: string
   target: string
-  label: string
+  relType: string
 }
 
 export interface TreeResponse {

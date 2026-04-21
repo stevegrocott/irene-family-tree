@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import type React from 'react'
 import ReactFlow, {
   Background,
@@ -19,6 +19,7 @@ import PersonNode from '@/components/PersonNode'
 import UnionNode from '@/components/UnionNode'
 import SearchBar from '@/components/SearchBar'
 import { applyDagreLayout } from '@/lib/layout'
+import { formatLifespan } from '@/lib/person'
 import type { TreeResponse, PersonData } from '@/types/tree'
 import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES } from '@/constants/tree'
 
@@ -100,12 +101,7 @@ function PersonDrawer({
   onClose: () => void
   onReroot: (id: string) => void
 }) {
-  const dates = [
-    person.birthYear ? `b. ${person.birthYear}` : null,
-    person.deathYear ? `d. ${person.deathYear}` : null,
-  ]
-    .filter(Boolean)
-    .join('  ·  ')
+  const dates = formatLifespan(person)
 
   return (
     <div
@@ -171,9 +167,8 @@ function FlowCanvas({
   const { setViewport } = useReactFlow()
   const abortRef = useRef<AbortController | null>(null)
 
-  // Derive stats from the laid-out nodes
-  const personCount = nodes.filter(n => n.type === 'person').length
-  const unionCount  = nodes.filter(n => n.type === 'union').length
+  const personCount = useMemo(() => nodes.filter(n => n.type === 'person').length, [nodes])
+  const unionCount  = useMemo(() => nodes.filter(n => n.type === 'union').length, [nodes])
 
   /**
    * Opens the PersonDrawer for the clicked person node.
@@ -321,6 +316,7 @@ function FlowCanvas({
 export default function FamilyTree() {
   const [rootId, setRootId] = useState('')
   const [persons, setPersons] = useState<Person[]>([])
+  const [personsError, setPersonsError] = useState<string | null>(null)
 
   /**
    * Fetch the full persons list once. Use it to seed the initial root and
@@ -328,14 +324,30 @@ export default function FamilyTree() {
    */
   useEffect(() => {
     fetch('/api/persons')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
       .then((data: Person[]) => {
         setPersons(data)
         const first = data.find(p => p.name?.trim()) ?? data[0]
         if (first) setRootId(first.gedcomId)
       })
-      .catch((err) => console.error('Failed to load persons', err))
+      .catch((err) => {
+        console.error('Failed to load persons', err)
+        setPersonsError('Could not load family members. Please check your database connection and refresh.')
+      })
   }, [])
+
+  if (personsError) {
+    return (
+      <div className="relative w-screen h-screen bg-[#050a18] flex items-center justify-center">
+        <div className="bg-white/10 backdrop-blur-md border border-red-400/30 rounded-2xl p-6 max-w-sm text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+          <p className="text-red-300 text-sm">{personsError}</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="relative w-screen h-screen bg-[#050a18]">

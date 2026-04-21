@@ -40,7 +40,9 @@ export async function GET(
 ) {
   const { id } = await params
 
-  const rows = await read<PersonDetailRow>(
+  let rows: PersonDetailRow[]
+  try {
+    rows = await read<PersonDetailRow>(
     `MATCH (p:Person {gedcomId: $id})
 
      // Parents: unions where p is a child, then find persons connected via UNION to those unions
@@ -104,7 +106,11 @@ export async function GET(
        [x IN siblings WHERE x IS NOT NULL] AS siblings,
        [x IN marriages WHERE x IS NOT NULL] AS marriages`,
     { id }
-  )
+    )
+  } catch (err) {
+    console.error('Neo4j query failed', err)
+    return NextResponse.json({ error: 'Failed to query graph database' }, { status: 500 })
+  }
 
   if (!rows.length || rows[0].gedcomId == null) {
     return NextResponse.json({ error: 'Person not found' }, { status: 404 })

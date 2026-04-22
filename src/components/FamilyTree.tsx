@@ -35,6 +35,9 @@ import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT
  * Minimal person summary used for the search bar and root selection.
  * @property gedcomId - GEDCOM identifier of the person
  * @property name - Display name of the person
+ * @property sex - Biological sex code ('M', 'F', or null)
+ * @property birthYear - Four-digit birth year string, or null if unknown
+ * @property birthPlace - Free-text birth location, or null if unknown
  */
 interface Person { gedcomId: string; name: string; sex: string | null; birthYear: string | null; birthPlace: string | null }
 
@@ -164,6 +167,37 @@ function RelativeRow({
 }
 
 /**
+ * A shared header/container for sub-views within the PersonDrawer.
+ * Provides a back button and title for nested views like edit and add-relative modes.
+ *
+ * @param {Object} props - Component props
+ * @param {string} props.title - Title to display in the header
+ * @param {Function} props.onBack - Called when user clicks the back button
+ * @param {React.ReactNode} props.children - Content to render below the header
+ * @returns {React.ReactElement} Rendered drawer sub-view container
+ */
+function DrawerSubView({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
+  return (
+    <div
+      data-testid="person-drawer"
+      className="absolute top-0 right-0 h-full w-80 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
+    >
+      <div className="flex items-center gap-2 px-5 py-4 border-b border-white/10">
+        <button
+          onClick={onBack}
+          aria-label="Back"
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+        >
+          ←
+        </button>
+        <h2 className="text-white font-semibold text-sm truncate flex-1">{title}</h2>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+/**
  * Side drawer panel showing details for a selected person.
  * Fetches and displays name, dates, GEDCOM ID, and immediate relatives
  * (parents, siblings, marriages). Allows re-rooting or navigating to relatives.
@@ -251,6 +285,7 @@ export function PersonDrawer({
     }
   }, [searchQuery, mode])
 
+  /** Clears all form state for adding a relative, preparing for a new add-relative flow. */
   const resetAddRelativeForm = () => {
     setSearchQuery('')
     setSearchResults([])
@@ -260,12 +295,21 @@ export function PersonDrawer({
     setNewSex('U')
   }
 
+  /**
+   * Opens the add-relative sub-view for the specified relationship type.
+   * @param {string} type - Relationship type: 'parent', 'spouse', or 'child'
+   */
   const openAddRelative = (type: 'parent' | 'spouse' | 'child') => {
     setAddRelativeType(type)
     resetAddRelativeForm()
     setMode('add-relative')
   }
 
+  /**
+   * Links an existing person as a relative and returns to view mode.
+   * Refreshes the person detail and parent drawer after successful link.
+   * @param {Person} relative - The person to link as a relative
+   */
   const handleSelectRelative = async (relative: Person) => {
     try {
       const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
@@ -283,6 +327,10 @@ export function PersonDrawer({
     }
   }
 
+  /**
+   * Creates a new person and links them as a relative in a single operation.
+   * Silently fails if no name is provided. Refreshes person detail on success.
+   */
   const handleCreateAndLink = async () => {
     const fullName = [givenName.trim(), familyName.trim()].filter(Boolean).join(' ')
     if (!fullName) return
@@ -309,13 +357,16 @@ export function PersonDrawer({
     }
   }
 
-  const relativeTypeLabel = addRelativeType
-
+  /** Opens the edit sub-view, initializing the birth place field from current person detail. */
   const openEdit = () => {
     setEditBirthPlace(detail?.birthPlace ?? '')
     setMode('edit')
   }
 
+  /**
+   * PATCHes the person record with the current edit-form values and returns to view mode.
+   * Increments `detailVersion` to trigger a re-fetch of the updated person detail.
+   */
   const handleSaveEdit = async () => {
     try {
       const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}`, {
@@ -333,23 +384,7 @@ export function PersonDrawer({
 
   if (mode === 'edit') {
     return (
-      <div
-        data-testid="person-drawer"
-        className="absolute top-0 right-0 h-full w-80 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
-      >
-        <div className="flex items-center gap-2 px-5 py-4 border-b border-white/10">
-          <button
-            onClick={() => setMode('view')}
-            aria-label="Back"
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            ←
-          </button>
-          <h2 className="text-white font-semibold text-sm truncate flex-1">
-            Edit {person.name || 'person'}
-          </h2>
-        </div>
-
+      <DrawerSubView title={`Edit ${person.name || 'person'}`} onBack={() => setMode('view')}>
         <div
           data-testid="person-drawer-edit-form"
           className="flex-1 overflow-y-auto px-5 py-4 space-y-4"
@@ -373,35 +408,19 @@ export function PersonDrawer({
             Save change
           </button>
         </div>
-      </div>
+      </DrawerSubView>
     )
   }
 
   if (mode === 'add-relative') {
     return (
-      <div
-        data-testid="person-drawer"
-        className="absolute top-0 right-0 h-full w-80 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
-      >
-        <div className="flex items-center gap-2 px-5 py-4 border-b border-white/10">
-          <button
-            onClick={() => setMode('view')}
-            aria-label="Back"
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            ←
-          </button>
-          <h2 className="text-white font-semibold text-sm truncate flex-1">
-            Add a {relativeTypeLabel} for {person.name || 'person'}
-          </h2>
-        </div>
-
+      <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => setMode('view')}>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           <div>
             <input
               data-testid="add-relative-search"
               type="text"
-              placeholder={`Search for a ${relativeTypeLabel}…`}
+              placeholder={`Search for a ${addRelativeType}…`}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
@@ -476,7 +495,7 @@ export function PersonDrawer({
             </button>
           </div>
         </div>
-      </div>
+      </DrawerSubView>
     )
   }
 
@@ -807,23 +826,32 @@ function FlowCanvas({
               setSelectedPerson({ gedcomId: id, name: '', sex: 'U', birthYear: null, deathYear: null, birthPlace: null, deathPlace: null, occupation: null, notes: null })
             }
           }}
+          onSelectRoot={onSelectRoot}
         />
       )}
     </>
   )
 }
 
+const TREE_ROOT_STORAGE_KEY = 'family-tree-root-id'
+
 /**
  * Root component for the interactive family tree visualization.
  * Fetches available people and renders the tree canvas with search and navigation.
+ * Persists the selected root person in localStorage for session continuity.
+ *
+ * @returns {React.ReactElement} Rendered family tree canvas with provider and error handling
  */
-const TREE_ROOT_STORAGE_KEY = 'family-tree-root-id'
-
 export default function FamilyTree() {
   const [rootId, setRootId] = useState('')
   const [persons, setPersons] = useState<Person[]>([])
   const [personsError, setPersonsError] = useState<string | null>(null)
 
+  /**
+   * Updates the active root person and persists the selection to localStorage
+   * so the same person is shown on next page load.
+   * @param {string} id - GEDCOM ID of the newly selected root person
+   */
   const handleSelectRoot = (id: string) => {
     setRootId(id)
     if (typeof window !== 'undefined') {

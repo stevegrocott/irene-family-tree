@@ -76,6 +76,11 @@ const aliceTreeResponse = {
 
 // ─── Test suite ─────────────────────────────────────────────────────────────
 
+/**
+ * Intercepts the NextAuth session endpoint and returns a synthetic authenticated
+ * session so tests can exercise auth-gated UI without a real OAuth flow.
+ * @param page - Playwright page to install the route mock on
+ */
 async function mockSignedInSession(page: import('@playwright/test').Page) {
   await page.route(/\/api\/auth\/session\b/, (route) =>
     route.fulfill({

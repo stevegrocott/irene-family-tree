@@ -48,14 +48,14 @@ RETURN u.gedcomId AS unionId`
     cypher = `MATCH (child:Person {gedcomId: $id}), (parent:Person {gedcomId: $targetId})
 MERGE (u:Union {gedcomId: $unionId})
 MERGE (parent)-[:UNION]->(u)
-MERGE (child)-[:CHILD]->(u)
+MERGE (u)-[:CHILD]->(child)
 RETURN u.gedcomId AS unionId`
   } else {
     // type === 'child': id is the parent; targetId is the child
     cypher = `MATCH (parent:Person {gedcomId: $id}), (child:Person {gedcomId: $targetId})
 MERGE (u:Union {gedcomId: $unionId})
 MERGE (parent)-[:UNION]->(u)
-MERGE (child)-[:CHILD]->(u)
+MERGE (u)-[:CHILD]->(child)
 RETURN u.gedcomId AS unionId`
   }
 
@@ -65,6 +65,10 @@ RETURN u.gedcomId AS unionId`
   } catch (err) {
     console.error('Neo4j write failed', err)
     return NextResponse.json({ error: 'Failed to write to graph database' }, { status: 500 })
+  }
+
+  if (!rows.length || !rows[0].unionId) {
+    return NextResponse.json({ error: 'Person not found' }, { status: 404 })
   }
 
   return NextResponse.json(rows[0], { status: 201 })

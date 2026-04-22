@@ -69,7 +69,7 @@ describe('POST /api/person/[id]/relationships', () => {
 
     expect(response.status).toBe(201)
     expect(mockWrite).toHaveBeenCalledWith(
-      expect.stringContaining('CHILD'),
+      expect.stringContaining('(u)-[:CHILD]->(child)'),
       expect.objectContaining({ id: 'I001', targetId: 'I002' })
     )
   })
@@ -82,7 +82,7 @@ describe('POST /api/person/[id]/relationships', () => {
 
     expect(response.status).toBe(201)
     expect(mockWrite).toHaveBeenCalledWith(
-      expect.stringContaining('CHILD'),
+      expect.stringContaining('(u)-[:CHILD]->(child)'),
       expect.objectContaining({ id: 'I001', targetId: 'I002' })
     )
   })

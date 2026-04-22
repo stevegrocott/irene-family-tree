@@ -5,14 +5,16 @@
  * response shapes for success, not-found, and database-error scenarios.
  * Neo4j `read` is fully mocked so no live database connection is required.
  */
-import { GET } from './route'
+import { GET, PATCH } from './route'
 
 jest.mock('@/lib/neo4j', () => ({
   read: jest.fn(),
+  write: jest.fn(),
 }))
 
-import { read } from '@/lib/neo4j'
+import { read, write } from '@/lib/neo4j'
 const mockRead = read as jest.MockedFunction<typeof read>
+const mockWrite = write as jest.MockedFunction<typeof write>
 
 /**
  * Creates a minimal Request object targeting the person-by-id endpoint.
@@ -266,5 +268,132 @@ describe('GET /api/person/[id]', () => {
 
     expect(body.marriages[0].marriageYear).toBeNull()
     expect(body.marriages[0].marriagePlace).toBeNull()
+  })
+})
+
+const makePatchRequest = (id: string, body: unknown) =>
+  new Request(`http://localhost/api/person/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+  })
+
+const updatedPerson = {
+  gedcomId: 'I001',
+  name: 'John Updated',
+  sex: 'M',
+  birthYear: '1901',
+  birthDate: '1901-03-15',
+  birthPlace: 'Manchester, England',
+  deathYear: '1981',
+  deathDate: '1981-07-04',
+  deathPlace: 'Chicago, USA',
+  occupation: 'Teacher',
+  notes: 'Updated notes',
+}
+
+describe('PATCH /api/person/[id]', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('returns 200 with updated person when write succeeds', async () => {
+    mockWrite.mockResolvedValue([updatedPerson])
+
+    const response = await PATCH(makePatchRequest('I001', { name: 'John Updated' }), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual(updatedPerson)
+  })
+
+  it('returns 400 when body is invalid JSON', async () => {
+    const request = new Request('http://localhost/api/person/I001', {
+      method: 'PATCH',
+      body: 'not-json',
+    })
+    const response = await PATCH(request, makeParams('I001'))
+
+    expect(response.status).toBe(400)
+  })
+
+  it('returns 400 when no valid fields are provided', async () => {
+    const response = await PATCH(makePatchRequest('I001', { invalidField: 'value' }), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body).toEqual({ error: 'No valid fields provided' })
+  })
+
+  it('returns 404 when no person matches the id', async () => {
+    mockWrite.mockResolvedValue([])
+
+    const response = await PATCH(makePatchRequest('MISSING', { name: 'Ghost' }), makeParams('MISSING'))
+    const body = await response.json()
+
+    expect(response.status).toBe(404)
+    expect(body).toEqual({ error: 'Person not found' })
+  })
+
+  it('returns 404 when the returned row has a null gedcomId', async () => {
+    mockWrite.mockResolvedValue([{ ...updatedPerson, gedcomId: null }])
+
+    const response = await PATCH(makePatchRequest('I001', { name: 'John' }), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(404)
+    expect(body).toEqual({ error: 'Person not found' })
+  })
+
+  it('returns 500 when Neo4j write throws', async () => {
+    mockWrite.mockRejectedValue(new Error('DB error'))
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    const response = await PATCH(makePatchRequest('I001', { name: 'Alice' }), makeParams('I001'))
+
+    expect(response.status).toBe(500)
+    expect((await response.json())).toEqual({ error: 'Failed to update graph database' })
+  })
+
+  it('passes the id and only allowed fields to the write call', async () => {
+    mockWrite.mockResolvedValue([updatedPerson])
+
+    await PATCH(makePatchRequest('I001', { name: 'John', occupation: 'Doctor', unknownField: 'ignored' }), makeParams('I001'))
+
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.stringContaining('MATCH (p:Person {gedcomId: $id})'),
+      expect.objectContaining({
+        id: 'I001',
+        fields: { name: 'John', occupation: 'Doctor' },
+      })
+    )
+  })
+
+  it('strips disallowed fields from the write call', async () => {
+    mockWrite.mockResolvedValue([updatedPerson])
+
+    await PATCH(makePatchRequest('I001', { name: 'John', password: 'secret', admin: true }), makeParams('I001'))
+
+    const callArgs = (mockWrite as jest.Mock).mock.calls[0][1] as { fields: Record<string, unknown> }
+    expect(callArgs.fields).not.toHaveProperty('password')
+    expect(callArgs.fields).not.toHaveProperty('admin')
+    expect(callArgs.fields).toHaveProperty('name', 'John')
+  })
+
+  it('accepts all allowed patch fields', async () => {
+    mockWrite.mockResolvedValue([updatedPerson])
+    const allFields = {
+      name: 'Alice', sex: 'F', birthYear: '1990', birthDate: '1990-01-01',
+      birthPlace: 'Paris', deathYear: '2070', deathDate: '2070-12-31',
+      deathPlace: 'Lyon', occupation: 'Engineer', notes: 'No notes',
+    }
+
+    const response = await PATCH(makePatchRequest('I001', allFields), makeParams('I001'))
+
+    expect(response.status).toBe(200)
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ fields: allFields })
+    )
   })
 })

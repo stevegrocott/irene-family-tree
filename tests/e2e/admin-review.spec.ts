@@ -130,29 +130,11 @@ test.describe('Admin Changes Review (/admin)', () => {
       // change into the React component state so the remaining assertions can
       // verify card rendering and client-side interactions.
       await page.waitForLoadState('networkidle')
+      await page.waitForSelector('[data-testid="changes-review"]')
       await page.evaluate((change) => {
-        // Walk the React fiber tree to find ChangesReview's first useState hook
-        // (the `changes` state) and dispatch an update with the mock record.
-        function findDispatch(node: Element | null): ((v: unknown) => void) | null {
-          if (!node) return null
-          const fiberKey = Object.keys(node).find(k => k.startsWith('__reactFiber$'))
-          if (!fiberKey) return null
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          let fiber: any = (node as any)[fiberKey]
-          while (fiber) {
-            if (fiber.memoizedState?.queue?.dispatch &&
-                Array.isArray(fiber.memoizedState.memoizedState)) {
-              return fiber.memoizedState.queue.dispatch
-            }
-            fiber = fiber.return
-          }
-          return null
-        }
-        // The ChangesReview root is the div.space-y-4 or the empty-state div.
-        const root = document.querySelector('[class*="space-y-4"], [class*="flex-col"]')
-        if (!root) return
-        const dispatch = findDispatch(root)
-        if (dispatch) dispatch([change])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const setter = (window as any).__setChanges
+        if (setter) setter([change])
       }, mockChange)
 
       // Verify card content.

@@ -5,6 +5,9 @@ export async function middleware(request: NextRequest) {
   const session = await auth()
   const isAdmin = session?.user?.role === 'admin'
   if (!session || !isAdmin) {
+    if (request.nextUrl.pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const signInUrl = new URL('/api/auth/signin', request.url)
     signInUrl.searchParams.set('callbackUrl', request.nextUrl.pathname)
     return NextResponse.redirect(signInUrl)

@@ -716,6 +716,10 @@ export function PersonDrawer({
 
         {detail && (
           <>
+            {detail.birthPlace && (
+              <p className="text-slate-400 text-xs">Born: {detail.birthPlace}</p>
+            )}
+
             <section data-testid="person-drawer-parents">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Parents</h3>
               {detail.parents.length === 0 ? (

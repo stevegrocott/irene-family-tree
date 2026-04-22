@@ -53,6 +53,11 @@ export function ChangesReview({ initialChanges }: { initialChanges: Change[] }) 
   const [pending, setPending] = useState<Record<string, 'keep' | 'revert' | undefined>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
 
+  if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(window as any).__setChanges = setChanges
+  }
+
   async function handleAction(id: string, action: 'keep' | 'revert') {
     setPending(p => ({ ...p, [id]: action }))
     setErrors(e => { const next = { ...e }; delete next[id]; return next })
@@ -73,7 +78,7 @@ export function ChangesReview({ initialChanges }: { initialChanges: Change[] }) 
 
   if (changes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div data-testid="changes-review" className="flex flex-col items-center justify-center py-20 text-center">
         <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-4">
           <svg className="w-8 h-8 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -85,7 +90,7 @@ export function ChangesReview({ initialChanges }: { initialChanges: Change[] }) 
   }
 
   return (
-    <div className="space-y-4">
+    <div data-testid="changes-review" className="space-y-4">
       {changes.map(change => {
         const isPending = !!pending[change.id]
         const isKeeping = pending[change.id] === 'keep'

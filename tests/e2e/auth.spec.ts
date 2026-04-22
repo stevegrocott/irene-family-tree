@@ -9,7 +9,7 @@ import { test, expect, type Route } from '@playwright/test'
  *   2. With a mocked signed-in session, AuthButton displays the user's name
  *      and exposes a "Sign out" control.
  *   3. Unauthenticated navigation to /admin is redirected to the NextAuth
- *      sign-in flow by the `src/proxy.ts` matcher.
+ *      sign-in flow by the `src/middleware.ts` matcher.
  */
 
 // Fulfils Google's OAuth authorize endpoint with an inert HTML body so the
@@ -109,14 +109,14 @@ test.describe('AuthButton with a mocked signed-in session', () => {
   })
 })
 
-test.describe('Proxy protection for /admin', () => {
+test.describe('Middleware protection for /admin', () => {
   test('redirects unauthenticated visitors to the sign-in flow', async ({ page }) => {
     // Stub Google in case NextAuth auto-forwards to the provider.
     await page.route(/accounts\.google\.com/, stubGoogleOAuth)
 
     const response = await page.goto('/admin', { waitUntil: 'domcontentloaded' })
 
-    // The proxy (src/proxy.ts) redirects unauthenticated requests to
+    // src/middleware.ts redirects unauthenticated requests to
     // /api/auth/signin. Depending on NextAuth's handler, the browser may land
     // on the sign-in page or be forwarded onward to Google.
     const landedUrl = page.url()

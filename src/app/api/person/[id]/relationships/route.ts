@@ -111,14 +111,18 @@ RETURN u.gedcomId AS unionId`
 
   const authorEmail = session?.user?.email ?? 'anonymous'
   const authorName = session?.user?.name ?? 'anonymous'
-  await recordChange(
-    authorEmail,
-    authorName,
-    'ADD_RELATIONSHIP',
-    id,
-    null,
-    { type, targetId, unionId: rows[0].unionId }
-  )
+  try {
+    await recordChange(
+      authorEmail,
+      authorName,
+      'ADD_RELATIONSHIP',
+      id,
+      null,
+      { type, targetId, unionId: rows[0].unionId }
+    )
+  } catch (auditErr) {
+    console.error('Audit recordChange failed (non-fatal)', auditErr)
+  }
 
   return NextResponse.json(rows[0], { status: 201 })
 }

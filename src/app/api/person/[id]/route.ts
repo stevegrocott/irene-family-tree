@@ -221,7 +221,11 @@ export async function PATCH(
     return NextResponse.json({ error: 'Person not found' }, { status: 404 })
   }
 
-  await recordChange(authorEmail, authorName, 'UPDATE_PERSON', id, previousPerson, rows[0])
+  try {
+    await recordChange(authorEmail, authorName, 'UPDATE_PERSON', id, previousPerson, rows[0])
+  } catch (auditErr) {
+    console.error('Audit recordChange failed (non-fatal)', auditErr)
+  }
 
   return NextResponse.json(rows[0])
 }

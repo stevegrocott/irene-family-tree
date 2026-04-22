@@ -5,9 +5,20 @@ jest.mock('@/lib/neo4j', () => ({
   write: jest.fn(),
 }))
 
+jest.mock('@/lib/changes', () => ({
+  recordChange: jest.fn().mockResolvedValue(undefined),
+}))
+
+jest.mock('@/auth', () => ({
+  auth: jest.fn().mockResolvedValue({ user: { email: 'editor@example.com', name: 'Editor User' } }),
+}))
+
 import { read, write } from '@/lib/neo4j'
 const mockRead = read as jest.MockedFunction<typeof read>
 const mockWrite = write as jest.MockedFunction<typeof write>
+
+import { recordChange } from '@/lib/changes'
+const mockRecordChange = recordChange as jest.MockedFunction<typeof recordChange>
 
 const makeRequest = (url = 'http://localhost/api/persons') =>
   new Request(url) as unknown as Request
@@ -177,5 +188,21 @@ describe('POST /api/persons', () => {
     const response = await POST(makePostRequest({ name: 'Alice' }))
 
     expect(response.status).toBe(500)
+  })
+
+  it('calls recordChange with null previousValue and created person data after successful POST', async () => {
+    const created = { gedcomId: '@U12345678@', name: 'Alice Test', sex: 'F', birthYear: '1990', birthPlace: 'London' }
+    mockWrite.mockResolvedValue([created])
+
+    await POST(makePostRequest({ name: 'Alice Test', sex: 'F', birthYear: '1990', birthPlace: 'London' }))
+
+    expect(mockRecordChange).toHaveBeenCalledWith(
+      'editor@example.com',
+      'Editor User',
+      'CREATE_PERSON',
+      '@U12345678@',
+      null,
+      created
+    )
   })
 })

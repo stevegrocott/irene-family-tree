@@ -8,6 +8,8 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { read, write } from '@/lib/neo4j'
+import { recordChange } from '@/lib/changes'
+import { auth } from '@/auth'
 
 /** Forces the route to run in the Node.js runtime (required for Neo4j driver). */
 export const runtime = 'nodejs'
@@ -101,5 +103,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to write to graph database' }, { status: 500 })
   }
 
-  return NextResponse.json(rows[0], { status: 201 })
+  const created = rows[0]
+  const session = await auth()
+  const authorEmail = session?.user?.email ?? 'anonymous'
+  const authorName = session?.user?.name ?? 'anonymous'
+  await recordChange(authorEmail, authorName, 'CREATE_PERSON', created.gedcomId, null, created)
+
+  return NextResponse.json(created, { status: 201 })
 }

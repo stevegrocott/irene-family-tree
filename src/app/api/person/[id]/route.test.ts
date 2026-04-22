@@ -12,9 +12,20 @@ jest.mock('@/lib/neo4j', () => ({
   write: jest.fn(),
 }))
 
+jest.mock('@/lib/changes', () => ({
+  recordChange: jest.fn().mockResolvedValue(undefined),
+}))
+
+jest.mock('@/auth', () => ({
+  auth: jest.fn().mockResolvedValue({ user: { email: 'editor@example.com', name: 'Editor User' } }),
+}))
+
 import { read, write } from '@/lib/neo4j'
 const mockRead = read as jest.MockedFunction<typeof read>
 const mockWrite = write as jest.MockedFunction<typeof write>
+
+import { recordChange } from '@/lib/changes'
+const mockRecordChange = recordChange as jest.MockedFunction<typeof recordChange>
 
 /**
  * Creates a minimal Request object targeting the person-by-id endpoint.
@@ -394,6 +405,23 @@ describe('PATCH /api/person/[id]', () => {
     expect(mockWrite).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ fields: allFields })
+    )
+  })
+
+  it('calls recordChange with previous person, updated person, and session author after successful update', async () => {
+    const previousPerson = { ...updatedPerson, name: 'John Original' }
+    mockRead.mockResolvedValueOnce([previousPerson])
+    mockWrite.mockResolvedValue([updatedPerson])
+
+    await PATCH(makePatchRequest('I001', { name: 'John Updated' }), makeParams('I001'))
+
+    expect(mockRecordChange).toHaveBeenCalledWith(
+      'editor@example.com',
+      'Editor User',
+      'UPDATE_PERSON',
+      'I001',
+      previousPerson,
+      updatedPerson
     )
   })
 })

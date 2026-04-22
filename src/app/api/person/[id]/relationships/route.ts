@@ -19,6 +19,9 @@ export async function POST(
 ) {
   const { id } = await params
 
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   let body: Record<string, unknown>
   try {
     body = await request.json()
@@ -73,7 +76,6 @@ RETURN u.gedcomId AS unionId`
     return NextResponse.json({ error: 'Person not found' }, { status: 404 })
   }
 
-  const session = await auth()
   const authorEmail = session?.user?.email ?? 'anonymous'
   const authorName = session?.user?.name ?? 'anonymous'
   await recordChange(

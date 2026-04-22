@@ -9,7 +9,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import type React from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession, signIn } from 'next-auth/react'
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -244,6 +244,21 @@ export function PersonDrawer({
   const [newBirthYear, setNewBirthYear] = useState('')
   const [newSex, setNewSex] = useState('U')
 
+  const [editGivenName, setEditGivenName] = useState('')
+  const [editFamilyName, setEditFamilyName] = useState('')
+  const [editSex, setEditSex] = useState('U')
+  const [editBirthYear, setEditBirthYear] = useState('')
+  const [editDiedYear, setEditDiedYear] = useState('')
+  const [editDeathPlace, setEditDeathPlace] = useState('')
+  const [editOccupation, setEditOccupation] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+  const [showEditBirthPlace, setShowEditBirthPlace] = useState(false)
+  const [showEditDiedYear, setShowEditDiedYear] = useState(false)
+  const [showEditDeathPlace, setShowEditDeathPlace] = useState(false)
+  const [showEditOccupation, setShowEditOccupation] = useState(false)
+  const [showEditNotes, setShowEditNotes] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+
   useEffect(() => {
     setDetail(null)
     setDetailLoading(true)
@@ -302,6 +317,7 @@ export function PersonDrawer({
   const openAddRelative = (type: 'parent' | 'spouse' | 'child') => {
     setAddRelativeType(type)
     resetAddRelativeForm()
+    setActionError(null)
     setMode('add-relative')
   }
 
@@ -324,6 +340,7 @@ export function PersonDrawer({
       onSelectRoot?.(person.gedcomId)
     } catch (err) {
       console.error('Failed to add relative', err)
+      setActionError('Failed to add relative. Please try again.')
     }
   }
 
@@ -332,8 +349,11 @@ export function PersonDrawer({
    * Silently fails if no name is provided. Refreshes person detail on success.
    */
   const handleCreateAndLink = async () => {
-    const fullName = [givenName.trim(), familyName.trim()].filter(Boolean).join(' ')
-    if (!fullName) return
+    if (!givenName.trim() || !familyName.trim()) {
+      setActionError('Both given name and family name are required.')
+      return
+    }
+    const fullName = `${givenName.trim()} ${familyName.trim()}`
     try {
       const createRes = await fetch('/api/persons', {
         method: 'POST',
@@ -354,12 +374,28 @@ export function PersonDrawer({
       onSelectRoot?.(person.gedcomId)
     } catch (err) {
       console.error('Failed to create and link relative', err)
+      setActionError('Failed to create and link person. Please try again.')
     }
   }
 
-  /** Opens the edit sub-view, initializing the birth place field from current person detail. */
+  /** Opens the edit sub-view, initializing all edit fields from current person/detail. */
   const openEdit = () => {
+    const nameParts = (person.name || '').split(' ')
+    setEditGivenName(nameParts[0] || '')
+    setEditFamilyName(nameParts.slice(1).join(' ') || '')
+    setEditSex(person.sex ?? 'U')
+    setEditBirthYear(person.birthYear ?? '')
     setEditBirthPlace(detail?.birthPlace ?? '')
+    setEditDiedYear(person.deathYear ?? '')
+    setEditDeathPlace(person.deathPlace ?? '')
+    setEditOccupation(person.occupation ?? '')
+    setEditNotes(person.notes ?? '')
+    setShowEditBirthPlace(!!(detail?.birthPlace))
+    setShowEditDiedYear(!!(person.deathYear))
+    setShowEditDeathPlace(!!(person.deathPlace))
+    setShowEditOccupation(!!(person.occupation))
+    setShowEditNotes(!!(person.notes))
+    setActionError(null)
     setMode('edit')
   }
 
@@ -372,13 +408,24 @@ export function PersonDrawer({
       const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ birthPlace: editBirthPlace }),
+        body: JSON.stringify({
+          givenName: editGivenName.trim(),
+          familyName: editFamilyName.trim(),
+          sex: editSex,
+          birthYear: editBirthYear.trim() || null,
+          birthPlace: showEditBirthPlace ? (editBirthPlace.trim() || null) : null,
+          diedYear: showEditDiedYear ? (editDiedYear.trim() || null) : null,
+          deathPlace: showEditDeathPlace ? (editDeathPlace.trim() || null) : null,
+          occupation: showEditOccupation ? (editOccupation.trim() || null) : null,
+          notes: showEditNotes ? (editNotes.trim() || null) : null,
+        }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setMode('view')
       setDetailVersion(v => v + 1)
     } catch (err) {
       console.error('Failed to save edit', err)
+      setActionError('Failed to save changes. Please try again.')
     }
   }
 
@@ -387,9 +434,54 @@ export function PersonDrawer({
       <DrawerSubView title={`Edit ${person.name || 'person'}`} onBack={() => setMode('view')}>
         <div
           data-testid="person-drawer-edit-form"
-          className="flex-1 overflow-y-auto px-5 py-4 space-y-4"
+          className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
         >
-          <div className="space-y-2">
+          <div>
+            <label htmlFor="edit-given-name" className="text-xs text-slate-400 block mb-1">Given name</label>
+            <input
+              id="edit-given-name"
+              type="text"
+              value={editGivenName}
+              onChange={e => setEditGivenName(e.target.value)}
+              className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+            />
+          </div>
+          <div>
+            <label htmlFor="edit-family-name" className="text-xs text-slate-400 block mb-1">Family name</label>
+            <input
+              id="edit-family-name"
+              type="text"
+              value={editFamilyName}
+              onChange={e => setEditFamilyName(e.target.value)}
+              className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+            />
+          </div>
+          <div>
+            <p className="text-xs text-slate-400 mb-1">Sex</p>
+            <div className="flex gap-2">
+              {(['M', 'F', 'U'] as const).map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setEditSex(s)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${editSex === s ? 'bg-indigo-500 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+                >
+                  {s === 'M' ? 'Male' : s === 'F' ? 'Female' : 'Unknown'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label htmlFor="edit-birth-year" className="text-xs text-slate-400 block mb-1">Born year</label>
+            <input
+              id="edit-birth-year"
+              type="text"
+              value={editBirthYear}
+              onChange={e => setEditBirthYear(e.target.value)}
+              className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+            />
+          </div>
+          {showEditBirthPlace ? (
             <div>
               <label htmlFor="edit-birth-place" className="text-xs text-slate-400 block mb-1">Birth place</label>
               <input
@@ -400,12 +492,83 @@ export function PersonDrawer({
                 className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
               />
             </div>
-          </div>
+          ) : (
+            <button type="button" onClick={() => setShowEditBirthPlace(true)} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+              + Add birth place
+            </button>
+          )}
+          {showEditDiedYear ? (
+            <div>
+              <label htmlFor="edit-died-year" className="text-xs text-slate-400 block mb-1">Died year</label>
+              <input
+                id="edit-died-year"
+                type="text"
+                value={editDiedYear}
+                onChange={e => setEditDiedYear(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setShowEditDiedYear(true)} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+              + Add died year
+            </button>
+          )}
+          {showEditDeathPlace ? (
+            <div>
+              <label htmlFor="edit-death-place" className="text-xs text-slate-400 block mb-1">Death place</label>
+              <input
+                id="edit-death-place"
+                type="text"
+                value={editDeathPlace}
+                onChange={e => setEditDeathPlace(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setShowEditDeathPlace(true)} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+              + Add death place
+            </button>
+          )}
+          {showEditOccupation ? (
+            <div>
+              <label htmlFor="edit-occupation" className="text-xs text-slate-400 block mb-1">Occupation</label>
+              <input
+                id="edit-occupation"
+                type="text"
+                value={editOccupation}
+                onChange={e => setEditOccupation(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setShowEditOccupation(true)} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+              + Add occupation
+            </button>
+          )}
+          {showEditNotes ? (
+            <div>
+              <label htmlFor="edit-notes" className="text-xs text-slate-400 block mb-1">Notes</label>
+              <textarea
+                id="edit-notes"
+                value={editNotes}
+                onChange={e => setEditNotes(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400 resize-none"
+              />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setShowEditNotes(true)} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+              + Add notes
+            </button>
+          )}
+          {actionError && (
+            <p className="text-red-400 text-xs">{actionError}</p>
+          )}
           <button
             onClick={handleSaveEdit}
             className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
           >
-            Save change
+            Save changes
           </button>
         </div>
       </DrawerSubView>
@@ -448,8 +611,9 @@ export function PersonDrawer({
             <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Or create new</p>
             <div className="space-y-2">
               <div>
-                <label className="text-xs text-slate-400 block mb-1">Given name</label>
+                <label htmlFor="create-given-name" className="text-xs text-slate-400 block mb-1">Given name</label>
                 <input
+                  id="create-given-name"
                   type="text"
                   value={givenName}
                   onChange={e => setGivenName(e.target.value)}
@@ -457,8 +621,9 @@ export function PersonDrawer({
                 />
               </div>
               <div>
-                <label className="text-xs text-slate-400 block mb-1">Family name</label>
+                <label htmlFor="create-family-name" className="text-xs text-slate-400 block mb-1">Family name</label>
                 <input
+                  id="create-family-name"
                   type="text"
                   value={familyName}
                   onChange={e => setFamilyName(e.target.value)}
@@ -466,8 +631,9 @@ export function PersonDrawer({
                 />
               </div>
               <div>
-                <label className="text-xs text-slate-400 block mb-1">Birth year</label>
+                <label htmlFor="create-birth-year" className="text-xs text-slate-400 block mb-1">Birth year</label>
                 <input
+                  id="create-birth-year"
                   type="text"
                   value={newBirthYear}
                   onChange={e => setNewBirthYear(e.target.value)}
@@ -475,8 +641,9 @@ export function PersonDrawer({
                 />
               </div>
               <div>
-                <label className="text-xs text-slate-400 block mb-1">Sex</label>
+                <label htmlFor="create-sex" className="text-xs text-slate-400 block mb-1">Sex</label>
                 <select
+                  id="create-sex"
                   value={newSex}
                   onChange={e => setNewSex(e.target.value)}
                   className="w-full px-3 py-1.5 rounded-lg bg-[#0a1628] border border-white/20 text-white text-sm focus:outline-none focus:border-indigo-400"
@@ -487,6 +654,9 @@ export function PersonDrawer({
                 </select>
               </div>
             </div>
+            {actionError && (
+              <p className="text-red-400 text-xs">{actionError}</p>
+            )}
             <button
               onClick={handleCreateAndLink}
               className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
@@ -616,8 +786,8 @@ export function PersonDrawer({
         )}
       </div>
 
-      {/* Footer – re-root action */}
-      <div className="px-5 py-4 border-t border-white/10">
+      {/* Footer – re-root action + unauthenticated CTA */}
+      <div className="px-5 py-4 border-t border-white/10 space-y-2">
         <button
           data-testid="person-drawer-reroot"
           onClick={() => { onReroot(person.gedcomId); onClose() }}
@@ -625,6 +795,14 @@ export function PersonDrawer({
         >
           FOCUS TREE ON {(person.name || 'PERSON').toUpperCase()}
         </button>
+        {!isSignedIn && (
+          <button
+            onClick={() => signIn('google')}
+            className="w-full py-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors text-center"
+          >
+            Sign in to suggest edits
+          </button>
+        )}
       </div>
     </div>
   )

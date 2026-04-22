@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import { write } from '@/lib/neo4j'
 
 export async function recordChange(
@@ -10,7 +11,9 @@ export async function recordChange(
 ): Promise<void> {
   await write(
     `CREATE (c:Change {
-      timestamp: $timestamp,
+      id: $id,
+      status: 'live',
+      appliedAt: $appliedAt,
       authorEmail: $authorEmail,
       authorName: $authorName,
       changeType: $changeType,
@@ -19,7 +22,8 @@ export async function recordChange(
       newValue: $newValue
     })`,
     {
-      timestamp: new Date().toISOString(),
+      id: randomUUID(),
+      appliedAt: new Date().toISOString(),
       authorEmail,
       authorName,
       changeType,

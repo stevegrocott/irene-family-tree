@@ -42,13 +42,14 @@ describe('recordChange', () => {
     )
   })
 
-  it('includes a timestamp string in the write parameters', async () => {
+  it('includes appliedAt string and id in the write parameters', async () => {
     await recordChange('alice@example.com', 'Alice', 'CREATE_PERSON', 'I001', null, {})
 
     expect(mockWrite).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
-        timestamp: expect.any(String),
+        appliedAt: expect.any(String),
+        id: expect.any(String),
       })
     )
   })

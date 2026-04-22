@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { read, write } from '@/lib/neo4j'
+import { auth } from '@/auth'
 
 export const runtime = 'nodejs'
 
 interface ChangeRow {
   id: string
-  changeType: string
   targetId: string
   previousValue: string | null
   status: string
@@ -21,6 +21,14 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (session.user.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const { id } = await params
 
   let body: Record<string, unknown>
@@ -39,9 +47,8 @@ export async function POST(
   try {
     rows = await read<ChangeRow>(
       `MATCH (c:Change {id: $id})
-       RETURN c.id AS id, c.changeType AS changeType,
-              c.targetId AS targetId, c.previousValue AS previousValue,
-              c.status AS status`,
+       RETURN c.id AS id, c.targetId AS targetId,
+              c.previousValue AS previousValue, c.status AS status`,
       { id }
     )
   } catch (err) {
@@ -64,22 +71,20 @@ export async function POST(
         `MATCH (c:Change {id: $id}) SET c.status = 'kept'`,
         { id }
       )
+    } else if (change.previousValue) {
+      const prevValue = safeParseJson(change.previousValue) ?? {}
+      await write(
+        `MATCH (c:Change {id: $id})
+         MATCH (p:Person {gedcomId: c.targetId})
+         SET p += $prevValue
+         SET c.status = 'reverted'`,
+        { id, prevValue }
+      )
     } else {
-      if (change.changeType === 'edit_person' && change.previousValue) {
-        const prevValue = safeParseJson(change.previousValue) ?? {}
-        await write(
-          `MATCH (c:Change {id: $id})
-           MATCH (p:Person {gedcomId: c.targetId})
-           SET p += $prevValue
-           SET c.status = 'reverted'`,
-          { id, prevValue }
-        )
-      } else {
-        await write(
-          `MATCH (c:Change {id: $id}) SET c.status = 'reverted'`,
-          { id }
-        )
-      }
+      await write(
+        `MATCH (c:Change {id: $id}) SET c.status = 'reverted'`,
+        { id }
+      )
     }
   } catch (err) {
     console.error('Neo4j write failed', err)

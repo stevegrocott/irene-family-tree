@@ -87,16 +87,23 @@ export async function POST(
       } else if (suggestion.changeType === 'ADD_RELATIONSHIP') {
         const personId = rawPayload.personId as string
         const relativeId = rawPayload.relativeId as string
-        await write(
+        const result = await write<{ id: string }>(
           `MATCH (c:PendingChange {id: $id})
            MATCH (p1:Person {gedcomId: $personId})
            MATCH (p2:Person {gedcomId: $relativeId})
            CREATE (u:Union)
            MERGE (u)-[:HAS_MEMBER]->(p1)
            MERGE (u)-[:HAS_MEMBER]->(p2)
-           SET c.status = 'approved'`,
+           SET c.status = 'approved'
+           RETURN c.id AS id`,
           { id, personId, relativeId }
         )
+        if (!result.length) {
+          return NextResponse.json(
+            { error: 'Target person(s) no longer exist; suggestion cannot be applied' },
+            { status: 409 }
+          )
+        }
       } else {
         const { targetId, ...rest } = rawPayload as { targetId?: string } & Record<string, unknown>
         const newValue: Record<string, unknown> = {}
@@ -104,13 +111,20 @@ export async function POST(
           if (key in rest) newValue[key] = rest[key]
         }
         if (targetId && Object.keys(newValue).length > 0) {
-          await write(
+          const result = await write<{ id: string }>(
             `MATCH (c:PendingChange {id: $id})
              MATCH (p:Person {gedcomId: $targetId})
              SET p += $newValue
-             SET c.status = 'approved'`,
+             SET c.status = 'approved'
+             RETURN c.id AS id`,
             { id, targetId, newValue }
           )
+          if (!result.length) {
+            return NextResponse.json(
+              { error: 'Target person no longer exists; suggestion cannot be applied' },
+              { status: 409 }
+            )
+          }
         } else {
           await write(
             `MATCH (c:PendingChange {id: $id}) SET c.status = 'approved'`,

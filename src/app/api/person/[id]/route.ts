@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server'
 import { read, write } from '@/lib/neo4j'
 import { recordChange } from '@/lib/changes'
 import { auth } from '@/auth'
+import { ALLOWED_PATCH_FIELDS } from '@/lib/patches'
 import type { PersonSummary, MarriageDetail } from '@/types/tree'
 
 /** Forces the route to run in the Node.js runtime (required for Neo4j driver). */
@@ -140,11 +141,6 @@ export async function GET(
 
   return NextResponse.json(rows[0])
 }
-
-const ALLOWED_PATCH_FIELDS = [
-  'name', 'sex', 'birthYear', 'birthDate', 'birthPlace',
-  'deathYear', 'deathDate', 'deathPlace', 'occupation', 'notes',
-] as const
 
 interface UpdatedPerson {
   gedcomId: string

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { read, write } from '@/lib/neo4j'
 import { auth } from '@/auth'
+import { ALLOWED_PATCH_FIELDS } from '@/lib/patches'
 
 export const runtime = 'nodejs'
 
@@ -72,7 +73,11 @@ export async function POST(
         { id }
       )
     } else if (change.previousValue) {
-      const prevValue = safeParseJson(change.previousValue) ?? {}
+      const rawPrev = safeParseJson(change.previousValue) ?? {}
+      const prevValue: Record<string, unknown> = {}
+      for (const key of ALLOWED_PATCH_FIELDS) {
+        if (key in rawPrev) prevValue[key] = rawPrev[key]
+      }
       await write(
         `MATCH (c:Change {id: $id})
          MATCH (p:Person {gedcomId: c.targetId})

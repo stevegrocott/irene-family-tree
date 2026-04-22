@@ -179,7 +179,7 @@ function RelativeRow({
 function DrawerSubView({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
   return (
     <div
-      data-testid="person-drawer"
+      data-testid="drawer-sub-view"
       className="absolute top-0 right-0 h-full w-80 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
     >
       <div className="flex items-center gap-2 px-5 py-4 border-b border-white/10">
@@ -380,9 +380,8 @@ export function PersonDrawer({
 
   /** Opens the edit sub-view, initializing all edit fields from current person/detail. */
   const openEdit = () => {
-    const nameParts = (person.name || '').split(' ')
-    setEditGivenName(nameParts[0] || '')
-    setEditFamilyName(nameParts.slice(1).join(' ') || '')
+    setEditGivenName(person.givenName ?? '')
+    setEditFamilyName(person.surname ?? '')
     setEditSex(person.sex ?? 'U')
     setEditBirthYear(person.birthYear ?? '')
     setEditBirthPlace(detail?.birthPlace ?? '')
@@ -568,7 +567,7 @@ export function PersonDrawer({
             onClick={handleSaveEdit}
             className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
           >
-            Save changes
+            Save change
           </button>
         </div>
       </DrawerSubView>

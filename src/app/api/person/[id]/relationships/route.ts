@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
-import { write } from '@/lib/neo4j'
+import { read, write } from '@/lib/neo4j'
 import { recordChange } from '@/lib/changes'
 import { auth } from '@/auth'
 
@@ -40,6 +40,39 @@ export async function POST(
   const type = body.type as RelationshipType
   const targetId = body.targetId as string
   const unionId = '@F' + randomUUID().slice(0, 8) + '@'
+
+  // Check for existing union before creating a new one
+  let checkCypher: string
+  if (type === 'spouse') {
+    checkCypher = `MATCH (a:Person {gedcomId: $id}), (b:Person {gedcomId: $targetId})
+OPTIONAL MATCH (a)-[:UNION]->(u:Union)<-[:UNION]-(b)
+RETURN u.gedcomId AS unionId`
+  } else if (type === 'parent') {
+    // targetId is the parent; id is the child
+    checkCypher = `MATCH (child:Person {gedcomId: $id}), (parent:Person {gedcomId: $targetId})
+OPTIONAL MATCH (parent)-[:UNION]->(u:Union)-[:CHILD]->(child)
+RETURN u.gedcomId AS unionId`
+  } else {
+    // type === 'child': id is the parent; targetId is the child
+    checkCypher = `MATCH (parent:Person {gedcomId: $id}), (child:Person {gedcomId: $targetId})
+OPTIONAL MATCH (parent)-[:UNION]->(u:Union)-[:CHILD]->(child)
+RETURN u.gedcomId AS unionId`
+  }
+
+  let existingRows: UnionRecord[]
+  try {
+    existingRows = await read<UnionRecord>(checkCypher, { id, targetId })
+  } catch (err) {
+    console.error('Neo4j read failed', err)
+    return NextResponse.json({ error: 'Failed to read from graph database' }, { status: 500 })
+  }
+
+  if (existingRows.length && existingRows[0].unionId) {
+    return NextResponse.json(
+      { error: 'Relationship already exists', unionId: existingRows[0].unionId },
+      { status: 409 }
+    )
+  }
 
   let cypher: string
   if (type === 'spouse') {

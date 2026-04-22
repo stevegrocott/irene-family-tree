@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server'
+import { randomUUID } from 'crypto'
 import { read, write } from '@/lib/neo4j'
 import { auth } from '@/auth'
 import { ALLOWED_PATCH_FIELDS } from '@/lib/patches'
 
 export const runtime = 'nodejs'
 
-interface SuggestionRow {
+interface PendingChangeRow {
   id: string
-  targetId: string
-  newValue: string | null
+  changeType: string
+  payload: string | null
   status: string
 }
 
@@ -44,12 +45,12 @@ export async function POST(
     return NextResponse.json({ error: 'action must be "approve" or "decline"' }, { status: 400 })
   }
 
-  let rows: SuggestionRow[]
+  let rows: PendingChangeRow[]
   try {
-    rows = await read<SuggestionRow>(
-      `MATCH (c:Change {id: $id})
-       RETURN c.id AS id, c.targetId AS targetId,
-              c.newValue AS newValue, c.status AS status`,
+    rows = await read<PendingChangeRow>(
+      `MATCH (c:PendingChange {id: $id})
+       RETURN c.id AS id, c.changeType AS changeType,
+              c.payload AS payload, c.status AS status`,
       { id }
     )
   } catch (err) {
@@ -68,28 +69,58 @@ export async function POST(
 
   try {
     if (action === 'approve') {
-      const rawNew = safeParseJson(suggestion.newValue) ?? {}
-      const newValue: Record<string, unknown> = {}
-      for (const key of ALLOWED_PATCH_FIELDS) {
-        if (key in rawNew) newValue[key] = rawNew[key]
-      }
-      if (Object.keys(newValue).length > 0) {
+      const rawPayload = safeParseJson(suggestion.payload) ?? {}
+
+      if (suggestion.changeType === 'CREATE_PERSON') {
+        const newId = randomUUID()
+        const personFields: Record<string, unknown> = {}
+        for (const key of ALLOWED_PATCH_FIELDS) {
+          if (key in rawPayload) personFields[key] = rawPayload[key]
+        }
         await write(
-          `MATCH (c:Change {id: $id})
-           MATCH (p:Person {gedcomId: c.targetId})
-           SET p += $newValue
+          `MATCH (c:PendingChange {id: $id})
+           CREATE (p:Person {gedcomId: $newId})
+           SET p += $personFields
            SET c.status = 'approved'`,
-          { id, newValue }
+          { id, newId, personFields }
+        )
+      } else if (suggestion.changeType === 'ADD_RELATIONSHIP') {
+        const personId = rawPayload.personId as string
+        const relativeId = rawPayload.relativeId as string
+        await write(
+          `MATCH (c:PendingChange {id: $id})
+           MATCH (p1:Person {gedcomId: $personId})
+           MATCH (p2:Person {gedcomId: $relativeId})
+           CREATE (u:Union)
+           MERGE (u)-[:HAS_MEMBER]->(p1)
+           MERGE (u)-[:HAS_MEMBER]->(p2)
+           SET c.status = 'approved'`,
+          { id, personId, relativeId }
         )
       } else {
-        await write(
-          `MATCH (c:Change {id: $id}) SET c.status = 'approved'`,
-          { id }
-        )
+        const { targetId, ...rest } = rawPayload as { targetId?: string } & Record<string, unknown>
+        const newValue: Record<string, unknown> = {}
+        for (const key of ALLOWED_PATCH_FIELDS) {
+          if (key in rest) newValue[key] = rest[key]
+        }
+        if (targetId && Object.keys(newValue).length > 0) {
+          await write(
+            `MATCH (c:PendingChange {id: $id})
+             MATCH (p:Person {gedcomId: $targetId})
+             SET p += $newValue
+             SET c.status = 'approved'`,
+            { id, targetId, newValue }
+          )
+        } else {
+          await write(
+            `MATCH (c:PendingChange {id: $id}) SET c.status = 'approved'`,
+            { id }
+          )
+        }
       }
     } else {
       await write(
-        `MATCH (c:Change {id: $id}) SET c.status = 'declined'`,
+        `MATCH (c:PendingChange {id: $id}) SET c.status = 'declined'`,
         { id }
       )
     }

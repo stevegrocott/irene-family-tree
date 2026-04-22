@@ -30,8 +30,8 @@ const makeParams = (id: string) => ({ params: Promise.resolve({ id }) })
 
 const pendingSuggestion = {
   id: 'sg-1',
-  targetId: 'I001',
-  newValue: null,
+  changeType: 'UPDATE_PERSON',
+  payload: null,
   status: 'pending',
 }
 
@@ -128,7 +128,7 @@ describe('POST /api/admin/suggestions/[id]', () => {
     expect(body).toEqual({ error: 'Suggestion is not pending' })
   })
 
-  it('returns 200 with success:true and sets status to approved on approve action with no fields', async () => {
+  it('returns 200 with success:true and sets status to approved on approve action with no payload fields', async () => {
     mockAuth.mockResolvedValue(ADMIN_SESSION as never)
     mockRead.mockResolvedValue([pendingSuggestion])
     mockWrite.mockResolvedValue([])
@@ -144,10 +144,13 @@ describe('POST /api/admin/suggestions/[id]', () => {
     )
   })
 
-  it('applies newValue fields to the person and sets status to approved when approving with field data', async () => {
+  it('applies payload fields to the person and sets status to approved for UPDATE_PERSON', async () => {
     mockAuth.mockResolvedValue(ADMIN_SESSION as never)
     const newVal = { name: 'John Doe', occupation: 'Farmer' }
-    mockRead.mockResolvedValue([{ ...pendingSuggestion, newValue: newVal }])
+    mockRead.mockResolvedValue([{
+      ...pendingSuggestion,
+      payload: JSON.stringify({ targetId: 'I001', ...newVal }),
+    }])
     mockWrite.mockResolvedValue([])
 
     const response = await POST(makeRequest({ action: 'approve' }), makeParams('sg-1'))
@@ -165,10 +168,13 @@ describe('POST /api/admin/suggestions/[id]', () => {
     )
   })
 
-  it('strips disallowed fields from newValue during approve', async () => {
+  it('strips disallowed fields from payload during UPDATE_PERSON approve', async () => {
     mockAuth.mockResolvedValue(ADMIN_SESSION as never)
     const newVal = { name: 'John Doe', password: 'secret', admin: true }
-    mockRead.mockResolvedValue([{ ...pendingSuggestion, newValue: newVal }])
+    mockRead.mockResolvedValue([{
+      ...pendingSuggestion,
+      payload: JSON.stringify({ targetId: 'I001', ...newVal }),
+    }])
     mockWrite.mockResolvedValue([])
 
     await POST(makeRequest({ action: 'approve' }), makeParams('sg-1'))
@@ -177,6 +183,54 @@ describe('POST /api/admin/suggestions/[id]', () => {
     expect(callArgs.newValue).not.toHaveProperty('password')
     expect(callArgs.newValue).not.toHaveProperty('admin')
     expect(callArgs.newValue).toHaveProperty('name', 'John Doe')
+  })
+
+  it('creates a new Person node and sets status to approved for CREATE_PERSON', async () => {
+    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockRead.mockResolvedValue([{
+      ...pendingSuggestion,
+      changeType: 'CREATE_PERSON',
+      payload: JSON.stringify({ name: 'Jane Doe', sex: 'F' }),
+    }])
+    mockWrite.mockResolvedValue([])
+
+    const response = await POST(makeRequest({ action: 'approve' }), makeParams('sg-1'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual({ success: true })
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.stringContaining('CREATE (p:Person'),
+      expect.objectContaining({ id: 'sg-1' })
+    )
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.stringContaining("SET c.status = 'approved'"),
+      expect.any(Object)
+    )
+  })
+
+  it('creates a relationship between persons and sets status to approved for ADD_RELATIONSHIP', async () => {
+    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockRead.mockResolvedValue([{
+      ...pendingSuggestion,
+      changeType: 'ADD_RELATIONSHIP',
+      payload: JSON.stringify({ personId: 'I001', relativeId: 'I002', type: 'spouse' }),
+    }])
+    mockWrite.mockResolvedValue([])
+
+    const response = await POST(makeRequest({ action: 'approve' }), makeParams('sg-1'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual({ success: true })
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.stringContaining('MATCH (p1:Person'),
+      expect.objectContaining({ id: 'sg-1' })
+    )
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.stringContaining("SET c.status = 'approved'"),
+      expect.any(Object)
+    )
   })
 
   it('returns 200 and sets status to declined on decline action', async () => {
@@ -197,7 +251,10 @@ describe('POST /api/admin/suggestions/[id]', () => {
 
   it('does not modify the person record when declining', async () => {
     mockAuth.mockResolvedValue(ADMIN_SESSION as never)
-    mockRead.mockResolvedValue([{ ...pendingSuggestion, newValue: { name: 'John Doe' } }])
+    mockRead.mockResolvedValue([{
+      ...pendingSuggestion,
+      payload: JSON.stringify({ targetId: 'I001', name: 'John Doe' }),
+    }])
     mockWrite.mockResolvedValue([])
 
     await POST(makeRequest({ action: 'decline' }), makeParams('sg-1'))
@@ -221,7 +278,7 @@ describe('POST /api/admin/suggestions/[id]', () => {
     expect(body).toEqual({ error: 'Failed to update graph database' })
   })
 
-  it('passes the suggestion id from route params to the Neo4j read call', async () => {
+  it('passes the suggestion id from route params to the Neo4j read call against PendingChange', async () => {
     mockAuth.mockResolvedValue(ADMIN_SESSION as never)
     mockRead.mockResolvedValue([{ ...pendingSuggestion, id: 'sg-99' }])
     mockWrite.mockResolvedValue([])
@@ -229,7 +286,7 @@ describe('POST /api/admin/suggestions/[id]', () => {
     await POST(makeRequest({ action: 'approve' }), makeParams('sg-99'))
 
     expect(mockRead).toHaveBeenCalledWith(
-      expect.stringContaining('MATCH (c:Change {id: $id})'),
+      expect.stringContaining('MATCH (c:PendingChange {id: $id})'),
       { id: 'sg-99' }
     )
   })

@@ -53,19 +53,16 @@ describe('GET /api/admin/suggestions', () => {
     expect(body).toEqual({ suggestions: [] })
   })
 
-  it('returns 200 with parsed suggestion data including JSON fields', async () => {
+  it('returns 200 with parsed suggestion data with payload as newValue', async () => {
     mockAuth.mockResolvedValue(ADMIN_SESSION as never)
     const row = {
       id: 'sg-1',
       changeType: 'UPDATE_PERSON',
-      targetId: 'I001',
-      personName: 'John Doe',
       authorName: 'Jane Smith',
       authorEmail: 'jane@example.com',
-      previousValue: JSON.stringify({ name: 'John' }),
-      newValue: JSON.stringify({ name: 'John Doe' }),
-      appliedAt: '2024-01-01T00:00:00Z',
+      payload: JSON.stringify({ targetId: 'I001', name: 'John Doe' }),
       status: 'pending',
+      createdAt: '2024-01-01T00:00:00Z',
     }
     mockRead.mockResolvedValue([row])
 
@@ -74,18 +71,23 @@ describe('GET /api/admin/suggestions', () => {
 
     expect(response.status).toBe(200)
     expect(body.suggestions).toHaveLength(1)
-    expect(body.suggestions[0].previousValue).toEqual({ name: 'John' })
+    expect(body.suggestions[0].targetId).toBe('I001')
     expect(body.suggestions[0].newValue).toEqual({ name: 'John Doe' })
+    expect(body.suggestions[0].previousValue).toBeNull()
   })
 
-  it("queries Neo4j for changes with status 'pending'", async () => {
+  it('queries PendingChange nodes with status pending ordered by createdAt DESC', async () => {
     mockAuth.mockResolvedValue(ADMIN_SESSION as never)
     mockRead.mockResolvedValue([])
 
     await GET()
 
     expect(mockRead).toHaveBeenCalledWith(
-      expect.stringContaining("status: 'pending'"),
+      expect.stringContaining('PendingChange'),
+      expect.any(Object)
+    )
+    expect(mockRead).toHaveBeenCalledWith(
+      expect.stringContaining('createdAt'),
       expect.any(Object)
     )
   })

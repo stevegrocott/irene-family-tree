@@ -21,3 +21,13 @@ export async function read<T>(cypher: string, params: Record<string, unknown> = 
     await session.close()
   }
 }
+
+export async function write<T>(cypher: string, params: Record<string, unknown> = {}): Promise<T[]> {
+  const session = driver.session({ defaultAccessMode: neo4j.session.WRITE })
+  try {
+    const { records } = await session.executeWrite(tx => tx.run(cypher, params))
+    return records.map(r => r.toObject() as T)
+  } finally {
+    await session.close()
+  }
+}

@@ -37,12 +37,22 @@ interface Person {
  * @returns A JSON response containing an array of {@link Person} objects on success,
  *          or `{ error: "Failed to query graph database" }` (500) on a Neo4j error.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const q = searchParams.get('q')
+
   let persons: Person[]
   try {
-    persons = await read<Person>(
-      'MATCH (p:Person) RETURN p.gedcomId AS gedcomId, p.name AS name, p.sex AS sex, p.birthYear AS birthYear, p.deathYear AS deathYear, p.birthPlace AS birthPlace ORDER BY p.name LIMIT 2000'
-    )
+    if (q) {
+      persons = await read<Person>(
+        'MATCH (p:Person) WHERE p.name CONTAINS $q RETURN p.gedcomId AS gedcomId, p.name AS name, p.sex AS sex, p.birthYear AS birthYear, p.deathYear AS deathYear, p.birthPlace AS birthPlace ORDER BY p.name LIMIT 2000',
+        { q }
+      )
+    } else {
+      persons = await read<Person>(
+        'MATCH (p:Person) RETURN p.gedcomId AS gedcomId, p.name AS name, p.sex AS sex, p.birthYear AS birthYear, p.deathYear AS deathYear, p.birthPlace AS birthPlace ORDER BY p.name LIMIT 2000'
+      )
+    }
   } catch (err) {
     console.error('Neo4j query failed', err)
     return NextResponse.json({ error: 'Failed to query graph database' }, { status: 500 })

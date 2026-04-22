@@ -43,6 +43,7 @@ export async function sessionCallback({ session, token }: SessionCallbackArgs): 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [Google],
   session: { strategy: 'jwt' },
+  trustHost: true,
   callbacks: {
     jwt: jwtCallback,
     session: sessionCallback,

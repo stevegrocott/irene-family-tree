@@ -7,6 +7,8 @@
 
 import { NextResponse } from 'next/server'
 import { read, write } from '@/lib/neo4j'
+import { recordChange } from '@/lib/changes'
+import { auth } from '@/auth'
 import type { PersonSummary, MarriageDetail } from '@/types/tree'
 
 /** Forces the route to run in the Node.js runtime (required for Neo4j driver). */
@@ -164,6 +166,10 @@ export async function PATCH(
 ) {
   const { id } = await params
 
+  const session = await auth()
+  const authorEmail = session?.user?.email ?? 'anonymous'
+  const authorName = session?.user?.name ?? 'anonymous'
+
   let body: Record<string, unknown>
   try {
     body = await request.json()
@@ -178,6 +184,23 @@ export async function PATCH(
 
   if (Object.keys(fields).length === 0) {
     return NextResponse.json({ error: 'No valid fields provided' }, { status: 400 })
+  }
+
+  let previousPerson: UpdatedPerson | null = null
+  try {
+    const previousRows = await read<UpdatedPerson>(
+      `MATCH (p:Person {gedcomId: $id})
+       RETURN p.gedcomId AS gedcomId, p.name AS name, p.sex AS sex,
+              p.birthYear AS birthYear, p.birthDate AS birthDate,
+              p.birthPlace AS birthPlace, p.deathYear AS deathYear,
+              p.deathDate AS deathDate, p.deathPlace AS deathPlace,
+              p.occupation AS occupation, p.notes AS notes`,
+      { id }
+    )
+    previousPerson = previousRows?.[0] ?? null
+  } catch (err) {
+    console.error('Neo4j pre-update read failed', err)
+    return NextResponse.json({ error: 'Failed to read current state for change tracking' }, { status: 500 })
   }
 
   let rows: UpdatedPerson[]
@@ -200,6 +223,8 @@ export async function PATCH(
   if (!rows.length || rows[0].gedcomId == null) {
     return NextResponse.json({ error: 'Person not found' }, { status: 404 })
   }
+
+  await recordChange(authorEmail, authorName, 'UPDATE_PERSON', id, previousPerson, rows[0])
 
   return NextResponse.json(rows[0])
 }

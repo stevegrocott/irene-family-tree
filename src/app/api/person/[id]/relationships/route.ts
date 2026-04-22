@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { write } from '@/lib/neo4j'
+import { recordChange } from '@/lib/changes'
+import { auth } from '@/auth'
 
 export const runtime = 'nodejs'
 
@@ -70,6 +72,18 @@ RETURN u.gedcomId AS unionId`
   if (!rows.length || !rows[0].unionId) {
     return NextResponse.json({ error: 'Person not found' }, { status: 404 })
   }
+
+  const session = await auth()
+  const authorEmail = session?.user?.email ?? 'anonymous'
+  const authorName = session?.user?.name ?? 'anonymous'
+  await recordChange(
+    authorEmail,
+    authorName,
+    'ADD_RELATIONSHIP',
+    id,
+    null,
+    { type, targetId, unionId: rows[0].unionId }
+  )
 
   return NextResponse.json(rows[0], { status: 201 })
 }

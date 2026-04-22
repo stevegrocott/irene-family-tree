@@ -4,8 +4,19 @@ jest.mock('@/lib/neo4j', () => ({
   write: jest.fn(),
 }))
 
+jest.mock('@/lib/changes', () => ({
+  recordChange: jest.fn().mockResolvedValue(undefined),
+}))
+
+jest.mock('@/auth', () => ({
+  auth: jest.fn().mockResolvedValue({ user: { email: 'editor@example.com', name: 'Editor User' } }),
+}))
+
 import { write } from '@/lib/neo4j'
 const mockWrite = write as jest.MockedFunction<typeof write>
+
+import { recordChange } from '@/lib/changes'
+const mockRecordChange = recordChange as jest.MockedFunction<typeof recordChange>
 
 const makeRequest = (body: unknown) =>
   new Request('http://localhost/api/person/I001/relationships', {
@@ -105,5 +116,20 @@ describe('POST /api/person/[id]/relationships', () => {
     const response = await POST(makeRequest({ type: 'spouse', targetId: 'I002' }), makeParams('I001'))
 
     expect(response.status).toBe(500)
+  })
+
+  it('calls recordChange with relationship details and session author after successful POST', async () => {
+    mockWrite.mockResolvedValue([{ unionId: '@F12345678@' }])
+
+    await POST(makeRequest({ type: 'spouse', targetId: 'I002' }), makeParams('I001'))
+
+    expect(mockRecordChange).toHaveBeenCalledWith(
+      'editor@example.com',
+      'Editor User',
+      'ADD_RELATIONSHIP',
+      'I001',
+      null,
+      { type: 'spouse', targetId: 'I002', unionId: '@F12345678@' }
+    )
   })
 })

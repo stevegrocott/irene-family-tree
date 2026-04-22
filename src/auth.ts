@@ -1,4 +1,4 @@
-import NextAuth, { type DefaultSession, type Session, type User, type Account } from 'next-auth'
+import NextAuth, { type DefaultSession, type Session, type NextAuthConfig } from 'next-auth'
 import Google from 'next-auth/providers/google'
 import type { JWT } from 'next-auth/jwt'
 
@@ -18,16 +18,9 @@ declare module 'next-auth/jwt' {
   }
 }
 
-type JwtCallbackArgs = {
-  token: JWT
-  user?: User
-  account?: Account | null
-}
-
-type SessionCallbackArgs = {
-  session: Session
-  token: JWT
-}
+type Callbacks = NonNullable<NextAuthConfig['callbacks']>
+type JwtCallbackArgs = Parameters<NonNullable<Callbacks['jwt']>>[0]
+type SessionCallbackArgs = Parameters<NonNullable<Callbacks['session']>>[0]
 
 export async function jwtCallback({ token, user, account }: JwtCallbackArgs): Promise<JWT> {
   if (account?.provider === 'google' && user?.email) {
@@ -51,7 +44,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [Google],
   session: { strategy: 'jwt' },
   callbacks: {
-    jwt: jwtCallback as never,
-    session: sessionCallback as never,
+    jwt: jwtCallback,
+    session: sessionCallback,
   },
 })

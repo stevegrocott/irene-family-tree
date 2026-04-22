@@ -1,9 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { auth } from '@/auth'
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const session = await auth()
-  if (!session) {
+  const isAdmin = session?.user?.role === 'admin'
+  if (!session || !isAdmin) {
     const signInUrl = new URL('/api/auth/signin', request.url)
     signInUrl.searchParams.set('callbackUrl', request.nextUrl.pathname)
     return NextResponse.redirect(signInUrl)

@@ -31,8 +31,7 @@
       "^.+\\.(t|j)sx?$": [
         "ts-jest",
         {
-          "useESM": false,
-          "diagnostics": false
+          "useESM": false
         }
       ]
     },

@@ -44,7 +44,7 @@ describe('jwtCallback', () => {
   it('does not override role on subsequent requests (no account)', async () => {
     const token = await jwtCallback({
       token: { role: 'admin' },
-      user: undefined,
+      user: undefined as never,
       account: null,
     })
     expect(token.role).toBe('admin')
@@ -54,7 +54,7 @@ describe('jwtCallback', () => {
 describe('sessionCallback', () => {
   it('exposes token.role as session.user.role', async () => {
     const session = await sessionCallback({
-      session: { user: { name: 'Test', email: 'test@example.com', image: null }, expires: '2099-01-01' },
+      session: { user: { name: 'Test', email: 'test@example.com', image: null }, expires: '2099-01-01' } as never,
       token: { role: 'admin', sub: '1' },
     })
     expect(session.user.role).toBe('admin')
@@ -62,7 +62,7 @@ describe('sessionCallback', () => {
 
   it('exposes user role when role is user', async () => {
     const session = await sessionCallback({
-      session: { user: { name: 'Test', email: 'test@example.com', image: null }, expires: '2099-01-01' },
+      session: { user: { name: 'Test', email: 'test@example.com', image: null }, expires: '2099-01-01' } as never,
       token: { role: 'user', sub: '1' },
     })
     expect(session.user.role).toBe('user')

@@ -109,7 +109,11 @@ export async function POST(request: Request) {
   const created = rows[0]
   const authorEmail = session?.user?.email ?? 'anonymous'
   const authorName = session?.user?.name ?? 'anonymous'
-  await recordChange(authorEmail, authorName, 'CREATE_PERSON', created.gedcomId, null, created)
+  try {
+    await recordChange(authorEmail, authorName, 'CREATE_PERSON', created.gedcomId, null, created)
+  } catch (auditErr) {
+    console.error('Audit recordChange failed (non-fatal)', auditErr)
+  }
 
   return NextResponse.json(created, { status: 201 })
 }

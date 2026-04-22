@@ -9,6 +9,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import type React from 'react'
+import { useSession } from 'next-auth/react'
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -166,26 +167,45 @@ function RelativeRow({
  * Side drawer panel showing details for a selected person.
  * Fetches and displays name, dates, GEDCOM ID, and immediate relatives
  * (parents, siblings, marriages). Allows re-rooting or navigating to relatives.
+ * When signed in, shows buttons to add relatives via search or create form.
  *
  * @param {PersonData} person - Person to display details for
  * @param {Function} onClose - Called when user closes the drawer
  * @param {Function} onReroot - Called with person's gedcomId to re-root the tree
  * @param {Function} onSelectPerson - Called with gedcomId to open another person's drawer
+ * @param {Function} [onSelectRoot] - Called to refresh the tree after adding a relative
  */
 export function PersonDrawer({
   person,
   onClose,
   onReroot,
   onSelectPerson,
+  onSelectRoot,
 }: {
   person: PersonData
   onClose: () => void
   onReroot: (id: string) => void
   onSelectPerson: (id: string) => void
+  onSelectRoot?: (id: string) => void
 }) {
+  const { status } = useSession()
+  const isSignedIn = status === 'authenticated'
+
   const dates = formatLifespan(person)
   const [detail, setDetail] = useState<PersonDetailResponse | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [detailVersion, setDetailVersion] = useState(0)
+
+  const [mode, setMode] = useState<'view' | 'add-relative'>('view')
+  const [addRelativeType, setAddRelativeType] = useState<'parent' | 'spouse' | 'child'>('child')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<Person[]>([])
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [givenName, setGivenName] = useState('')
+  const [familyName, setFamilyName] = useState('')
+  const [newBirthYear, setNewBirthYear] = useState('')
+  const [newSex, setNewSex] = useState('U')
 
   useEffect(() => {
     setDetail(null)
@@ -205,7 +225,189 @@ export function PersonDrawer({
       })
       .finally(() => { if (!cancelled) setDetailLoading(false) })
     return () => { cancelled = true; ctrl.abort() }
-  }, [person.gedcomId])
+  }, [person.gedcomId, detailVersion])
+
+  useEffect(() => {
+    if (mode !== 'add-relative' || !searchQuery.trim()) {
+      setSearchResults([])
+      return
+    }
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => {
+      fetch(`/api/persons?q=${encodeURIComponent(searchQuery)}`)
+        .then(r => r.ok ? r.json() as Promise<Person[]> : Promise.reject(new Error(`HTTP ${r.status}`)))
+        .then(data => setSearchResults(data))
+        .catch(err => console.error('Search failed', err))
+    }, 300)
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    }
+  }, [searchQuery, mode])
+
+  const openAddRelative = (type: 'parent' | 'spouse' | 'child') => {
+    setAddRelativeType(type)
+    setSearchQuery('')
+    setSearchResults([])
+    setGivenName('')
+    setFamilyName('')
+    setNewBirthYear('')
+    setNewSex('U')
+    setMode('add-relative')
+  }
+
+  const handleSelectRelative = async (relative: Person) => {
+    try {
+      const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetId: relative.gedcomId, type: addRelativeType }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setMode('view')
+      setSearchQuery('')
+      setSearchResults([])
+      setDetailVersion(v => v + 1)
+      onSelectRoot?.(person.gedcomId)
+    } catch (err) {
+      console.error('Failed to add relative', err)
+    }
+  }
+
+  const handleCreateAndLink = async () => {
+    const fullName = [givenName.trim(), familyName.trim()].filter(Boolean).join(' ')
+    if (!fullName) return
+    try {
+      const createRes = await fetch('/api/persons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: fullName, sex: newSex || null, birthYear: newBirthYear || null }),
+      })
+      if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`)
+      const newPerson = await createRes.json() as Person
+      const linkRes = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetId: newPerson.gedcomId, type: addRelativeType }),
+      })
+      if (!linkRes.ok) throw new Error(`HTTP ${linkRes.status}`)
+      setMode('view')
+      setGivenName('')
+      setFamilyName('')
+      setNewBirthYear('')
+      setNewSex('U')
+      setDetailVersion(v => v + 1)
+      onSelectRoot?.(person.gedcomId)
+    } catch (err) {
+      console.error('Failed to create and link relative', err)
+    }
+  }
+
+  const relativeTypeLabel = addRelativeType === 'parent' ? 'parent' : addRelativeType === 'spouse' ? 'spouse' : 'child'
+
+  if (mode === 'add-relative') {
+    return (
+      <div
+        data-testid="person-drawer"
+        className="absolute top-0 right-0 h-full w-80 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
+      >
+        {/* Sub-view header */}
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-white/10">
+          <button
+            onClick={() => setMode('view')}
+            aria-label="Back"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            ←
+          </button>
+          <h2 className="text-white font-semibold text-sm truncate flex-1">
+            Add a {relativeTypeLabel} for {person.name || 'person'}
+          </h2>
+        </div>
+
+        {/* Sub-view body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <div>
+            <input
+              data-testid="add-relative-search"
+              type="text"
+              placeholder={`Search for a ${relativeTypeLabel}…`}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+            />
+            {searchResults.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {searchResults.map(p => (
+                  <li key={p.gedcomId}>
+                    <button
+                      onClick={() => handleSelectRelative(p)}
+                      className="w-full text-left px-3 py-2 rounded-lg text-sm text-white/80 hover:bg-white/10 transition-colors"
+                    >
+                      <span className="font-medium">{p.name || 'Unknown'}</span>
+                      {p.birthYear && <span className="ml-2 text-xs text-slate-500">{p.birthYear}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <hr className="border-white/10" />
+
+          <div className="space-y-3">
+            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Or create new</p>
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Given name</label>
+                <input
+                  type="text"
+                  value={givenName}
+                  onChange={e => setGivenName(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Family name</label>
+                <input
+                  type="text"
+                  value={familyName}
+                  onChange={e => setFamilyName(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Birth year</label>
+                <input
+                  type="text"
+                  value={newBirthYear}
+                  onChange={e => setNewBirthYear(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Sex</label>
+                <select
+                  value={newSex}
+                  onChange={e => setNewSex(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-[#0a1628] border border-white/20 text-white text-sm focus:outline-none focus:border-indigo-400"
+                >
+                  <option value="U">Unknown</option>
+                  <option value="M">Male</option>
+                  <option value="F">Female</option>
+                </select>
+              </div>
+            </div>
+            <button
+              onClick={handleCreateAndLink}
+              className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+            >
+              Save change
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -254,6 +456,14 @@ export function PersonDrawer({
                   {detail.parents.map(p => <li key={p.gedcomId}><RelativeRow person={p} onSelect={onSelectPerson} onReroot={onReroot} /></li>)}
                 </ul>
               )}
+              {isSignedIn && (
+                <button
+                  onClick={() => openAddRelative('parent')}
+                  className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                >
+                  + Add parent
+                </button>
+              )}
             </section>
 
             <section data-testid="person-drawer-siblings">
@@ -284,6 +494,22 @@ export function PersonDrawer({
                     </li>
                   ))}
                 </ul>
+              )}
+              {isSignedIn && (
+                <div className="mt-2 flex gap-3">
+                  <button
+                    onClick={() => openAddRelative('spouse')}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                  >
+                    + Add spouse
+                  </button>
+                  <button
+                    onClick={() => openAddRelative('child')}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                  >
+                    + Add child
+                  </button>
+                </div>
               )}
             </section>
           </>

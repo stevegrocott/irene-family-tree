@@ -222,8 +222,9 @@ export function PersonDrawer({
   onSelectPerson: (id: string) => void
   onSelectRoot?: (id: string) => void
 }) {
-  const { status } = useSession()
+  const { data: session, status } = useSession()
   const isSignedIn = status === 'authenticated'
+  const isAdmin = session?.user?.role === 'admin'
 
   const dates = formatLifespan(person)
   const [detail, setDetail] = useState<PersonDetailResponse | null>(null)
@@ -427,6 +428,34 @@ export function PersonDrawer({
     }
   }
 
+  const handleSuggestChange = async () => {
+    try {
+      const res = await fetch('/api/suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          changeType: 'UPDATE_PERSON',
+          payload: {
+            targetId: person.gedcomId,
+            name: [editGivenName.trim(), editFamilyName.trim()].filter(Boolean).join(' ') || null,
+            sex: editSex,
+            birthYear: editBirthYear.trim() || null,
+            birthPlace: showEditBirthPlace ? (editBirthPlace.trim() || null) : null,
+            deathYear: showEditDiedYear ? (editDiedYear.trim() || null) : null,
+            deathPlace: showEditDeathPlace ? (editDeathPlace.trim() || null) : null,
+            occupation: showEditOccupation ? (editOccupation.trim() || null) : null,
+            notes: showEditNotes ? (editNotes.trim() || null) : null,
+          },
+        }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setMode('view')
+    } catch (err) {
+      console.error('Failed to submit suggestion', err)
+      setActionError('Failed to submit suggestion. Please try again.')
+    }
+  }
+
   if (mode === 'edit') {
     return (
       <DrawerSubView title={`Edit ${person.name || 'person'}`} onBack={() => setMode('view')}>
@@ -562,12 +591,22 @@ export function PersonDrawer({
           {actionError && (
             <p className="text-red-400 text-xs">{actionError}</p>
           )}
-          <button
-            onClick={handleSaveEdit}
-            className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
-          >
-            Save change
-          </button>
+          {isAdmin ? (
+            <button
+              onClick={handleSaveEdit}
+              className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+            >
+              Save change
+            </button>
+          ) : (
+            <button
+              data-testid="suggest-change"
+              onClick={handleSuggestChange}
+              className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+            >
+              Suggest this change
+            </button>
+          )}
         </div>
       </DrawerSubView>
     )

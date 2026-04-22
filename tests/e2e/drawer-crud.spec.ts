@@ -21,6 +21,7 @@ const signedInUser = {
   name: 'E2E Test User',
   email: 'e2e@example.com',
   image: null,
+  role: 'admin' as const,
 }
 
 /** Known person whose drawer we open and edit. */

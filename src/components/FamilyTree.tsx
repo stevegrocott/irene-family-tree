@@ -258,6 +258,7 @@ export function PersonDrawer({
   const [showEditOccupation, setShowEditOccupation] = useState(false)
   const [showEditNotes, setShowEditNotes] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     setDetail(null)
@@ -327,13 +328,14 @@ export function PersonDrawer({
    * @param {Person} relative - The person to link as a relative
    */
   const handleSelectRelative = async (relative: Person) => {
+    setIsSubmitting(true)
     try {
       const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targetId: relative.gedcomId, type: addRelativeType }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok && res.status !== 409) throw new Error(`HTTP ${res.status}`)
       resetAddRelativeForm()
       setMode('view')
       setDetailVersion(v => v + 1)
@@ -341,6 +343,8 @@ export function PersonDrawer({
     } catch (err) {
       console.error('Failed to add relative', err)
       setActionError('Failed to add relative. Please try again.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -354,6 +358,7 @@ export function PersonDrawer({
       return
     }
     const fullName = `${givenName.trim()} ${familyName.trim()}`
+    setIsSubmitting(true)
     try {
       const createRes = await fetch('/api/persons', {
         method: 'POST',
@@ -367,7 +372,7 @@ export function PersonDrawer({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targetId: newPerson.gedcomId, type: addRelativeType }),
       })
-      if (!linkRes.ok) throw new Error(`HTTP ${linkRes.status}`)
+      if (!linkRes.ok && linkRes.status !== 409) throw new Error(`HTTP ${linkRes.status}`)
       resetAddRelativeForm()
       setMode('view')
       setDetailVersion(v => v + 1)
@@ -375,6 +380,8 @@ export function PersonDrawer({
     } catch (err) {
       console.error('Failed to create and link relative', err)
       setActionError('Failed to create and link person. Please try again.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -592,7 +599,8 @@ export function PersonDrawer({
                   <li key={p.gedcomId}>
                     <button
                       onClick={() => handleSelectRelative(p)}
-                      className="w-full text-left px-3 py-2 rounded-lg text-sm text-white/80 hover:bg-white/10 transition-colors"
+                      disabled={isSubmitting}
+                      className="w-full text-left px-3 py-2 rounded-lg text-sm text-white/80 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <span className="font-medium">{p.name || 'Unknown'}</span>
                       {p.birthYear && <span className="ml-2 text-xs text-slate-500">{p.birthYear}</span>}
@@ -657,7 +665,8 @@ export function PersonDrawer({
             )}
             <button
               onClick={handleCreateAndLink}
-              className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+              disabled={isSubmitting}
+              className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Save change
             </button>

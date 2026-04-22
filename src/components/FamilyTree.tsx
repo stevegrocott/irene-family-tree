@@ -9,6 +9,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import type React from 'react'
+import { useSession, signIn } from 'next-auth/react'
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -34,6 +35,9 @@ import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT
  * Minimal person summary used for the search bar and root selection.
  * @property gedcomId - GEDCOM identifier of the person
  * @property name - Display name of the person
+ * @property sex - Biological sex code ('M', 'F', or null)
+ * @property birthYear - Four-digit birth year string, or null if unknown
+ * @property birthPlace - Free-text birth location, or null if unknown
  */
 interface Person { gedcomId: string; name: string; sex: string | null; birthYear: string | null; birthPlace: string | null }
 
@@ -163,29 +167,97 @@ function RelativeRow({
 }
 
 /**
+ * A shared header/container for sub-views within the PersonDrawer.
+ * Provides a back button and title for nested views like edit and add-relative modes.
+ *
+ * @param {Object} props - Component props
+ * @param {string} props.title - Title to display in the header
+ * @param {Function} props.onBack - Called when user clicks the back button
+ * @param {React.ReactNode} props.children - Content to render below the header
+ * @returns {React.ReactElement} Rendered drawer sub-view container
+ */
+function DrawerSubView({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
+  return (
+    <div
+      data-testid="drawer-sub-view"
+      className="absolute top-0 right-0 h-full w-80 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
+    >
+      <div className="flex items-center gap-2 px-5 py-4 border-b border-white/10">
+        <button
+          onClick={onBack}
+          aria-label="Back"
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+        >
+          ←
+        </button>
+        <h2 className="text-white font-semibold text-sm truncate flex-1">{title}</h2>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+/**
  * Side drawer panel showing details for a selected person.
  * Fetches and displays name, dates, GEDCOM ID, and immediate relatives
  * (parents, siblings, marriages). Allows re-rooting or navigating to relatives.
+ * When signed in, shows buttons to add relatives via search or create form.
  *
  * @param {PersonData} person - Person to display details for
  * @param {Function} onClose - Called when user closes the drawer
  * @param {Function} onReroot - Called with person's gedcomId to re-root the tree
  * @param {Function} onSelectPerson - Called with gedcomId to open another person's drawer
+ * @param {Function} [onSelectRoot] - Called to refresh the tree after adding a relative
  */
 export function PersonDrawer({
   person,
   onClose,
   onReroot,
   onSelectPerson,
+  onSelectRoot,
 }: {
   person: PersonData
   onClose: () => void
   onReroot: (id: string) => void
   onSelectPerson: (id: string) => void
+  onSelectRoot?: (id: string) => void
 }) {
+  const { status } = useSession()
+  const isSignedIn = status === 'authenticated'
+
   const dates = formatLifespan(person)
   const [detail, setDetail] = useState<PersonDetailResponse | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [detailVersion, setDetailVersion] = useState(0)
+
+  const [mode, setMode] = useState<'view' | 'add-relative' | 'edit'>('view')
+
+  const [editBirthPlace, setEditBirthPlace] = useState('')
+  const [addRelativeType, setAddRelativeType] = useState<'parent' | 'spouse' | 'child'>('child')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<Person[]>([])
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchAbortRef = useRef<AbortController | null>(null)
+
+  const [givenName, setGivenName] = useState('')
+  const [familyName, setFamilyName] = useState('')
+  const [newBirthYear, setNewBirthYear] = useState('')
+  const [newSex, setNewSex] = useState('U')
+
+  const [editGivenName, setEditGivenName] = useState('')
+  const [editFamilyName, setEditFamilyName] = useState('')
+  const [editSex, setEditSex] = useState('U')
+  const [editBirthYear, setEditBirthYear] = useState('')
+  const [editDiedYear, setEditDiedYear] = useState('')
+  const [editDeathPlace, setEditDeathPlace] = useState('')
+  const [editOccupation, setEditOccupation] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+  const [showEditBirthPlace, setShowEditBirthPlace] = useState(false)
+  const [showEditDiedYear, setShowEditDiedYear] = useState(false)
+  const [showEditDeathPlace, setShowEditDeathPlace] = useState(false)
+  const [showEditOccupation, setShowEditOccupation] = useState(false)
+  const [showEditNotes, setShowEditNotes] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   useEffect(() => {
     setDetail(null)
@@ -205,7 +277,396 @@ export function PersonDrawer({
       })
       .finally(() => { if (!cancelled) setDetailLoading(false) })
     return () => { cancelled = true; ctrl.abort() }
-  }, [person.gedcomId])
+  }, [person.gedcomId, detailVersion])
+
+  useEffect(() => {
+    if (mode !== 'add-relative' || !searchQuery.trim()) {
+      if (searchResults.length > 0) setSearchResults([])
+      return
+    }
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    if (searchAbortRef.current) searchAbortRef.current.abort()
+    searchTimerRef.current = setTimeout(() => {
+      const abortCtrl = new AbortController()
+      searchAbortRef.current = abortCtrl
+      fetch(`/api/persons?q=${encodeURIComponent(searchQuery)}`, { signal: abortCtrl.signal })
+        .then(r => r.ok ? r.json() as Promise<Person[]> : Promise.reject(new Error(`HTTP ${r.status}`)))
+        .then(data => { if (!abortCtrl.signal.aborted) setSearchResults(data) })
+        .catch(err => { if (err instanceof Error && err.name !== 'AbortError') console.error('Search failed', err) })
+    }, 300)
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+      if (searchAbortRef.current) searchAbortRef.current.abort()
+    }
+  }, [searchQuery, mode])
+
+  /** Clears all form state for adding a relative, preparing for a new add-relative flow. */
+  const resetAddRelativeForm = () => {
+    setSearchQuery('')
+    setSearchResults([])
+    setGivenName('')
+    setFamilyName('')
+    setNewBirthYear('')
+    setNewSex('U')
+  }
+
+  /**
+   * Opens the add-relative sub-view for the specified relationship type.
+   * @param {string} type - Relationship type: 'parent', 'spouse', or 'child'
+   */
+  const openAddRelative = (type: 'parent' | 'spouse' | 'child') => {
+    setAddRelativeType(type)
+    resetAddRelativeForm()
+    setActionError(null)
+    setMode('add-relative')
+  }
+
+  /**
+   * Links an existing person as a relative and returns to view mode.
+   * Refreshes the person detail and parent drawer after successful link.
+   * @param {Person} relative - The person to link as a relative
+   */
+  const handleSelectRelative = async (relative: Person) => {
+    try {
+      const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetId: relative.gedcomId, type: addRelativeType }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      resetAddRelativeForm()
+      setMode('view')
+      setDetailVersion(v => v + 1)
+      onSelectRoot?.(person.gedcomId)
+    } catch (err) {
+      console.error('Failed to add relative', err)
+      setActionError('Failed to add relative. Please try again.')
+    }
+  }
+
+  /**
+   * Creates a new person and links them as a relative in a single operation.
+   * Silently fails if no name is provided. Refreshes person detail on success.
+   */
+  const handleCreateAndLink = async () => {
+    if (!givenName.trim() || !familyName.trim()) {
+      setActionError('Both given name and family name are required.')
+      return
+    }
+    const fullName = `${givenName.trim()} ${familyName.trim()}`
+    try {
+      const createRes = await fetch('/api/persons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: fullName, sex: newSex || null, birthYear: newBirthYear || null }),
+      })
+      if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`)
+      const newPerson = await createRes.json() as Person
+      const linkRes = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetId: newPerson.gedcomId, type: addRelativeType }),
+      })
+      if (!linkRes.ok) throw new Error(`HTTP ${linkRes.status}`)
+      resetAddRelativeForm()
+      setMode('view')
+      setDetailVersion(v => v + 1)
+      onSelectRoot?.(person.gedcomId)
+    } catch (err) {
+      console.error('Failed to create and link relative', err)
+      setActionError('Failed to create and link person. Please try again.')
+    }
+  }
+
+  /** Opens the edit sub-view, initializing all edit fields from current person/detail. */
+  const openEdit = () => {
+    setEditGivenName(person.givenName ?? '')
+    setEditFamilyName(person.surname ?? '')
+    setEditSex(person.sex ?? 'U')
+    setEditBirthYear(person.birthYear ?? '')
+    setEditBirthPlace(detail?.birthPlace ?? '')
+    setEditDiedYear(person.deathYear ?? '')
+    setEditDeathPlace(person.deathPlace ?? '')
+    setEditOccupation(person.occupation ?? '')
+    setEditNotes(person.notes ?? '')
+    setShowEditBirthPlace(!!(detail?.birthPlace))
+    setShowEditDiedYear(!!(person.deathYear))
+    setShowEditDeathPlace(!!(person.deathPlace))
+    setShowEditOccupation(!!(person.occupation))
+    setShowEditNotes(!!(person.notes))
+    setActionError(null)
+    setMode('edit')
+  }
+
+  /**
+   * PATCHes the person record with the current edit-form values and returns to view mode.
+   * Increments `detailVersion` to trigger a re-fetch of the updated person detail.
+   */
+  const handleSaveEdit = async () => {
+    try {
+      const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          givenName: editGivenName.trim(),
+          familyName: editFamilyName.trim(),
+          sex: editSex,
+          birthYear: editBirthYear.trim() || null,
+          birthPlace: showEditBirthPlace ? (editBirthPlace.trim() || null) : null,
+          diedYear: showEditDiedYear ? (editDiedYear.trim() || null) : null,
+          deathPlace: showEditDeathPlace ? (editDeathPlace.trim() || null) : null,
+          occupation: showEditOccupation ? (editOccupation.trim() || null) : null,
+          notes: showEditNotes ? (editNotes.trim() || null) : null,
+        }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setMode('view')
+      setDetailVersion(v => v + 1)
+    } catch (err) {
+      console.error('Failed to save edit', err)
+      setActionError('Failed to save changes. Please try again.')
+    }
+  }
+
+  if (mode === 'edit') {
+    return (
+      <DrawerSubView title={`Edit ${person.name || 'person'}`} onBack={() => setMode('view')}>
+        <div
+          data-testid="person-drawer-edit-form"
+          className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
+        >
+          <div>
+            <label htmlFor="edit-given-name" className="text-xs text-slate-400 block mb-1">Given name</label>
+            <input
+              id="edit-given-name"
+              type="text"
+              value={editGivenName}
+              onChange={e => setEditGivenName(e.target.value)}
+              className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+            />
+          </div>
+          <div>
+            <label htmlFor="edit-family-name" className="text-xs text-slate-400 block mb-1">Family name</label>
+            <input
+              id="edit-family-name"
+              type="text"
+              value={editFamilyName}
+              onChange={e => setEditFamilyName(e.target.value)}
+              className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+            />
+          </div>
+          <div>
+            <p className="text-xs text-slate-400 mb-1">Sex</p>
+            <div className="flex gap-2">
+              {(['M', 'F', 'U'] as const).map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setEditSex(s)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${editSex === s ? 'bg-indigo-500 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+                >
+                  {s === 'M' ? 'Male' : s === 'F' ? 'Female' : 'Unknown'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label htmlFor="edit-birth-year" className="text-xs text-slate-400 block mb-1">Born year</label>
+            <input
+              id="edit-birth-year"
+              type="text"
+              value={editBirthYear}
+              onChange={e => setEditBirthYear(e.target.value)}
+              className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+            />
+          </div>
+          {showEditBirthPlace ? (
+            <div>
+              <label htmlFor="edit-birth-place" className="text-xs text-slate-400 block mb-1">Birth place</label>
+              <input
+                id="edit-birth-place"
+                type="text"
+                value={editBirthPlace}
+                onChange={e => setEditBirthPlace(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setShowEditBirthPlace(true)} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+              + Add birth place
+            </button>
+          )}
+          {showEditDiedYear ? (
+            <div>
+              <label htmlFor="edit-died-year" className="text-xs text-slate-400 block mb-1">Died year</label>
+              <input
+                id="edit-died-year"
+                type="text"
+                value={editDiedYear}
+                onChange={e => setEditDiedYear(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setShowEditDiedYear(true)} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+              + Add died year
+            </button>
+          )}
+          {showEditDeathPlace ? (
+            <div>
+              <label htmlFor="edit-death-place" className="text-xs text-slate-400 block mb-1">Death place</label>
+              <input
+                id="edit-death-place"
+                type="text"
+                value={editDeathPlace}
+                onChange={e => setEditDeathPlace(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setShowEditDeathPlace(true)} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+              + Add death place
+            </button>
+          )}
+          {showEditOccupation ? (
+            <div>
+              <label htmlFor="edit-occupation" className="text-xs text-slate-400 block mb-1">Occupation</label>
+              <input
+                id="edit-occupation"
+                type="text"
+                value={editOccupation}
+                onChange={e => setEditOccupation(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setShowEditOccupation(true)} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+              + Add occupation
+            </button>
+          )}
+          {showEditNotes ? (
+            <div>
+              <label htmlFor="edit-notes" className="text-xs text-slate-400 block mb-1">Notes</label>
+              <textarea
+                id="edit-notes"
+                value={editNotes}
+                onChange={e => setEditNotes(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400 resize-none"
+              />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setShowEditNotes(true)} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+              + Add notes
+            </button>
+          )}
+          {actionError && (
+            <p className="text-red-400 text-xs">{actionError}</p>
+          )}
+          <button
+            onClick={handleSaveEdit}
+            className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+          >
+            Save change
+          </button>
+        </div>
+      </DrawerSubView>
+    )
+  }
+
+  if (mode === 'add-relative') {
+    return (
+      <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => setMode('view')}>
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <div>
+            <input
+              data-testid="add-relative-search"
+              type="text"
+              placeholder={`Search for a ${addRelativeType}…`}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+            />
+            {searchResults.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {searchResults.map(p => (
+                  <li key={p.gedcomId}>
+                    <button
+                      onClick={() => handleSelectRelative(p)}
+                      className="w-full text-left px-3 py-2 rounded-lg text-sm text-white/80 hover:bg-white/10 transition-colors"
+                    >
+                      <span className="font-medium">{p.name || 'Unknown'}</span>
+                      {p.birthYear && <span className="ml-2 text-xs text-slate-500">{p.birthYear}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <hr className="border-white/10" />
+
+          <div className="space-y-3">
+            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Or create new</p>
+            <div className="space-y-2">
+              <div>
+                <label htmlFor="create-given-name" className="text-xs text-slate-400 block mb-1">Given name</label>
+                <input
+                  id="create-given-name"
+                  type="text"
+                  value={givenName}
+                  onChange={e => setGivenName(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+                />
+              </div>
+              <div>
+                <label htmlFor="create-family-name" className="text-xs text-slate-400 block mb-1">Family name</label>
+                <input
+                  id="create-family-name"
+                  type="text"
+                  value={familyName}
+                  onChange={e => setFamilyName(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+                />
+              </div>
+              <div>
+                <label htmlFor="create-birth-year" className="text-xs text-slate-400 block mb-1">Birth year</label>
+                <input
+                  id="create-birth-year"
+                  type="text"
+                  value={newBirthYear}
+                  onChange={e => setNewBirthYear(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+                />
+              </div>
+              <div>
+                <label htmlFor="create-sex" className="text-xs text-slate-400 block mb-1">Sex</label>
+                <select
+                  id="create-sex"
+                  value={newSex}
+                  onChange={e => setNewSex(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-[#0a1628] border border-white/20 text-white text-sm focus:outline-none focus:border-indigo-400"
+                >
+                  <option value="U">Unknown</option>
+                  <option value="M">Male</option>
+                  <option value="F">Female</option>
+                </select>
+              </div>
+            </div>
+            {actionError && (
+              <p className="text-red-400 text-xs">{actionError}</p>
+            )}
+            <button
+              onClick={handleCreateAndLink}
+              className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+            >
+              Save change
+            </button>
+          </div>
+        </div>
+      </DrawerSubView>
+    )
+  }
 
   return (
     <div
@@ -217,6 +678,16 @@ export function PersonDrawer({
         <h2 className="text-white font-semibold text-base truncate flex-1 mr-2">
           {person.name || <span className="text-slate-500 italic">Unknown</span>}
         </h2>
+        {isSignedIn && (
+          <button
+            data-testid="person-drawer-edit"
+            onClick={openEdit}
+            aria-label="Edit person"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors mr-1"
+          >
+            ✎
+          </button>
+        )}
         <button
           data-testid="person-drawer-close"
           onClick={onClose}
@@ -254,6 +725,14 @@ export function PersonDrawer({
                   {detail.parents.map(p => <li key={p.gedcomId}><RelativeRow person={p} onSelect={onSelectPerson} onReroot={onReroot} /></li>)}
                 </ul>
               )}
+              {isSignedIn && (
+                <button
+                  onClick={() => openAddRelative('parent')}
+                  className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                >
+                  + Add parent
+                </button>
+              )}
             </section>
 
             <section data-testid="person-drawer-siblings">
@@ -285,13 +764,29 @@ export function PersonDrawer({
                   ))}
                 </ul>
               )}
+              {isSignedIn && (
+                <div className="mt-2 flex gap-3">
+                  <button
+                    onClick={() => openAddRelative('spouse')}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                  >
+                    + Add spouse
+                  </button>
+                  <button
+                    onClick={() => openAddRelative('child')}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                  >
+                    + Add child
+                  </button>
+                </div>
+              )}
             </section>
           </>
         )}
       </div>
 
-      {/* Footer – re-root action */}
-      <div className="px-5 py-4 border-t border-white/10">
+      {/* Footer – re-root action + unauthenticated CTA */}
+      <div className="px-5 py-4 border-t border-white/10 space-y-2">
         <button
           data-testid="person-drawer-reroot"
           onClick={() => { onReroot(person.gedcomId); onClose() }}
@@ -299,6 +794,14 @@ export function PersonDrawer({
         >
           FOCUS TREE ON {(person.name || 'PERSON').toUpperCase()}
         </button>
+        {!isSignedIn && (
+          <button
+            onClick={() => signIn('google')}
+            className="w-full py-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors text-center"
+          >
+            Sign in to suggest edits
+          </button>
+        )}
       </div>
     </div>
   )
@@ -500,23 +1003,32 @@ function FlowCanvas({
               setSelectedPerson({ gedcomId: id, name: '', sex: 'U', birthYear: null, deathYear: null, birthPlace: null, deathPlace: null, occupation: null, notes: null })
             }
           }}
+          onSelectRoot={onSelectRoot}
         />
       )}
     </>
   )
 }
 
+const TREE_ROOT_STORAGE_KEY = 'family-tree-root-id'
+
 /**
  * Root component for the interactive family tree visualization.
  * Fetches available people and renders the tree canvas with search and navigation.
+ * Persists the selected root person in localStorage for session continuity.
+ *
+ * @returns {React.ReactElement} Rendered family tree canvas with provider and error handling
  */
-const TREE_ROOT_STORAGE_KEY = 'family-tree-root-id'
-
 export default function FamilyTree() {
   const [rootId, setRootId] = useState('')
   const [persons, setPersons] = useState<Person[]>([])
   const [personsError, setPersonsError] = useState<string | null>(null)
 
+  /**
+   * Updates the active root person and persists the selection to localStorage
+   * so the same person is shown on next page load.
+   * @param {string} id - GEDCOM ID of the newly selected root person
+   */
   const handleSelectRoot = (id: string) => {
     setRootId(id)
     if (typeof window !== 'undefined') {

@@ -1,6 +1,7 @@
 import { POST } from './route'
 
 jest.mock('@/lib/neo4j', () => ({
+  read: jest.fn(),
   write: jest.fn(),
 }))
 
@@ -12,7 +13,8 @@ jest.mock('@/auth', () => ({
   auth: jest.fn().mockResolvedValue({ user: { email: 'editor@example.com', name: 'Editor User' } }),
 }))
 
-import { write } from '@/lib/neo4j'
+import { read, write } from '@/lib/neo4j'
+const mockRead = read as jest.MockedFunction<typeof read>
 const mockWrite = write as jest.MockedFunction<typeof write>
 
 import { recordChange } from '@/lib/changes'
@@ -30,6 +32,8 @@ const makeParams = (id: string) => ({ params: Promise.resolve({ id }) })
 describe('POST /api/person/[id]/relationships', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    // Default: no existing union found
+    mockRead.mockResolvedValue([{ unionId: null }])
   })
 
   it('returns 400 when body is invalid JSON', async () => {
@@ -131,5 +135,47 @@ describe('POST /api/person/[id]/relationships', () => {
       null,
       { type: 'spouse', targetId: 'I002', unionId: '@F12345678@' }
     )
+  })
+
+  it('returns 409 when a spouse union already exists between the two persons', async () => {
+    mockRead.mockResolvedValue([{ unionId: '@Fexisting1@' }])
+
+    const response = await POST(makeRequest({ type: 'spouse', targetId: 'I002' }), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body).toEqual({ error: 'Relationship already exists', unionId: '@Fexisting1@' })
+    expect(mockWrite).not.toHaveBeenCalled()
+  })
+
+  it('returns 409 when a parent-child union already exists', async () => {
+    mockRead.mockResolvedValue([{ unionId: '@Fexisting2@' }])
+
+    const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body).toEqual({ error: 'Relationship already exists', unionId: '@Fexisting2@' })
+    expect(mockWrite).not.toHaveBeenCalled()
+  })
+
+  it('returns 409 when a child union already exists', async () => {
+    mockRead.mockResolvedValue([{ unionId: '@Fexisting3@' }])
+
+    const response = await POST(makeRequest({ type: 'child', targetId: 'I002' }), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body).toEqual({ error: 'Relationship already exists', unionId: '@Fexisting3@' })
+    expect(mockWrite).not.toHaveBeenCalled()
+  })
+
+  it('returns 500 when Neo4j read throws during existence check', async () => {
+    mockRead.mockRejectedValue(new Error('DB read error'))
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    const response = await POST(makeRequest({ type: 'spouse', targetId: 'I002' }), makeParams('I001'))
+
+    expect(response.status).toBe(500)
   })
 })

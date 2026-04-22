@@ -14,15 +14,9 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import neo4j from 'neo4j-driver'
+import { loadLocalEnv, validateRequiredEnv } from '../src/lib/env'
 
-// Load .env.local for local dev (no dotenv dependency needed)
-const envPath = path.join(__dirname, '../.env.local')
-if (fs.existsSync(envPath)) {
-  for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
-    const m = line.match(/^([^#=]+)=(.*)$/)
-    if (m) process.env[m[1].trim()] = m[2]
-  }
-}
+loadLocalEnv()
 
 interface PersonNode {
   gedcomId: string
@@ -42,37 +36,59 @@ interface UnionNode {
   marriagePlace: string | null
 }
 
-interface SpouseRel {
+interface PersonUnionRel {
   personId: string
   unionId: string
 }
 
-interface ChildRel {
-  personId: string
-  unionId: string
+const GEDCOM_TYPES = {
+  INDIVIDUAL: 'INDI',
+  FAMILY: 'FAM',
+  NAME: 'NAME',
+  GIVEN_NAME: 'GIVN',
+  SURNAME: 'SURN',
+  SEX: 'SEX',
+  BIRTH: 'BIRT',
+  DEATH: 'DEAT',
+  DATE: 'DATE',
+  PLACE: 'PLAC',
+  OCCUPATION: 'OCCU',
+  NOTE: 'NOTE',
+  MARRIAGE: 'MARR',
+  HEAD: 'HEAD',
+  GEDC: 'GEDC',
+  VERS: 'VERS',
+  FORM: 'FORM',
+  CHAR: 'CHAR',
+  SOUR: 'SOUR',
+  HUSB: 'HUSB',
+  WIFE: 'WIFE',
+  CHIL: 'CHIL',
+  TRLR: 'TRLR',
+} as const
+
+function groupByUnionId(rels: PersonUnionRel[]): Map<string, PersonUnionRel[]> {
+  const map = new Map<string, PersonUnionRel[]>()
+  for (const rel of rels) {
+    if (!map.has(rel.unionId)) map.set(rel.unionId, [])
+    map.get(rel.unionId)!.push(rel)
+  }
+  return map
 }
 
-/**
- * Escapes @ signs in GEDCOM text values.
- * In GEDCOM 5.5.1, a bare @ in a value field must be written as @@.
- * This function is only called for plain text fields, never for pointer IDs.
- */
+// In GEDCOM 5.5.1, a bare @ in a value field must be written as @@. Never call this on pointer IDs.
 function escapeGedcomValue(value: string): string {
   return value.replace(/@/g, '@@')
 }
 
-/**
- * Builds a GEDCOM INDI record string for a single person.
- */
 function buildIndiRecord(person: PersonNode): string {
   const lines: string[] = []
 
-  lines.push(`0 ${person.gedcomId} INDI`)
+  lines.push(`0 ${person.gedcomId} ${GEDCOM_TYPES.INDIVIDUAL}`)
 
-  // NAME record: reconstruct "Given /Surname/" format
   const isUnknown = !person.name || person.name === '[Unknown]'
   if (isUnknown) {
-    lines.push('1 NAME [Unknown]')
+    lines.push(`1 ${GEDCOM_TYPES.NAME} [Unknown]`)
   } else {
     const parts = person.name.trim().split(' ')
     const surname = parts.length > 1 ? parts[parts.length - 1] : ''
@@ -80,64 +96,54 @@ function buildIndiRecord(person: PersonNode): string {
     const gedcomName = surname
       ? `${escapeGedcomValue(givenName)} /${escapeGedcomValue(surname)}/`
       : escapeGedcomValue(givenName)
-    lines.push(`1 NAME ${gedcomName}`)
-    if (givenName) lines.push(`2 GIVN ${escapeGedcomValue(givenName)}`)
-    if (surname) lines.push(`2 SURN ${escapeGedcomValue(surname)}`)
+    lines.push(`1 ${GEDCOM_TYPES.NAME} ${gedcomName}`)
+    if (givenName) lines.push(`2 ${GEDCOM_TYPES.GIVEN_NAME} ${escapeGedcomValue(givenName)}`)
+    if (surname) lines.push(`2 ${GEDCOM_TYPES.SURNAME} ${escapeGedcomValue(surname)}`)
   }
 
-  // SEX
   if (person.sex) {
-    lines.push(`1 SEX ${person.sex}`)
+    lines.push(`1 ${GEDCOM_TYPES.SEX} ${person.sex}`)
   }
 
-  // BIRT
   if (person.birthYear || person.birthPlace) {
-    lines.push('1 BIRT')
-    if (person.birthYear) lines.push(`2 DATE ${person.birthYear}`)
-    if (person.birthPlace) lines.push(`2 PLAC ${escapeGedcomValue(person.birthPlace)}`)
+    lines.push(`1 ${GEDCOM_TYPES.BIRTH}`)
+    if (person.birthYear) lines.push(`2 ${GEDCOM_TYPES.DATE} ${person.birthYear}`)
+    if (person.birthPlace) lines.push(`2 ${GEDCOM_TYPES.PLACE} ${escapeGedcomValue(person.birthPlace)}`)
   }
 
-  // DEAT
   if (person.deathYear || person.deathPlace) {
-    lines.push('1 DEAT')
-    if (person.deathYear) lines.push(`2 DATE ${person.deathYear}`)
-    if (person.deathPlace) lines.push(`2 PLAC ${escapeGedcomValue(person.deathPlace)}`)
+    lines.push(`1 ${GEDCOM_TYPES.DEATH}`)
+    if (person.deathYear) lines.push(`2 ${GEDCOM_TYPES.DATE} ${person.deathYear}`)
+    if (person.deathPlace) lines.push(`2 ${GEDCOM_TYPES.PLACE} ${escapeGedcomValue(person.deathPlace)}`)
   }
 
-  // OCCU
   if (person.occupation) {
-    lines.push(`1 OCCU ${escapeGedcomValue(person.occupation)}`)
+    lines.push(`1 ${GEDCOM_TYPES.OCCUPATION} ${escapeGedcomValue(person.occupation)}`)
   }
 
-  // NOTE
   if (person.notes) {
-    lines.push(`1 NOTE ${escapeGedcomValue(person.notes)}`)
+    lines.push(`1 ${GEDCOM_TYPES.NOTE} ${escapeGedcomValue(person.notes)}`)
   }
 
   return lines.join('\n')
 }
 
-/**
- * Builds a GEDCOM FAM record string for a single union.
- * Spouse roles (HUSB/WIFE) are inferred from the Person's sex field.
- */
+// Spouse roles (HUSB/WIFE) are inferred from Person.sex; falls back to insertion order for unrecognised values.
 function buildFamRecord(
   union: UnionNode,
-  spouses: SpouseRel[],
-  children: ChildRel[],
+  spousesForUnion: PersonUnionRel[],
+  childrenForUnion: PersonUnionRel[],
   personSexMap: Map<string, string>
 ): string {
   const lines: string[] = []
 
-  lines.push(`0 ${union.gedcomId} FAM`)
+  lines.push(`0 ${union.gedcomId} ${GEDCOM_TYPES.FAMILY}`)
 
-  // Determine husband and wife from sex; fall back to insertion order
-  const unionSpouses = spouses.filter(s => s.unionId === union.gedcomId)
   let husb: string | null = null
   let wife: string | null = null
   const unassigned: string[] = []
 
-  for (const s of unionSpouses) {
+  for (const s of spousesForUnion) {
     const sex = personSexMap.get(s.personId) ?? ''
     if (sex === 'M' && husb === null) {
       husb = s.personId
@@ -148,27 +154,23 @@ function buildFamRecord(
     }
   }
 
-  // Assign any remaining spouses whose sex did not match
   for (const pid of unassigned) {
     if (husb === null) husb = pid
     else if (wife === null) wife = pid
   }
 
-  if (husb !== null) lines.push(`1 HUSB ${husb}`)
-  if (wife !== null) lines.push(`1 WIFE ${wife}`)
+  if (husb !== null) lines.push(`1 ${GEDCOM_TYPES.HUSB} ${husb}`)
+  if (wife !== null) lines.push(`1 ${GEDCOM_TYPES.WIFE} ${wife}`)
 
-  // CHIL records
-  const unionChildren = children.filter(c => c.unionId === union.gedcomId)
-  for (const c of unionChildren) {
-    lines.push(`1 CHIL ${c.personId}`)
+  for (const c of childrenForUnion) {
+    lines.push(`1 ${GEDCOM_TYPES.CHIL} ${c.personId}`)
   }
 
-  // MARR
   if (union.marriageYear || union.marriagePlace) {
-    lines.push('1 MARR')
-    if (union.marriageYear) lines.push(`2 DATE ${union.marriageYear}`)
+    lines.push(`1 ${GEDCOM_TYPES.MARRIAGE}`)
+    if (union.marriageYear) lines.push(`2 ${GEDCOM_TYPES.DATE} ${union.marriageYear}`)
     if (union.marriagePlace) {
-      lines.push(`2 PLAC ${escapeGedcomValue(union.marriagePlace)}`)
+      lines.push(`2 ${GEDCOM_TYPES.PLACE} ${escapeGedcomValue(union.marriagePlace)}`)
     }
   }
 
@@ -176,14 +178,7 @@ function buildFamRecord(
 }
 
 async function main() {
-  const missingEnv = ['NEO4J_URI', 'NEO4J_USER', 'NEO4J_PASSWORD'].filter(
-    k => !process.env[k]
-  )
-  if (missingEnv.length) {
-    throw new Error(
-      `Missing required environment variables: ${missingEnv.join(', ')}`
-    )
-  }
+  validateRequiredEnv(['NEO4J_URI', 'NEO4J_USER', 'NEO4J_PASSWORD'])
 
   const driver = neo4j.driver(
     process.env.NEO4J_URI!,
@@ -193,20 +188,36 @@ async function main() {
   const session = driver.session()
 
   try {
-    // Query all Person nodes
-    const personResult = await session.run(
-      `MATCH (p:Person)
-       RETURN p.gedcomId   AS gedcomId,
-              p.name       AS name,
-              p.sex        AS sex,
-              p.birthYear  AS birthYear,
-              p.deathYear  AS deathYear,
-              p.birthPlace AS birthPlace,
-              p.deathPlace AS deathPlace,
-              p.occupation AS occupation,
-              p.notes      AS notes
-       ORDER BY p.gedcomId`
-    )
+    const [personResult, unionResult, spouseResult, childResult] = await Promise.all([
+      session.run(
+        `MATCH (p:Person)
+         RETURN p.gedcomId   AS gedcomId,
+                p.name       AS name,
+                p.sex        AS sex,
+                p.birthYear  AS birthYear,
+                p.deathYear  AS deathYear,
+                p.birthPlace AS birthPlace,
+                p.deathPlace AS deathPlace,
+                p.occupation AS occupation,
+                p.notes      AS notes
+         ORDER BY p.gedcomId`
+      ),
+      session.run(
+        `MATCH (u:Union)
+         RETURN u.gedcomId      AS gedcomId,
+                u.marriageYear  AS marriageYear,
+                u.marriagePlace AS marriagePlace
+         ORDER BY u.gedcomId`
+      ),
+      session.run(
+        `MATCH (p:Person)-[:UNION]->(u:Union)
+         RETURN p.gedcomId AS personId, u.gedcomId AS unionId`
+      ),
+      session.run(
+        `MATCH (p:Person)-[:CHILD]->(u:Union)
+         RETURN p.gedcomId AS personId, u.gedcomId AS unionId`
+      ),
+    ])
 
     const persons: PersonNode[] = personResult.records.map(r => ({
       gedcomId: r.get('gedcomId') as string,
@@ -220,76 +231,48 @@ async function main() {
       notes: r.get('notes') as string | null,
     }))
 
-    // Query all Union nodes
-    const unionResult = await session.run(
-      `MATCH (u:Union)
-       RETURN u.gedcomId      AS gedcomId,
-              u.marriageYear  AS marriageYear,
-              u.marriagePlace AS marriagePlace
-       ORDER BY u.gedcomId`
-    )
-
     const unions: UnionNode[] = unionResult.records.map(r => ({
       gedcomId: r.get('gedcomId') as string,
       marriageYear: r.get('marriageYear') as string | null,
       marriagePlace: r.get('marriagePlace') as string | null,
     }))
 
-    // Query spouse (UNION) relationships
-    const spouseResult = await session.run(
-      `MATCH (p:Person)-[:UNION]->(u:Union)
-       RETURN p.gedcomId AS personId, u.gedcomId AS unionId`
-    )
-
-    const spouses: SpouseRel[] = spouseResult.records.map(r => ({
+    const toRel = (r: { get(k: string): unknown }) => ({
       personId: r.get('personId') as string,
       unionId: r.get('unionId') as string,
-    }))
+    })
+    const spousesByUnion = groupByUnionId(spouseResult.records.map(toRel))
+    const childrenByUnion = groupByUnionId(childResult.records.map(toRel))
 
-    // Query child (CHILD) relationships
-    const childResult = await session.run(
-      `MATCH (p:Person)-[:CHILD]->(u:Union)
-       RETURN p.gedcomId AS personId, u.gedcomId AS unionId`
-    )
-
-    const children: ChildRel[] = childResult.records.map(r => ({
-      personId: r.get('personId') as string,
-      unionId: r.get('unionId') as string,
-    }))
-
-    // Build a sex lookup map for spouse-role determination
     const personSexMap = new Map<string, string>()
     for (const p of persons) {
       personSexMap.set(p.gedcomId, p.sex)
     }
 
-    // Assemble GEDCOM sections
     const sections: string[] = []
 
-    // HEAD block
     sections.push(
       [
-        '0 HEAD',
-        '1 SOUR FamilyTree',
-        '1 GEDC',
-        '2 VERS 5.5.1',
-        '2 FORM LINEAGE-LINKED',
-        '1 CHAR UTF-8',
+        `0 ${GEDCOM_TYPES.HEAD}`,
+        `1 ${GEDCOM_TYPES.SOUR} FamilyTree`,
+        `1 ${GEDCOM_TYPES.GEDC}`,
+        `2 ${GEDCOM_TYPES.VERS} 5.5.1`,
+        `2 ${GEDCOM_TYPES.FORM} LINEAGE-LINKED`,
+        `1 ${GEDCOM_TYPES.CHAR} UTF-8`,
       ].join('\n')
     )
 
-    // INDI records
     for (const person of persons) {
       sections.push(buildIndiRecord(person))
     }
 
-    // FAM records
     for (const union of unions) {
+      const spouses = spousesByUnion.get(union.gedcomId) ?? []
+      const children = childrenByUnion.get(union.gedcomId) ?? []
       sections.push(buildFamRecord(union, spouses, children, personSexMap))
     }
 
-    // TRLR
-    sections.push('0 TRLR')
+    sections.push(`0 ${GEDCOM_TYPES.TRLR}`)
 
     const output = sections.join('\n') + '\n'
     const outPath = path.join(__dirname, '../family-tree.ged')

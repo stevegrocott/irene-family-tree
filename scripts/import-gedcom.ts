@@ -10,18 +10,16 @@
  * - NEO4J_USER: Neo4j username
  * - NEO4J_PASSWORD: Neo4j password
  *
- * The script clears all existing data before importing to ensure a clean state.
+ * Re-import is idempotent: MERGE upserts nodes and relationships so any
+ * app-created data (e.g. Suggestion nodes) is preserved across runs.
  */
 
 import * as fs from 'fs'
 import * as path from 'path'
 import { parse } from 'parse-gedcom'
 import neo4j from 'neo4j-driver'
+import { loadLocalEnv, validateRequiredEnv } from '../src/lib/env'
 
-/**
- * GEDCOM record and field type constants used for parsing family tree data.
- * Maps human-readable names to their GEDCOM abbreviations.
- */
 const GEDCOM_TYPES = {
   INDIVIDUAL: 'INDI',
   FAMILY: 'FAM',
@@ -39,16 +37,9 @@ const GEDCOM_TYPES = {
   OCCUPATION: 'OCCU',
   NOTE: 'NOTE',
   MARRIAGE: 'MARR',
-}
+} as const
 
-// Load .env.local for local dev (no dotenv dependency needed)
-const envPath = path.join(__dirname, '../.env.local')
-if (fs.existsSync(envPath)) {
-  for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
-    const m = line.match(/^([^#=]+)=(.*)$/)
-    if (m) process.env[m[1].trim()] = m[2]
-  }
-}
+loadLocalEnv()
 
 /**
  * Typed metadata attached to a parsed GEDCOM node's `data` property.
@@ -121,16 +112,15 @@ function extractYear(dateString: string): string | null {
  * @throws {Error} If database connection fails or Neo4j operations error
  */
 async function main() {
-  const missingEnv = ['NEO4J_URI', 'NEO4J_USER', 'NEO4J_PASSWORD'].filter(k => !process.env[k])
-  if (missingEnv.length) {
-    throw new Error(`Missing required environment variables: ${missingEnv.join(', ')}`)
-  }
+  validateRequiredEnv(['NEO4J_URI', 'NEO4J_USER', 'NEO4J_PASSWORD'])
 
   const filePath = path.join(__dirname, '../family-tree.ged')
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`GEDCOM input file not found: ${filePath}`)
+  let content: string
+  try {
+    content = fs.readFileSync(filePath, 'utf-8')
+  } catch (err) {
+    throw new Error(`Failed to read GEDCOM input file at ${filePath}: ${(err as Error).message}`)
   }
-  const content = fs.readFileSync(filePath, 'utf-8')
   const root = parse(content) as unknown as { type: string; children: GedNode[] }
 
   const driver = neo4j.driver(
@@ -271,8 +261,7 @@ async function main() {
   }
 }
 
-// Re-import is now idempotent: MERGE preserves app-created nodes (Suggestions, etc.).
-// Last re-import: 2026-04-22 against Aura (586 persons, 177 unions; 275 persons have birthPlace)
+// Re-import is idempotent: MERGE preserves app-created nodes (Suggestions, etc.).
 
 main().catch(err => {
   console.error(err)

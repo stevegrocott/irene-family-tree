@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "jest",
-    "import": "ts-node --project tsconfig.scripts.json scripts/import-gedcom.ts"
+    "import": "ts-node --project tsconfig.scripts.json scripts/import-gedcom.ts",
+    "export": "ts-node --project tsconfig.scripts.json scripts/export-gedcom.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",

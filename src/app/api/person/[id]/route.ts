@@ -166,6 +166,10 @@ export async function PATCH(
 ) {
   const { id } = await params
 
+  const session = await auth()
+  const authorEmail = session?.user?.email ?? 'anonymous'
+  const authorName = session?.user?.name ?? 'anonymous'
+
   let body: Record<string, unknown>
   try {
     body = await request.json()
@@ -196,6 +200,7 @@ export async function PATCH(
     previousPerson = previousRows?.[0] ?? null
   } catch (err) {
     console.error('Neo4j pre-update read failed', err)
+    return NextResponse.json({ error: 'Failed to read current state for change tracking' }, { status: 500 })
   }
 
   let rows: UpdatedPerson[]
@@ -219,9 +224,6 @@ export async function PATCH(
     return NextResponse.json({ error: 'Person not found' }, { status: 404 })
   }
 
-  const session = await auth()
-  const authorEmail = session?.user?.email ?? 'anonymous'
-  const authorName = session?.user?.name ?? 'anonymous'
   await recordChange(authorEmail, authorName, 'UPDATE_PERSON', id, previousPerson, rows[0])
 
   return NextResponse.json(rows[0])

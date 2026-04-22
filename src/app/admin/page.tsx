@@ -1,19 +1,28 @@
 import { redirect } from 'next/navigation'
-import { headers, cookies } from 'next/headers'
 import { auth } from '@/auth'
+import { read } from '@/lib/neo4j'
 import { ChangesReview } from './ChangesReview'
+import type { Change } from './types'
 
-interface Change {
+const PAGE_SIZE = 20
+
+interface ChangeRow {
   id: string
-  changeType: 'edit_person' | 'add_person' | 'add_relationship'
+  changeType: string
   targetId: string
-  personName: string
+  personName: string | null
   authorName: string
   authorEmail: string
-  previousValue: Record<string, unknown> | null
-  newValue: Record<string, unknown>
+  previousValue: string | null
+  newValue: string
   appliedAt: string
   status: string
+}
+
+function safeParseJson(val: unknown): Record<string, unknown> | null {
+  if (val === null || val === undefined) return null
+  if (typeof val === 'object') return val as Record<string, unknown>
+  try { return JSON.parse(val as string) } catch { return null }
 }
 
 export default async function AdminPage() {
@@ -22,22 +31,31 @@ export default async function AdminPage() {
     redirect('/api/auth/signin?callbackUrl=/admin')
   }
 
-  const headersList = await headers()
-  const host = headersList.get('host') ?? 'localhost:3000'
-  const proto = process.env.NODE_ENV === 'production' ? 'https' : 'http'
-  const cookieStore = await cookies()
-  const cookieHeader = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ')
-
   let changes: Change[] = []
   try {
-    const res = await fetch(`${proto}://${host}/api/admin/changes`, {
-      headers: { Cookie: cookieHeader },
-      cache: 'no-store',
-    })
-    if (res.ok) {
-      const data = await res.json()
-      changes = data.changes ?? []
-    }
+    const rows = await read<ChangeRow>(
+      `MATCH (c:Change {status: 'live'})
+       OPTIONAL MATCH (p:Person {gedcomId: c.targetId})
+       RETURN c.id            AS id,
+              c.changeType    AS changeType,
+              c.targetId      AS targetId,
+              p.name          AS personName,
+              c.authorName    AS authorName,
+              c.authorEmail   AS authorEmail,
+              c.previousValue AS previousValue,
+              c.newValue      AS newValue,
+              c.appliedAt     AS appliedAt,
+              c.status        AS status
+       ORDER BY c.appliedAt DESC
+       SKIP $skip LIMIT $limit`,
+      { skip: 0, limit: PAGE_SIZE }
+    )
+    changes = rows.map(row => ({
+      ...row,
+      personName: row.personName ?? '',
+      previousValue: safeParseJson(row.previousValue),
+      newValue: safeParseJson(row.newValue) ?? {},
+    })) as Change[]
   } catch {
     // Render with empty list; the component shows a friendly message
   }

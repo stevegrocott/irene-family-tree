@@ -1,19 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-
-interface Change {
-  id: string
-  changeType: 'edit_person' | 'add_person' | 'add_relationship'
-  targetId: string
-  personName: string
-  authorName: string
-  authorEmail: string
-  previousValue: Record<string, unknown> | null
-  newValue: Record<string, unknown>
-  appliedAt: string
-  status: string
-}
+import type { Change } from './types'
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'name',
@@ -29,10 +17,10 @@ const FIELD_LABELS: Record<string, string> = {
 }
 
 function describeChange(change: Change): string {
-  if (change.changeType === 'add_person') {
+  if (change.changeType === 'CREATE_PERSON') {
     return `Added new person: ${change.personName}`
   }
-  if (change.changeType === 'add_relationship') {
+  if (change.changeType === 'ADD_RELATIONSHIP') {
     const type = change.newValue?.relationshipType as string | undefined
     return `Added ${type ?? 'relationship'} relationship`
   }

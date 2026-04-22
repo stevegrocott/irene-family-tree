@@ -72,6 +72,9 @@ interface CreatedPerson {
 }
 
 export async function POST(request: Request) {
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   let body: Record<string, unknown>
   try {
     body = await request.json()
@@ -104,7 +107,6 @@ export async function POST(request: Request) {
   }
 
   const created = rows[0]
-  const session = await auth()
   const authorEmail = session?.user?.email ?? 'anonymous'
   const authorName = session?.user?.name ?? 'anonymous'
   await recordChange(authorEmail, authorName, 'CREATE_PERSON', created.gedcomId, null, created)

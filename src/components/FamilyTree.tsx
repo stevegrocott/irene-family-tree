@@ -196,11 +196,14 @@ export function PersonDrawer({
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailVersion, setDetailVersion] = useState(0)
 
-  const [mode, setMode] = useState<'view' | 'add-relative'>('view')
+  const [mode, setMode] = useState<'view' | 'add-relative' | 'edit'>('view')
+
+  const [editBirthPlace, setEditBirthPlace] = useState('')
   const [addRelativeType, setAddRelativeType] = useState<'parent' | 'spouse' | 'child'>('child')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Person[]>([])
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchAbortRef = useRef<AbortController | null>(null)
 
   const [givenName, setGivenName] = useState('')
   const [familyName, setFamilyName] = useState('')
@@ -229,29 +232,37 @@ export function PersonDrawer({
 
   useEffect(() => {
     if (mode !== 'add-relative' || !searchQuery.trim()) {
-      setSearchResults([])
+      if (searchResults.length > 0) setSearchResults([])
       return
     }
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    if (searchAbortRef.current) searchAbortRef.current.abort()
     searchTimerRef.current = setTimeout(() => {
-      fetch(`/api/persons?q=${encodeURIComponent(searchQuery)}`)
+      const abortCtrl = new AbortController()
+      searchAbortRef.current = abortCtrl
+      fetch(`/api/persons?q=${encodeURIComponent(searchQuery)}`, { signal: abortCtrl.signal })
         .then(r => r.ok ? r.json() as Promise<Person[]> : Promise.reject(new Error(`HTTP ${r.status}`)))
-        .then(data => setSearchResults(data))
-        .catch(err => console.error('Search failed', err))
+        .then(data => { if (!abortCtrl.signal.aborted) setSearchResults(data) })
+        .catch(err => { if (err instanceof Error && err.name !== 'AbortError') console.error('Search failed', err) })
     }, 300)
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+      if (searchAbortRef.current) searchAbortRef.current.abort()
     }
   }, [searchQuery, mode])
 
-  const openAddRelative = (type: 'parent' | 'spouse' | 'child') => {
-    setAddRelativeType(type)
+  const resetAddRelativeForm = () => {
     setSearchQuery('')
     setSearchResults([])
     setGivenName('')
     setFamilyName('')
     setNewBirthYear('')
     setNewSex('U')
+  }
+
+  const openAddRelative = (type: 'parent' | 'spouse' | 'child') => {
+    setAddRelativeType(type)
+    resetAddRelativeForm()
     setMode('add-relative')
   }
 
@@ -263,9 +274,8 @@ export function PersonDrawer({
         body: JSON.stringify({ targetId: relative.gedcomId, type: addRelativeType }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      resetAddRelativeForm()
       setMode('view')
-      setSearchQuery('')
-      setSearchResults([])
       setDetailVersion(v => v + 1)
       onSelectRoot?.(person.gedcomId)
     } catch (err) {
@@ -290,11 +300,8 @@ export function PersonDrawer({
         body: JSON.stringify({ targetId: newPerson.gedcomId, type: addRelativeType }),
       })
       if (!linkRes.ok) throw new Error(`HTTP ${linkRes.status}`)
+      resetAddRelativeForm()
       setMode('view')
-      setGivenName('')
-      setFamilyName('')
-      setNewBirthYear('')
-      setNewSex('U')
       setDetailVersion(v => v + 1)
       onSelectRoot?.(person.gedcomId)
     } catch (err) {
@@ -302,7 +309,73 @@ export function PersonDrawer({
     }
   }
 
-  const relativeTypeLabel = addRelativeType === 'parent' ? 'parent' : addRelativeType === 'spouse' ? 'spouse' : 'child'
+  const relativeTypeLabel = addRelativeType
+
+  const openEdit = () => {
+    setEditBirthPlace(detail?.birthPlace ?? '')
+    setMode('edit')
+  }
+
+  const handleSaveEdit = async () => {
+    try {
+      const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ birthPlace: editBirthPlace }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setMode('view')
+      setDetailVersion(v => v + 1)
+    } catch (err) {
+      console.error('Failed to save edit', err)
+    }
+  }
+
+  if (mode === 'edit') {
+    return (
+      <div
+        data-testid="person-drawer"
+        className="absolute top-0 right-0 h-full w-80 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
+      >
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-white/10">
+          <button
+            onClick={() => setMode('view')}
+            aria-label="Back"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            ←
+          </button>
+          <h2 className="text-white font-semibold text-sm truncate flex-1">
+            Edit {person.name || 'person'}
+          </h2>
+        </div>
+
+        <div
+          data-testid="person-drawer-edit-form"
+          className="flex-1 overflow-y-auto px-5 py-4 space-y-4"
+        >
+          <div className="space-y-2">
+            <div>
+              <label htmlFor="edit-birth-place" className="text-xs text-slate-400 block mb-1">Birth place</label>
+              <input
+                id="edit-birth-place"
+                type="text"
+                value={editBirthPlace}
+                onChange={e => setEditBirthPlace(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+          </div>
+          <button
+            onClick={handleSaveEdit}
+            className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+          >
+            Save change
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   if (mode === 'add-relative') {
     return (
@@ -310,7 +383,6 @@ export function PersonDrawer({
         data-testid="person-drawer"
         className="absolute top-0 right-0 h-full w-80 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
       >
-        {/* Sub-view header */}
         <div className="flex items-center gap-2 px-5 py-4 border-b border-white/10">
           <button
             onClick={() => setMode('view')}
@@ -324,7 +396,6 @@ export function PersonDrawer({
           </h2>
         </div>
 
-        {/* Sub-view body */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           <div>
             <input
@@ -419,6 +490,16 @@ export function PersonDrawer({
         <h2 className="text-white font-semibold text-base truncate flex-1 mr-2">
           {person.name || <span className="text-slate-500 italic">Unknown</span>}
         </h2>
+        {isSignedIn && (
+          <button
+            data-testid="person-drawer-edit"
+            onClick={openEdit}
+            aria-label="Edit person"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors mr-1"
+          >
+            ✎
+          </button>
+        )}
         <button
           data-testid="person-drawer-close"
           onClick={onClose}

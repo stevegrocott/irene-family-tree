@@ -76,6 +76,19 @@ const aliceTreeResponse = {
 
 // ─── Test suite ─────────────────────────────────────────────────────────────
 
+async function mockSignedInSession(page: import('@playwright/test').Page) {
+  await page.route(/\/api\/auth\/session\b/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        user: signedInUser,
+        expires: '2099-01-01T00:00:00.000Z',
+      }),
+    })
+  )
+}
+
 test.describe('PersonDrawer CRUD', () => {
   // ── Edit flow ──────────────────────────────────────────────────────────────
 
@@ -83,53 +96,51 @@ test.describe('PersonDrawer CRUD', () => {
     // Track birth place so the mock can reflect PATCH updates.
     let currentBirthPlace = 'London, England'
 
-    // Register all route mocks before navigating so they are active from the
-    // very first request. Routes registered later take precedence (LIFO), but
-    // here each URL pattern is unique so order does not matter.
+    await mockSignedInSession(page)
 
-    await page.route(/\/api\/auth\/session\b/, (route) =>
+    await page.route(/\/api\/persons/, (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          user: signedInUser,
-          expires: '2099-01-01T00:00:00.000Z',
-        }),
+        body: JSON.stringify([
+          {
+            gedcomId: '@ITEST@',
+            name: 'Alice Test',
+            sex: 'F',
+            birthYear: '1900',
+            deathYear: null,
+            birthPlace: 'London, England',
+          },
+        ]),
       })
     )
 
-    // Handle GET and PATCH for any /api/person/[id] path.
-    // Routes ending in /relationships are handled separately below.
-    await page.route(/\/api\/person\//, async (route) => {
-      const method = route.request().method()
-      const url = route.request().url()
+    await page.route(/\/api\/tree\//, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(aliceTreeResponse),
+      })
+    )
 
-      if (url.includes('/relationships')) {
-        // Not expected in this test — fall through to real handler.
+    await page.route(/\/api\/person\//, async (route) => {
+      if (route.request().url().includes('/relationships')) {
         await route.continue()
         return
       }
-
-      if (method === 'PATCH') {
-        // Reflect the body's birthPlace back so the drawer can show it.
+      if (route.request().method() === 'PATCH') {
         try {
           const body = JSON.parse(route.request().postData() ?? '{}') as Record<string, string>
           if (typeof body.birthPlace === 'string') currentBirthPlace = body.birthPlace
         } catch {
           // ignore parse errors
         }
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ ...mockPersonDetail, birthPlace: currentBirthPlace }),
-        })
-      } else {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ ...mockPersonDetail, birthPlace: currentBirthPlace }),
-        })
       }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...mockPersonDetail, birthPlace: currentBirthPlace }),
+      })
     })
 
     await page.goto('/')
@@ -184,16 +195,7 @@ test.describe('PersonDrawer CRUD', () => {
     // the POST to /relationships.
     let childAdded = false
 
-    await page.route(/\/api\/auth\/session\b/, (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          user: signedInUser,
-          expires: '2099-01-01T00:00:00.000Z',
-        }),
-      })
-    )
+    await mockSignedInSession(page)
 
     // Persons list — used both for the initial tree root selection and for the
     // add-relative search (whether server- or client-side filtered).

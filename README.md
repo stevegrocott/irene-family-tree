@@ -29,6 +29,17 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Environment Variables
+
+The following environment variables must be set in your Vercel project settings (or a local `.env.local` file for development):
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `AUTH_SECRET` | Yes | Random secret for NextAuth session encryption. Generate with: `openssl rand -base64 32` |
+| `GOOGLE_CLIENT_ID` | Yes | OAuth 2.0 Client ID from [Google Cloud Console](https://console.cloud.google.com) |
+| `GOOGLE_CLIENT_SECRET` | Yes | OAuth 2.0 Client Secret from Google Cloud Console |
+| `ADMIN_EMAILS` | Yes | Comma-separated list of email addresses granted admin role (e.g. `alice@example.com,bob@example.com`) |
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.

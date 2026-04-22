@@ -21,7 +21,7 @@ function describeChange(change: Change): string {
     return `Added new person: ${change.personName}`
   }
   if (change.changeType === 'ADD_RELATIONSHIP') {
-    const type = change.newValue?.relationshipType as string | undefined
+    const type = change.newValue?.type as string | undefined
     return `Added ${type ?? 'relationship'} relationship`
   }
   const prev = change.previousValue

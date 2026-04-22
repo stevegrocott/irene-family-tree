@@ -188,7 +188,6 @@ async function main() {
     }
 
     await session.executeWrite(async tx => {
-      await tx.run('MATCH (n) DETACH DELETE n')
       await tx.run(
         `UNWIND $rows AS row
          MERGE (p:Person {gedcomId: row.gedcomId})
@@ -272,6 +271,7 @@ async function main() {
   }
 }
 
+// Re-import is now idempotent: MERGE preserves app-created nodes (Suggestions, etc.).
 // Last re-import: 2026-04-22 against Aura (586 persons, 177 unions; 275 persons have birthPlace)
 
 main().catch(err => {

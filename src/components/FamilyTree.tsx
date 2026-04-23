@@ -91,11 +91,11 @@ export function Toolbar({
       <span data-testid="toolbar-person-count" className="text-xs text-white/60 select-none">
         <span className="text-white font-medium">{personCount}</span> people
       </span>
-      <span data-testid="toolbar-ancestors" className="text-xs text-white/60 select-none">
-        <span className="text-white font-medium">{ancestors}</span> ancestors
+      <span data-testid="toolbar-gen-up" className="text-xs text-white/60 select-none">
+        <span className="text-white font-medium">{ancestors}</span> gen up
       </span>
-      <span data-testid="toolbar-descendants" className="text-xs text-white/60 select-none">
-        <span className="text-white font-medium">{descendants}</span> descendants
+      <span data-testid="toolbar-gen-down" className="text-xs text-white/60 select-none">
+        <span className="text-white font-medium">{descendants}</span> gen down
       </span>
       <span data-testid="toolbar-viewing" className="text-xs text-white/60 select-none">
         VIEWING: <span className="text-white font-medium">{rootName}</span>

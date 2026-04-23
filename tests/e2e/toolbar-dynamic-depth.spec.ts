@@ -8,10 +8,10 @@ import { test, expect } from '@playwright/test';
  * Flow:
  *   1. Clear localStorage so the default root (Irene Tunnicliffe) is loaded.
  *   2. Wait for the toolbar to render.
- *   3. Read the ancestor and descendant generation depths from the toolbar labels.
- *   4. Compute the actual max generation depth as max(ancestors, descendants).
+ *   3. Read the gen-up and gen-down generation depths from the toolbar labels.
+ *   4. Compute the actual max generation depth as max(genUp, genDown).
  *   5. Assert the slider `max` attribute equals that computed depth.
- *   6. Assert the ancestors label is visible with a non-zero count.
+ *   6. Assert the gen-up label is visible with a non-zero count.
  */
 test.describe('toolbar dynamic depth', () => {
   test.beforeEach(async ({ page }) => {
@@ -28,18 +28,18 @@ test.describe('toolbar dynamic depth', () => {
     await expect(toolbarViewing).toContainText('Irene', { timeout: 15_000 });
 
     // The toolbar computes:
-    //   ancestors  = Math.abs(Math.min(...negative generations))
-    //   descendants = Math.max(...positive generations)
+    //   genUp   = Math.abs(Math.min(...negative generations))
+    //   genDown = Math.max(...positive generations)
     // These represent the actual max generation depths in each direction.
-    const ancestorCountEl = page.getByTestId('toolbar-ancestors').locator('span').first();
-    const descendantCountEl = page.getByTestId('toolbar-descendants').locator('span').first();
+    const genUpCountEl = page.getByTestId('toolbar-gen-up').locator('span').first();
+    const genDownCountEl = page.getByTestId('toolbar-gen-down').locator('span').first();
 
-    const ancestorText = await ancestorCountEl.textContent();
-    const descendantText = await descendantCountEl.textContent();
+    const genUpText = await genUpCountEl.textContent();
+    const genDownText = await genDownCountEl.textContent();
 
-    const ancestors = Number(ancestorText ?? '0');
-    const descendants = Number(descendantText ?? '0');
-    const actualMaxDepth = Math.max(ancestors, descendants);
+    const genUp = Number(genUpText ?? '0');
+    const genDown = Number(genDownText ?? '0');
+    const actualMaxDepth = Math.max(genUp, genDown);
 
     // Slider max must equal the actual tree depth, not a hardcoded constant like MAX_HOPS (16)
     const slider = page.getByTestId('toolbar-depth-slider');

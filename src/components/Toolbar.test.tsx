@@ -103,11 +103,11 @@ describe('Toolbar', () => {
       )
     })
 
-    const ancestors = container.querySelector('[data-testid="toolbar-ancestors"]')
+    const ancestors = container.querySelector('[data-testid="toolbar-gen-up"]')
     expect(ancestors).not.toBeNull()
     expect(ancestors!.textContent).toContain('3')
 
-    const descendants = container.querySelector('[data-testid="toolbar-descendants"]')
+    const descendants = container.querySelector('[data-testid="toolbar-gen-down"]')
     expect(descendants).not.toBeNull()
     expect(descendants!.textContent).toContain('1')
 

@@ -261,6 +261,12 @@ export function PersonDrawer({
   const [actionError, setActionError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const [myChanges, setMyChanges] = useState<{
+    createChange: { id: string; changeType: string; targetId: string; newValue: Record<string, unknown>; appliedAt: string } | null
+    relationshipChanges: Array<{ id: string; newValue: Record<string, unknown>; appliedAt: string }>
+    updateChanges: Array<{ id: string; newValue: Record<string, unknown>; appliedAt: string }>
+  } | null>(null)
+
   useEffect(() => {
     setDetail(null)
     setDetailLoading(true)
@@ -280,6 +286,42 @@ export function PersonDrawer({
       .finally(() => { if (!cancelled) setDetailLoading(false) })
     return () => { cancelled = true; ctrl.abort() }
   }, [person.gedcomId, detailVersion])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/my-changes`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled || !data) return
+        // Only accept responses that match the expected shape; guards against
+        // unmocked test environments that might serve arbitrary JSON here.
+        if (Array.isArray(data.relationshipChanges) && Array.isArray(data.updateChanges)) {
+          setMyChanges(data)
+        }
+      })
+      .catch(err => {
+        if (err instanceof Error && err.name !== 'AbortError') {
+          console.error('Failed to fetch my-changes', err)
+        }
+      })
+    return () => { cancelled = true }
+  }, [person.gedcomId, detailVersion])
+
+  /**
+   * Revert a change via POST /api/changes/[id]/revert.
+   * Returns `{ ok: true }` on 2xx or `{ ok: false, detail }` on failure,
+   * pulling a human-readable message from `conflictingChange.detail` or
+   * `error` in the response body.
+   */
+  const revertChangeRequest = async (
+    changeId: string
+  ): Promise<{ ok: true } | { ok: false; detail: string }> => {
+    const res = await fetch(`/api/changes/${encodeURIComponent(changeId)}/revert`, { method: 'POST' })
+    if (res.ok) return { ok: true }
+    const body = await res.json().catch(() => ({}))
+    const detail = body?.conflictingChange?.detail ?? body?.error ?? 'Revert failed'
+    return { ok: false, detail: String(detail) }
+  }
 
   useEffect(() => {
     if (mode !== 'add-relative' || !searchQuery.trim()) {
@@ -383,6 +425,74 @@ export function PersonDrawer({
       setActionError('Failed to create and link person. Please try again.')
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  /**
+   * True when the detail record has any relationships (parents, siblings, marriages, or
+   * children within a marriage). Used to disable the delete-person button because a
+   * `CREATE_PERSON` revert is only safe when the Person has no UNION/CHILD edges.
+   */
+  const detailHasRelationships = !!(
+    detail && (
+      detail.parents.length > 0 ||
+      detail.siblings.length > 0 ||
+      detail.marriages.length > 0
+    )
+  )
+
+  /**
+   * Deletes the current person by reverting the author's CREATE_PERSON change.
+   * Only callable when `myChanges.createChange` is present (caller enforces button visibility).
+   * Prompts for confirmation, then on success closes the drawer and refreshes the tree.
+   * On 409 surfaces the server's conflict detail inline via `actionError`.
+   */
+  const handleDeletePerson = async () => {
+    if (!myChanges?.createChange) return
+    if (typeof window !== 'undefined' && !window.confirm(`Delete ${person.name || 'this person'}? This cannot be undone.`)) return
+    const result = await revertChangeRequest(myChanges.createChange.id)
+    if (result.ok) {
+      setMyChanges(null)
+      onSelectRoot?.(person.gedcomId) // nudges tree refetch in the parent canvas
+      onClose()
+    } else {
+      setActionError(result.detail)
+    }
+  }
+
+  /**
+   * Removes a marriage/union by reverting the author's ADD_RELATIONSHIP change for it.
+   * On success, bumps `detailVersion` so both the person detail and `my-changes`
+   * re-fetch (the marriage disappears from the list). On 409 surfaces the detail
+   * inline via `actionError`.
+   * @param {string} changeId - id of the `ADD_RELATIONSHIP` Change to revert
+   */
+  const handleRemoveMarriage = async (changeId: string) => {
+    if (typeof window !== 'undefined' && !window.confirm('Remove this marriage? This cannot be undone.')) return
+    const result = await revertChangeRequest(changeId)
+    if (result.ok) {
+      onSelectRoot?.(person.gedcomId)
+      setDetailVersion(v => v + 1)
+    } else {
+      setActionError(result.detail)
+    }
+  }
+
+  /**
+   * Reverts one of this author's UPDATE_PERSON changes on this person.
+   * On success, bumps `detailVersion` so the "Your edits" list shrinks and the
+   * person detail reflects the restored previousValue. On 409 surfaces the detail
+   * inline via `actionError`.
+   * @param {string} changeId - id of the `UPDATE_PERSON` Change to revert
+   */
+  const handleRevertEdit = async (changeId: string) => {
+    if (typeof window !== 'undefined' && !window.confirm('Revert this edit? The previous values will be restored.')) return
+    const result = await revertChangeRequest(changeId)
+    if (result.ok) {
+      onSelectRoot?.(person.gedcomId)
+      setDetailVersion(v => v + 1)
+    } else {
+      setActionError(result.detail)
     }
   }
 
@@ -615,6 +725,42 @@ export function PersonDrawer({
               + Add notes
             </button>
           )}
+          {myChanges && Array.isArray(myChanges.updateChanges) && myChanges.updateChanges.length > 0 && (
+            <section
+              data-testid="person-drawer-your-edits"
+              className="pt-3 mt-3 border-t border-white/10 space-y-2"
+            >
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Your edits to this person
+              </h3>
+              <ul className="space-y-2">
+                {myChanges.updateChanges.map(c => (
+                  <li
+                    key={c.id}
+                    data-testid={`your-edit-${c.id}`}
+                    className="flex items-center gap-2 text-xs text-white/70"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <span className="block truncate text-white/80">
+                        {Object.keys(c.newValue).join(', ') || '(no fields)'}
+                      </span>
+                      <time className="block text-[10px] text-slate-500">
+                        {new Date(c.appliedAt).toISOString()}
+                      </time>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid={`your-edit-revert-${c.id}`}
+                      onClick={() => handleRevertEdit(c.id)}
+                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-white/80 transition-colors"
+                    >
+                      Revert
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {actionError && (
             <p className="text-red-400 text-xs">{actionError}</p>
           )}
@@ -832,16 +978,37 @@ export function PersonDrawer({
                 <p className="text-slate-600 text-xs italic">None recorded</p>
               ) : (
                 <ul className="space-y-3">
-                  {detail.marriages.map(m => (
-                    <li key={m.unionId} className="space-y-1">
-                      {m.spouse && <RelativeRow person={m.spouse} onSelect={onSelectPerson} onReroot={onReroot} />}
-                      {m.children.length > 0 && (
-                        <ul className="pl-4 space-y-1">
-                          {m.children.map(c => <li key={c.gedcomId}><RelativeRow person={c} onSelect={onSelectPerson} onReroot={onReroot} small /></li>)}
-                        </ul>
-                      )}
-                    </li>
-                  ))}
+                  {detail.marriages.map(m => {
+                    const removableChange = myChanges?.relationshipChanges?.find(
+                      c => c.newValue.unionId === m.unionId
+                    )
+                    return (
+                      <li key={m.unionId} className="space-y-1">
+                        <div className="flex items-center gap-1">
+                          <div className="flex-1 min-w-0">
+                            {m.spouse && <RelativeRow person={m.spouse} onSelect={onSelectPerson} onReroot={onReroot} />}
+                          </div>
+                          {removableChange && (
+                            <button
+                              type="button"
+                              data-testid={`marriage-remove-${m.unionId}`}
+                              aria-label="Remove marriage"
+                              title="Remove marriage"
+                              onClick={() => handleRemoveMarriage(removableChange.id)}
+                              className="w-6 h-6 flex items-center justify-center rounded-lg text-white/40 hover:text-red-400 hover:bg-white/10 transition-colors text-sm leading-none flex-shrink-0"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                        {m.children.length > 0 && (
+                          <ul className="pl-4 space-y-1">
+                            {m.children.map(c => <li key={c.gedcomId}><RelativeRow person={c} onSelect={onSelectPerson} onReroot={onReroot} small /></li>)}
+                          </ul>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
               {isSignedIn && (
@@ -874,6 +1041,21 @@ export function PersonDrawer({
         >
           FOCUS TREE ON {(person.name || 'PERSON').toUpperCase()}
         </button>
+        {myChanges?.createChange && (
+          <button
+            data-testid="person-drawer-delete"
+            onClick={handleDeletePerson}
+            disabled={detailHasRelationships}
+            title={detailHasRelationships ? 'Has relationships — contact an admin' : undefined}
+            aria-label={`Delete ${person.name || 'person'}`}
+            className="w-full py-2 rounded-xl bg-red-500/80 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-500/80"
+          >
+            Delete this person
+          </button>
+        )}
+        {actionError && (
+          <p data-testid="person-drawer-action-error" className="text-red-400 text-xs">{actionError}</p>
+        )}
         {!isSignedIn && (
           <button
             onClick={() => signIn('google')}

@@ -38,4 +38,4 @@ async function main() {
   console.log('\nDuplicate Union nodes (same gedcomId):')
   for (const r of r3.records) console.log(` ${r.get('gid')}: ${r.get('cnt')} nodes`)
 }
-main().catch(console.error).finally(() => { session.close(); driver.close() })
+main().catch(console.error).finally(async () => { await session.close(); await driver.close() })

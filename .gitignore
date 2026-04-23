@@ -43,3 +43,6 @@ next-env.d.ts
 # orchestrator runtime
 logs/
 status.json
+
+# worktrees
+.worktrees/

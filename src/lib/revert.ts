@@ -29,8 +29,72 @@ export interface ChangeRow {
 }
 
 export async function revertChange(
-  _changeId: string,
-  _reverter: { email: string; name: string }
+  changeId: string,
+  reverter: { email: string; name: string }
 ): Promise<RevertOutcome> {
-  throw new Error('not implemented')
+  const rows = await read<ChangeRow>(
+    `MATCH (c:Change {id: $id})
+     RETURN c.id AS id, c.changeType AS changeType, c.targetId AS targetId,
+            c.previousValue AS previousValue, c.newValue AS newValue,
+            c.status AS status, c.authorEmail AS authorEmail,
+            c.authorName AS authorName, c.appliedAt AS appliedAt`,
+    { id: changeId }
+  )
+
+  if (rows.length === 0) {
+    return { ok: false, status: 404, error: 'Change not found' }
+  }
+
+  const change = rows[0]
+
+  if (change.status !== 'live') {
+    return { ok: false, status: 409, error: 'Change is not live' }
+  }
+
+  if (change.changeType === 'CREATE_PERSON') {
+    const edgeRows = await read<{ edges: number }>(
+      `MATCH (p:Person {gedcomId: $targetId})
+       OPTIONAL MATCH (p)-[r]-()
+       RETURN count(r) AS edges`,
+      { targetId: change.targetId }
+    )
+    const edgeCount = edgeRows[0]?.edges ?? 0
+    if (edgeCount > 0) {
+      return {
+        ok: false,
+        status: 409,
+        error: 'Cannot revert: person has relationships',
+        conflict: {
+          kind: 'has-relationships',
+          detail: `Person has ${edgeCount} relationship(s); remove them before reverting.`,
+        },
+      }
+    }
+
+    await write(
+      `MATCH (p:Person {gedcomId: $targetId}) DETACH DELETE p`,
+      { targetId: change.targetId }
+    )
+    await write(
+      `MATCH (c:Change {id: $id}) SET c.status = 'reverted'`,
+      { id: change.id }
+    )
+
+    const prevFromCreate = JSON.parse(change.newValue) as Record<string, unknown>
+    await recordChange(
+      reverter.email,
+      reverter.name,
+      'DELETE_PERSON',
+      change.targetId,
+      prevFromCreate,
+      {}
+    )
+
+    return { ok: true }
+  }
+
+  // Touch imports so TypeScript does not complain until later tasks use them.
+  void ALLOWED_PATCH_FIELDS
+
+  return { ok: false, status: 409, error: 'Unsupported change type' }
 }

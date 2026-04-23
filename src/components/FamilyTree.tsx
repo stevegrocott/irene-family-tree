@@ -406,6 +406,26 @@ export function PersonDrawer({
     setMode('edit')
   }
 
+  /** Discards pending edits and returns to view mode. */
+  const handleCancelEdit = () => {
+    setEditGivenName(person.givenName ?? '')
+    setEditFamilyName(person.surname ?? '')
+    setEditSex(person.sex ?? 'U')
+    setEditBirthYear(person.birthYear ?? '')
+    setEditBirthPlace(detail?.birthPlace ?? '')
+    setEditDiedYear(person.deathYear ?? '')
+    setEditDeathPlace(person.deathPlace ?? '')
+    setEditOccupation(person.occupation ?? '')
+    setEditNotes(person.notes ?? '')
+    setShowEditBirthPlace(!!(detail?.birthPlace))
+    setShowEditDiedYear(!!(person.deathYear))
+    setShowEditDeathPlace(!!(person.deathPlace))
+    setShowEditOccupation(!!(person.occupation))
+    setShowEditNotes(!!(person.notes))
+    setActionError(null)
+    setMode('view')
+  }
+
   /**
    * PATCHes the person record with the current edit-form values and returns to view mode.
    * Increments `detailVersion` to trigger a re-fetch of the updated person detail.
@@ -598,22 +618,31 @@ export function PersonDrawer({
           {actionError && (
             <p className="text-red-400 text-xs">{actionError}</p>
           )}
-          {isAdmin ? (
+          <div className="flex gap-2">
             <button
-              onClick={handleSaveEdit}
-              className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+              data-testid="person-drawer-cancel"
+              onClick={handleCancelEdit}
+              className="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
             >
-              Save change
+              Cancel
             </button>
-          ) : (
-            <button
-              data-testid="suggest-change"
-              onClick={handleSuggestChange}
-              className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
-            >
-              Suggest this change
-            </button>
-          )}
+            {isAdmin ? (
+              <button
+                onClick={handleSaveEdit}
+                className="flex-1 py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+              >
+                Save change
+              </button>
+            ) : (
+              <button
+                data-testid="suggest-change"
+                onClick={handleSuggestChange}
+                className="flex-1 py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+              >
+                Suggest this change
+              </button>
+            )}
+          </div>
         </div>
       </DrawerSubView>
     )

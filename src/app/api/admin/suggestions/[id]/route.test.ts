@@ -245,7 +245,7 @@ describe('POST /api/admin/suggestions/[id]', () => {
     expect(body).toEqual({ success: true })
     expect(mockWrite).toHaveBeenCalledWith(
       expect.stringContaining("SET c.status = 'declined'"),
-      { id: 'sg-1' }
+      expect.objectContaining({ id: 'sg-1' })
     )
   })
 

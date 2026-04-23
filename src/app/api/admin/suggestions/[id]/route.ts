@@ -45,6 +45,8 @@ export async function POST(
     return NextResponse.json({ error: 'action must be "approve" or "decline"' }, { status: 400 })
   }
 
+  const reason = typeof body.reason === 'string' ? body.reason : null
+
   let rows: PendingChangeRow[]
   try {
     rows = await read<PendingChangeRow>(
@@ -134,8 +136,9 @@ export async function POST(
       }
     } else {
       await write(
-        `MATCH (c:PendingChange {id: $id}) SET c.status = 'declined'`,
-        { id }
+        `MATCH (c:PendingChange {id: $id})
+         SET c.status = 'declined', c.declinedAt = datetime(), c.declineReason = $reason`,
+        { id, reason }
       )
     }
   } catch (err) {

@@ -192,6 +192,86 @@ test.describe('PersonDrawer CRUD', () => {
     await expect(drawer).toContainText('Paris, France')
   })
 
+  // ── Cancel flow ────────────────────────────────────────────────────────────
+
+  test('edit: Cancel button is visible in edit mode and returns to view mode', async ({
+    page,
+  }) => {
+    await mockSignedInSession(page)
+
+    await page.route(/\/api\/persons/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            gedcomId: '@ITEST@',
+            name: 'Alice Test',
+            sex: 'F',
+            birthYear: '1900',
+            deathYear: null,
+            birthPlace: 'London, England',
+          },
+        ]),
+      })
+    )
+
+    await page.route(/\/api\/tree\//, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(aliceTreeResponse),
+      })
+    )
+
+    await page.route(/\/api\/person\//, async (route) => {
+      if (route.request().url().includes('/relationships')) {
+        await route.continue()
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(mockPersonDetail),
+      })
+    })
+
+    await page.goto('/')
+
+    // Wait for the tree to render.
+    await expect(page.getByTestId('toolbar-viewing')).toBeVisible({ timeout: 15_000 })
+
+    // Open the drawer for Alice Test.
+    const personNode = page.locator('.react-flow__node-person').first()
+    await expect(personNode).toBeVisible({ timeout: 10_000 })
+    await personNode.click()
+
+    const drawer = page.getByTestId('person-drawer')
+    await expect(drawer).toBeVisible()
+
+    // Detail fetch completes.
+    await expect(drawer).toContainText('London, England', { timeout: 5_000 })
+
+    // Enter edit mode.
+    const editBtn = page.getByTestId('person-drawer-edit')
+    await expect(editBtn).toBeVisible()
+    await editBtn.click()
+
+    const editForm = page.getByTestId('person-drawer-edit-form')
+    await expect(editForm).toBeVisible()
+
+    // Cancel button is visible in the edit footer.
+    const cancelBtn = page.getByTestId('person-drawer-cancel')
+    await expect(cancelBtn).toBeVisible()
+
+    // Clicking Cancel returns the drawer to view mode.
+    await cancelBtn.click()
+    await expect(editForm).not.toBeVisible({ timeout: 5_000 })
+
+    // View mode still shows the original birth place unchanged.
+    await expect(drawer).toContainText('London, England')
+  })
+
   // ── Add-relative flow ──────────────────────────────────────────────────────
 
   test('add-relative: + Add child opens search; selecting adds relationship to drawer', async ({

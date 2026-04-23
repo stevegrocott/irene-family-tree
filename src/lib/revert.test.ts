@@ -84,3 +84,119 @@ describe('revertChange — CREATE_PERSON', () => {
     expect(mockWrite).not.toHaveBeenCalled()
   })
 })
+
+describe('revertChange — ADD_RELATIONSHIP', () => {
+  it('spouse happy path: deletes union when unionEdges=2 and childEdges=0', async () => {
+    mockRead
+      .mockResolvedValueOnce([
+        {
+          id: 'c2',
+          changeType: 'ADD_RELATIONSHIP',
+          targetId: 'I001',
+          previousValue: null,
+          newValue: JSON.stringify({ type: 'spouse', targetId: 'I002', unionId: 'U001' }),
+          status: 'live',
+          authorEmail: 'a@b',
+          authorName: 'A',
+          appliedAt: '2026-01-01',
+        },
+      ])
+      .mockResolvedValueOnce([{ unionEdges: 2, childEdges: 0 }])
+
+    const result = await revertChange('c2', REVERTER)
+
+    expect(result).toEqual({ ok: true })
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.stringContaining('MATCH (u:Union {gedcomId: $unionId}) DETACH DELETE u'),
+      expect.objectContaining({ unionId: 'U001' })
+    )
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.stringContaining("SET c.status = 'reverted'"),
+      expect.objectContaining({ id: 'c2' })
+    )
+  })
+
+  it('parent/child happy path: deletes union when unionEdges=1 and childEdges=1', async () => {
+    mockRead
+      .mockResolvedValueOnce([
+        {
+          id: 'c3',
+          changeType: 'ADD_RELATIONSHIP',
+          targetId: 'I001',
+          previousValue: null,
+          newValue: JSON.stringify({ type: 'parent', targetId: 'I003', unionId: 'U002' }),
+          status: 'live',
+          authorEmail: 'a@b',
+          authorName: 'A',
+          appliedAt: '2026-01-01',
+        },
+      ])
+      .mockResolvedValueOnce([{ unionEdges: 1, childEdges: 1 }])
+
+    const result = await revertChange('c3', REVERTER)
+
+    expect(result).toEqual({ ok: true })
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.stringContaining('MATCH (u:Union {gedcomId: $unionId}) DETACH DELETE u'),
+      expect.objectContaining({ unionId: 'U002' })
+    )
+  })
+
+  it('spouse block: returns 409 union-touched when union has a CHILD edge', async () => {
+    mockRead
+      .mockResolvedValueOnce([
+        {
+          id: 'c4',
+          changeType: 'ADD_RELATIONSHIP',
+          targetId: 'I001',
+          previousValue: null,
+          newValue: JSON.stringify({ type: 'spouse', targetId: 'I002', unionId: 'U003' }),
+          status: 'live',
+          authorEmail: 'a@b',
+          authorName: 'A',
+          appliedAt: '2026-01-01',
+        },
+      ])
+      .mockResolvedValueOnce([{ unionEdges: 2, childEdges: 1 }])
+
+    const result = await revertChange('c4', REVERTER)
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: false,
+        status: 409,
+        conflict: expect.objectContaining({ kind: 'union-touched' }),
+      })
+    )
+    expect(mockWrite).not.toHaveBeenCalled()
+  })
+
+  it('parent/child block: returns 409 union-touched when union has extra UNION or CHILD', async () => {
+    mockRead
+      .mockResolvedValueOnce([
+        {
+          id: 'c5',
+          changeType: 'ADD_RELATIONSHIP',
+          targetId: 'I001',
+          previousValue: null,
+          newValue: JSON.stringify({ type: 'child', targetId: 'I004', unionId: 'U004' }),
+          status: 'live',
+          authorEmail: 'a@b',
+          authorName: 'A',
+          appliedAt: '2026-01-01',
+        },
+      ])
+      .mockResolvedValueOnce([{ unionEdges: 2, childEdges: 1 }])
+
+    const result = await revertChange('c5', REVERTER)
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: false,
+        status: 409,
+        conflict: expect.objectContaining({ kind: 'union-touched' }),
+      })
+    )
+    expect(mockWrite).not.toHaveBeenCalled()
+  })
+})

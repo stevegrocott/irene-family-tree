@@ -51,6 +51,50 @@ export async function revertChange(
     return { ok: false, status: 409, error: 'Change is not live' }
   }
 
+  if (change.changeType === 'ADD_RELATIONSHIP') {
+    const parsed = JSON.parse(change.newValue) as {
+      type: 'spouse' | 'parent' | 'child'
+      targetId: string
+      unionId: string
+    }
+    const edgeRows = await read<{ unionEdges: number; childEdges: number }>(
+      `MATCH (u:Union {gedcomId: $unionId})
+       OPTIONAL MATCH (u)<-[ue:UNION]-()
+       OPTIONAL MATCH (u)-[ce:CHILD]->()
+       RETURN count(DISTINCT ue) AS unionEdges, count(DISTINCT ce) AS childEdges`,
+      { unionId: parsed.unionId }
+    )
+    const { unionEdges = 0, childEdges = 0 } = edgeRows[0] ?? {}
+
+    const pristine =
+      parsed.type === 'spouse'
+        ? unionEdges === 2 && childEdges === 0
+        : unionEdges === 1 && childEdges === 1
+
+    if (!pristine) {
+      return {
+        ok: false,
+        status: 409,
+        error: 'Cannot revert: union has been modified since',
+        conflict: {
+          kind: 'union-touched',
+          detail: `Union has ${unionEdges} spouse edge(s) and ${childEdges} child edge(s); other edits are present, so reverting this relationship alone would leave the union inconsistent.`,
+        },
+      }
+    }
+
+    await write(
+      `MATCH (u:Union {gedcomId: $unionId}) DETACH DELETE u`,
+      { unionId: parsed.unionId }
+    )
+    await write(
+      `MATCH (c:Change {id: $id}) SET c.status = 'reverted'`,
+      { id: change.id }
+    )
+
+    return { ok: true }
+  }
+
   if (change.changeType === 'CREATE_PERSON') {
     const edgeRows = await read<{ edges: number }>(
       `MATCH (p:Person {gedcomId: $targetId})

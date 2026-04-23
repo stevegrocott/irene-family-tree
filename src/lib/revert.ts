@@ -52,10 +52,19 @@ export async function revertChange(
   }
 
   if (change.changeType === 'ADD_RELATIONSHIP') {
-    const parsed = JSON.parse(change.newValue) as {
+    let parsed: {
       type: 'spouse' | 'parent' | 'child'
       targetId: string
       unionId: string
+    }
+    try {
+      parsed = JSON.parse(change.newValue) as {
+        type: 'spouse' | 'parent' | 'child'
+        targetId: string
+        unionId: string
+      }
+    } catch {
+      return { ok: false, status: 409, error: 'Malformed change record: cannot parse newValue' }
     }
     const edgeRows = await read<{ unionEdges: number; childEdges: number }>(
       `MATCH (u:Union {gedcomId: $unionId})
@@ -115,6 +124,15 @@ export async function revertChange(
       }
     }
 
+    // Parse BEFORE any mutation so malformed newValue can't leave the graph in
+    // a half-reverted state (person deleted, no audit written).
+    let prevFromCreate: Record<string, unknown>
+    try {
+      prevFromCreate = JSON.parse(change.newValue) as Record<string, unknown>
+    } catch {
+      return { ok: false, status: 409, error: 'Malformed change record: cannot parse newValue' }
+    }
+
     await write(
       `MATCH (p:Person {gedcomId: $targetId}) DETACH DELETE p`,
       { targetId: change.targetId }
@@ -124,15 +142,18 @@ export async function revertChange(
       { id: change.id }
     )
 
-    const prevFromCreate = JSON.parse(change.newValue) as Record<string, unknown>
-    await recordChange(
-      reverter.email,
-      reverter.name,
-      'DELETE_PERSON',
-      change.targetId,
-      prevFromCreate,
-      {}
-    )
+    try {
+      await recordChange(
+        reverter.email,
+        reverter.name,
+        'DELETE_PERSON',
+        change.targetId,
+        prevFromCreate,
+        {}
+      )
+    } catch (auditErr) {
+      console.error('Audit recordChange failed (non-fatal)', auditErr)
+    }
 
     return { ok: true }
   }

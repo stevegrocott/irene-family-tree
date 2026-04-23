@@ -1,25 +1,10 @@
-const DUPLICATE_UNION_EDGES_QUERY = `
-    MATCH (p:Person)-[r:UNION]->(u:Union)
-    WITH p, u, count(r) AS edgeCount
-    WHERE edgeCount > 1
-    RETURN p.name AS person, p.gedcomId AS id, u.gedcomId AS union, edgeCount
-    ORDER BY edgeCount DESC LIMIT 10
-  `
-
-const DUPLICATE_CHILD_EDGES_QUERY = `
-    MATCH (u:Union)-[r:CHILD]->(p:Person)
-    WITH p, u, count(r) AS edgeCount
-    WHERE edgeCount > 1
-    RETURN p.name AS person, p.gedcomId AS id, u.gedcomId AS union, edgeCount
-    ORDER BY edgeCount DESC LIMIT 10
-  `
-
-const DUPLICATE_UNION_NODES_QUERY = `
-    MATCH (u:Union)
-    WITH u.gedcomId AS gid, count(u) AS cnt
-    WHERE cnt > 1
-    RETURN gid, cnt ORDER BY cnt DESC LIMIT 10
-  `
+import {
+  DUPLICATE_CHILD_EDGES_QUERY,
+  DUPLICATE_UNION_EDGES_QUERY,
+  DUPLICATE_UNION_NODES_QUERY,
+  findDuplicates,
+  type QueryableSession,
+} from './check-dupes'
 
 type FakeRecord = { get: (key: string) => unknown }
 
@@ -27,20 +12,17 @@ function record(fields: Record<string, unknown>): FakeRecord {
   return { get: (key: string) => fields[key] }
 }
 
-type SessionStub = {
-  run: jest.Mock<Promise<{ records: FakeRecord[] }>, [string]>
-}
-
 function seededSession(seed: {
   unionEdges: FakeRecord[]
   childEdges: FakeRecord[]
   unionNodes: FakeRecord[]
-}): SessionStub {
+}): QueryableSession {
   return {
     run: jest.fn(async (cypher: string) => {
-      if (cypher.includes(':UNION]')) return { records: seed.unionEdges }
-      if (cypher.includes(':CHILD]')) return { records: seed.childEdges }
-      return { records: seed.unionNodes }
+      if (cypher === DUPLICATE_UNION_EDGES_QUERY) return { records: seed.unionEdges }
+      if (cypher === DUPLICATE_CHILD_EDGES_QUERY) return { records: seed.childEdges }
+      if (cypher === DUPLICATE_UNION_NODES_QUERY) return { records: seed.unionNodes }
+      return { records: [] }
     }),
   }
 }
@@ -60,27 +42,31 @@ describe('check-dupes duplicate detection (seeded dataset with known duplicates)
     ],
   }
 
-  it('returns non-zero duplicate UNION edge count when duplicates are seeded', async () => {
-    const session = seededSession(seed)
-    const result = await session.run(DUPLICATE_UNION_EDGES_QUERY)
-
-    expect(result.records.length).toBeGreaterThan(0)
-    expect(result.records[0].get('edgeCount')).toBeGreaterThan(1)
+  it('exports CHILD edge query using canonical direction (u:Union)-[:CHILD]->(p:Person)', () => {
+    expect(DUPLICATE_CHILD_EDGES_QUERY).toContain('(u:Union)-[r:CHILD]->(p:Person)')
   })
 
-  it('returns non-zero duplicate CHILD edge count when duplicates are seeded', async () => {
+  it('findDuplicates returns non-zero duplicate UNION edge count when duplicates are seeded', async () => {
     const session = seededSession(seed)
-    const result = await session.run(DUPLICATE_CHILD_EDGES_QUERY)
+    const result = await findDuplicates(session)
 
-    expect(result.records.length).toBeGreaterThan(0)
-    expect(result.records[0].get('edgeCount')).toBeGreaterThan(1)
+    expect(result.unionEdges.length).toBeGreaterThan(0)
+    expect(result.unionEdges[0].get('edgeCount')).toBeGreaterThan(1)
   })
 
-  it('returns non-zero duplicate Union node count when duplicates are seeded', async () => {
+  it('findDuplicates returns non-zero duplicate CHILD edge count when duplicates are seeded', async () => {
     const session = seededSession(seed)
-    const result = await session.run(DUPLICATE_UNION_NODES_QUERY)
+    const result = await findDuplicates(session)
 
-    expect(result.records.length).toBeGreaterThan(0)
-    expect(result.records[0].get('cnt')).toBeGreaterThan(1)
+    expect(result.childEdges.length).toBeGreaterThan(0)
+    expect(result.childEdges[0].get('edgeCount')).toBeGreaterThan(1)
+  })
+
+  it('findDuplicates returns non-zero duplicate Union node count when duplicates are seeded', async () => {
+    const session = seededSession(seed)
+    const result = await findDuplicates(session)
+
+    expect(result.unionNodes.length).toBeGreaterThan(0)
+    expect(result.unionNodes[0].get('cnt')).toBeGreaterThan(1)
   })
 })

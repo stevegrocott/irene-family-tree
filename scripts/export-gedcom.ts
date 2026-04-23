@@ -118,7 +118,7 @@ async function main() {
          RETURN p.gedcomId AS personId, u.gedcomId AS unionId`
       ),
       session.run(
-        `MATCH (p:Person)-[:CHILD]->(u:Union)
+        `MATCH (u:Union)-[:CHILD]->(p:Person)
          RETURN p.gedcomId AS personId, u.gedcomId AS unionId`
       ),
     ])

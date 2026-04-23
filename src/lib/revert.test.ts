@@ -200,3 +200,78 @@ describe('revertChange — ADD_RELATIONSHIP', () => {
     expect(mockWrite).not.toHaveBeenCalled()
   })
 })
+
+describe('revertChange — UPDATE_PERSON', () => {
+  it('happy path: applies previousValue to Person, flips status=reverted', async () => {
+    mockRead
+      .mockResolvedValueOnce([
+        {
+          id: 'c6',
+          changeType: 'UPDATE_PERSON',
+          targetId: 'I001',
+          previousValue: JSON.stringify({ name: 'Old', birthYear: 1900, bogusField: 'ignore' }),
+          newValue: JSON.stringify({ name: 'New', birthYear: 1901 }),
+          status: 'live',
+          authorEmail: 'a@b',
+          authorName: 'A',
+          appliedAt: '2026-01-01',
+        },
+      ])
+      // later-change lookup returns nothing
+      .mockResolvedValueOnce([])
+
+    const result = await revertChange('c6', REVERTER)
+
+    expect(result).toEqual({ ok: true })
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.stringContaining('SET p += $prevValue'),
+      expect.objectContaining({
+        targetId: 'I001',
+        prevValue: expect.objectContaining({ name: 'Old', birthYear: 1900 }),
+      })
+    )
+    // The bogus field must be filtered out
+    const setCall = mockWrite.mock.calls.find(([cypher]) =>
+      typeof cypher === 'string' && cypher.includes('SET p += $prevValue')
+    )
+    expect(setCall).toBeDefined()
+    const prevValueArg = (setCall![1] as { prevValue: Record<string, unknown> }).prevValue
+    expect(prevValueArg).not.toHaveProperty('bogusField')
+
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.stringContaining("SET c.status = 'reverted'"),
+      expect.objectContaining({ id: 'c6' })
+    )
+  })
+
+  it('block: returns 409 field-updated-later when a later UPDATE_PERSON touches an overlapping field', async () => {
+    mockRead
+      .mockResolvedValueOnce([
+        {
+          id: 'c7',
+          changeType: 'UPDATE_PERSON',
+          targetId: 'I001',
+          previousValue: JSON.stringify({ name: 'Old', birthYear: 1900 }),
+          newValue: JSON.stringify({ name: 'Mid' }),
+          status: 'live',
+          authorEmail: 'a@b',
+          authorName: 'A',
+          appliedAt: '2026-01-01',
+        },
+      ])
+      .mockResolvedValueOnce([
+        { id: 'c8', newValue: JSON.stringify({ name: 'Newer' }) },
+      ])
+
+    const result = await revertChange('c7', REVERTER)
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: false,
+        status: 409,
+        conflict: expect.objectContaining({ kind: 'field-updated-later' }),
+      })
+    )
+    expect(mockWrite).not.toHaveBeenCalled()
+  })
+})

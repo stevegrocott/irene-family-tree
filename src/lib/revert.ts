@@ -137,8 +137,57 @@ export async function revertChange(
     return { ok: true }
   }
 
-  // Touch imports so TypeScript does not complain until later tasks use them.
-  void ALLOWED_PATCH_FIELDS
+  if (change.changeType === 'UPDATE_PERSON') {
+    const rawPrev =
+      change.previousValue !== null
+        ? (JSON.parse(change.previousValue) as Record<string, unknown>)
+        : {}
+    const allowedKeys = new Set<string>(ALLOWED_PATCH_FIELDS)
+    const prevValue: Record<string, unknown> = {}
+    for (const key of Object.keys(rawPrev)) {
+      if (allowedKeys.has(key)) prevValue[key] = rawPrev[key]
+    }
+    const revertKeys = new Set(Object.keys(prevValue))
+
+    const laterRows = await read<{ id: string; newValue: string }>(
+      `MATCH (c:Change { status: 'live', changeType: 'UPDATE_PERSON', targetId: $targetId })
+       WHERE c.appliedAt > $appliedAt AND c.id <> $id
+       RETURN c.id AS id, c.newValue AS newValue`,
+      { targetId: change.targetId, appliedAt: change.appliedAt, id: change.id }
+    )
+
+    for (const row of laterRows) {
+      let laterNew: Record<string, unknown>
+      try {
+        laterNew = JSON.parse(row.newValue) as Record<string, unknown>
+      } catch {
+        continue
+      }
+      const overlap = Object.keys(laterNew).filter(k => revertKeys.has(k))
+      if (overlap.length > 0) {
+        return {
+          ok: false,
+          status: 409,
+          error: 'Cannot revert: a later edit changed the same field(s)',
+          conflict: {
+            kind: 'field-updated-later',
+            detail: `A later edit (${row.id}) modified field(s): ${overlap.join(', ')}.`,
+          },
+        }
+      }
+    }
+
+    await write(
+      `MATCH (p:Person {gedcomId: $targetId}) SET p += $prevValue`,
+      { targetId: change.targetId, prevValue }
+    )
+    await write(
+      `MATCH (c:Change {id: $id}) SET c.status = 'reverted'`,
+      { id: change.id }
+    )
+
+    return { ok: true }
+  }
 
   return { ok: false, status: 409, error: 'Unsupported change type' }
 }

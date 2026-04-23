@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
-import { write } from '@/lib/neo4j'
+import { read, write } from '@/lib/neo4j'
 import { recordChange } from '@/lib/changes'
 import { auth } from '@/auth'
 
@@ -10,8 +10,7 @@ const VALID_TYPES = ['spouse', 'parent', 'child'] as const
 type RelationshipType = typeof VALID_TYPES[number]
 
 interface UnionRecord {
-  unionId: string
-  created: boolean
+  unionId: string | null
 }
 
 export async function POST(
@@ -40,59 +39,59 @@ export async function POST(
 
   const type = body.type as RelationshipType
   const targetId = body.targetId as string
+
+  let existsCypher: string
+  if (type === 'spouse') {
+    existsCypher = `MATCH (a:Person {gedcomId: $id})-[:UNION]->(u:Union)<-[:UNION]-(b:Person {gedcomId: $targetId})
+RETURN u.gedcomId AS unionId LIMIT 1`
+  } else if (type === 'parent') {
+    // targetId is the parent; id is the child
+    existsCypher = `MATCH (parent:Person {gedcomId: $targetId})-[:UNION]->(u:Union)-[:CHILD]->(child:Person {gedcomId: $id})
+RETURN u.gedcomId AS unionId LIMIT 1`
+  } else {
+    // type === 'child': id is the parent; targetId is the child
+    existsCypher = `MATCH (parent:Person {gedcomId: $id})-[:UNION]->(u:Union)-[:CHILD]->(child:Person {gedcomId: $targetId})
+RETURN u.gedcomId AS unionId LIMIT 1`
+  }
+
+  let existingRows: { unionId: string | null }[]
+  try {
+    existingRows = await read<{ unionId: string | null }>(existsCypher, { id, targetId })
+  } catch (err) {
+    console.error('Neo4j read failed', err)
+    return NextResponse.json({ error: 'Failed to read from graph database' }, { status: 500 })
+  }
+
+  if (existingRows.length && existingRows[0].unionId) {
+    return NextResponse.json(
+      { error: 'Relationship already exists', unionId: existingRows[0].unionId },
+      { status: 409 }
+    )
+  }
+
   const unionId = '@F' + randomUUID().slice(0, 8) + '@'
 
   let cypher: string
   if (type === 'spouse') {
     cypher = `MATCH (a:Person {gedcomId: $id}), (b:Person {gedcomId: $targetId})
-OPTIONAL MATCH (a)-[:UNION]->(existing:Union)<-[:UNION]-(b)
-CALL {
-  WITH a, b, existing
-  WITH a, b WHERE existing IS NULL
-  MERGE (u:Union {gedcomId: $unionId})
-  MERGE (a)-[:UNION]->(u)
-  MERGE (b)-[:UNION]->(u)
-  RETURN u.gedcomId AS unionId, true AS created
-UNION
-  WITH existing
-  WITH existing WHERE existing IS NOT NULL
-  RETURN existing.gedcomId AS unionId, false AS created
-}
-RETURN unionId, created`
+MERGE (u:Union {gedcomId: $unionId})
+MERGE (a)-[:UNION]->(u)
+MERGE (b)-[:UNION]->(u)
+RETURN u.gedcomId AS unionId`
   } else if (type === 'parent') {
     // targetId is the parent; id is the child
     cypher = `MATCH (child:Person {gedcomId: $id}), (parent:Person {gedcomId: $targetId})
-OPTIONAL MATCH (parent)-[:UNION]->(existing:Union)-[:CHILD]->(child)
-CALL {
-  WITH child, parent, existing
-  WITH child, parent WHERE existing IS NULL
-  MERGE (u:Union {gedcomId: $unionId})
-  MERGE (parent)-[:UNION]->(u)
-  MERGE (u)-[:CHILD]->(child)
-  RETURN u.gedcomId AS unionId, true AS created
-UNION
-  WITH existing
-  WITH existing WHERE existing IS NOT NULL
-  RETURN existing.gedcomId AS unionId, false AS created
-}
-RETURN unionId, created`
+MERGE (u:Union {gedcomId: $unionId})
+MERGE (parent)-[:UNION]->(u)
+MERGE (u)-[:CHILD]->(child)
+RETURN u.gedcomId AS unionId`
   } else {
     // type === 'child': id is the parent; targetId is the child
     cypher = `MATCH (parent:Person {gedcomId: $id}), (child:Person {gedcomId: $targetId})
-OPTIONAL MATCH (parent)-[:UNION]->(existing:Union)-[:CHILD]->(child)
-CALL {
-  WITH parent, child, existing
-  WITH parent, child WHERE existing IS NULL
-  MERGE (u:Union {gedcomId: $unionId})
-  MERGE (parent)-[:UNION]->(u)
-  MERGE (u)-[:CHILD]->(child)
-  RETURN u.gedcomId AS unionId, true AS created
-UNION
-  WITH existing
-  WITH existing WHERE existing IS NOT NULL
-  RETURN existing.gedcomId AS unionId, false AS created
-}
-RETURN unionId, created`
+MERGE (u:Union {gedcomId: $unionId})
+MERGE (parent)-[:UNION]->(u)
+MERGE (u)-[:CHILD]->(child)
+RETURN u.gedcomId AS unionId`
   }
 
   let rows: UnionRecord[]
@@ -107,27 +106,22 @@ RETURN unionId, created`
     return NextResponse.json({ error: 'Person not found' }, { status: 404 })
   }
 
-  const { unionId: resultUnionId, created } = rows[0]
+  const resultUnionId = rows[0].unionId
 
-  if (created) {
-    const authorEmail = session?.user?.email ?? 'anonymous'
-    const authorName = session?.user?.name ?? 'anonymous'
-    try {
-      await recordChange(
-        authorEmail,
-        authorName,
-        'ADD_RELATIONSHIP',
-        id,
-        null,
-        { type, targetId, unionId: resultUnionId }
-      )
-    } catch (auditErr) {
-      console.error('Audit recordChange failed (non-fatal)', auditErr)
-    }
+  const authorEmail = session?.user?.email ?? 'anonymous'
+  const authorName = session?.user?.name ?? 'anonymous'
+  try {
+    await recordChange(
+      authorEmail,
+      authorName,
+      'ADD_RELATIONSHIP',
+      id,
+      null,
+      { type, targetId, unionId: resultUnionId }
+    )
+  } catch (auditErr) {
+    console.error('Audit recordChange failed (non-fatal)', auditErr)
   }
 
-  return NextResponse.json(
-    { unionId: resultUnionId },
-    { status: created ? 201 : 200 }
-  )
+  return NextResponse.json({ unionId: resultUnionId }, { status: 201 })
 }

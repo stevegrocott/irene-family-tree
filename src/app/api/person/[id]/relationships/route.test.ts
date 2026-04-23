@@ -76,6 +76,16 @@ describe('POST /api/person/[id]/relationships', () => {
     )
   })
 
+  // AC#3 (issue #58): Ideally we would execute the Cypher against a live Neo4j
+  // instance and query the resulting graph to confirm the CHILD edge points
+  // Union → Person. That is not feasible here because `@/lib/neo4j` is mocked
+  // at the top of this file — `write` never touches a real database, so no
+  // post-write graph query can be issued. Asserting the Cypher string contains
+  // the canonical pattern `(u)-[:CHILD]->(child)` (see the two tests below)
+  // is the accepted substitute: it fails if the direction is reversed to
+  // `(child)-[:CHILD]->(u)` (the PR #57 regression) while staying within the
+  // unit-test boundary. Real-graph direction verification belongs in an
+  // integration/E2E suite running against a live Neo4j.
   it('creates a parent relationship with UNION for target and CHILD for id', async () => {
     mockWrite.mockResolvedValue([{ unionId: '@F12345678@' }])
 

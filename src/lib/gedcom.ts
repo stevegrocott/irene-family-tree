@@ -34,3 +34,12 @@ export function escapeGedcomValue(value: string): string {
 export function extractYear(dateString: string): string | null {
   return dateString.match(/\d{4}/)?.[0] ?? null
 }
+
+export function buildNoteLines(level: number, notes: string): string[] {
+  const noteLines = notes.split('\n')
+  const result = [`${level} ${GEDCOM_TYPES.NOTE} ${escapeGedcomValue(noteLines[0])}`]
+  for (const cont of noteLines.slice(1)) {
+    result.push(`${level + 1} ${GEDCOM_TYPES.CONT} ${escapeGedcomValue(cont)}`)
+  }
+  return result
+}

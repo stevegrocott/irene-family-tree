@@ -2,7 +2,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import neo4j from 'neo4j-driver'
 import { loadLocalEnv, validateRequiredEnv } from '../src/lib/env'
-import { GEDCOM_TYPES, escapeGedcomValue } from '../src/lib/gedcom'
+import { GEDCOM_TYPES, escapeGedcomValue, buildNoteLines } from '../src/lib/gedcom'
 
 loadLocalEnv()
 
@@ -76,11 +76,7 @@ function buildIndiRecord(person: PersonNode, famsIds: string[], famcIds: string[
   }
 
   if (person.notes) {
-    const noteLines = person.notes.split('\n')
-    lines.push(`1 ${GEDCOM_TYPES.NOTE} ${escapeGedcomValue(noteLines[0])}`)
-    for (const cont of noteLines.slice(1)) {
-      lines.push(`2 ${GEDCOM_TYPES.CONT} ${escapeGedcomValue(cont)}`)
-    }
+    lines.push(...buildNoteLines(1, person.notes))
   }
 
   for (const uid of famsIds) {

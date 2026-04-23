@@ -5,6 +5,9 @@ import { auth } from '@/auth'
 
 export const runtime = 'nodejs'
 
+const ALLOWED_CHANGE_TYPES = ['UPDATE_PERSON', 'CREATE_PERSON', 'ADD_RELATIONSHIP'] as const
+type AllowedChangeType = (typeof ALLOWED_CHANGE_TYPES)[number]
+
 export async function POST(request: Request): Promise<NextResponse> {
   const session = await auth()
   if (!session?.user) {
@@ -25,8 +28,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'changeType and payload are required' }, { status: 400 })
   }
 
+  if (!ALLOWED_CHANGE_TYPES.includes(body.changeType as AllowedChangeType)) {
+    return NextResponse.json({ error: 'Invalid changeType' }, { status: 400 })
+  }
+
   const id = randomUUID()
-  const changeType = body.changeType as string
+  const changeType = body.changeType as AllowedChangeType
   const payload = JSON.stringify(body.payload)
   const status = 'pending'
 

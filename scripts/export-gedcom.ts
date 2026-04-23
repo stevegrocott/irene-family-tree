@@ -9,15 +9,16 @@ import {
   type PersonNode,
 } from '../src/lib/gedcom'
 
-loadLocalEnv()
+export const CHILD_EDGES_QUERY = `MATCH (u:Union)-[:CHILD]->(p:Person)
+         RETURN p.gedcomId AS personId, u.gedcomId AS unionId`
 
-interface UnionNode {
+export interface UnionNode {
   gedcomId: string
   marriageYear: string | null
   marriagePlace: string | null
 }
 
-interface PersonUnionRel {
+export interface PersonUnionRel {
   personId: string
   unionId: string
 }
@@ -31,14 +32,14 @@ function groupByUnionId(rels: PersonUnionRel[]): Map<string, PersonUnionRel[]> {
   return map
 }
 
-interface FamilyBuildContext {
+export interface FamilyBuildContext {
   union: UnionNode
   spouses: PersonUnionRel[]
   children: PersonUnionRel[]
   personSexMap: Map<string, string>
 }
 
-function buildFamRecord(ctx: FamilyBuildContext): string {
+export function buildFamRecord(ctx: FamilyBuildContext): string {
   const lines: string[] = []
 
   lines.push(`0 ${ctx.union.gedcomId} ${GEDCOM_TYPES.FAMILY}`)
@@ -82,6 +83,7 @@ function buildFamRecord(ctx: FamilyBuildContext): string {
 }
 
 async function main() {
+  loadLocalEnv()
   validateRequiredEnv(['NEO4J_URI', 'NEO4J_USER', 'NEO4J_PASSWORD'])
 
   const driver = neo4j.driver(
@@ -117,10 +119,7 @@ async function main() {
         `MATCH (p:Person)-[:UNION]->(u:Union)
          RETURN p.gedcomId AS personId, u.gedcomId AS unionId`
       ),
-      session.run(
-        `MATCH (u:Union)-[:CHILD]->(p:Person)
-         RETURN p.gedcomId AS personId, u.gedcomId AS unionId`
-      ),
+      session.run(CHILD_EDGES_QUERY),
     ])
 
     const persons: PersonNode[] = personResult.records.map(r => ({
@@ -208,7 +207,9 @@ async function main() {
   }
 }
 
-main().catch(err => {
-  console.error(err)
-  process.exit(1)
-})
+if (require.main === module) {
+  main().catch(err => {
+    console.error(err)
+    process.exit(1)
+  })
+}

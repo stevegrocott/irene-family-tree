@@ -19,6 +19,7 @@ beforeEach(() => {
 describe('revertChange — CREATE_PERSON', () => {
   it('deletes the Person, flips status=reverted, writes DELETE_PERSON audit', async () => {
     mockRead
+      // 1st read: fetch change row
       .mockResolvedValueOnce([
         {
           id: 'c1',
@@ -32,6 +33,7 @@ describe('revertChange — CREATE_PERSON', () => {
           appliedAt: '2026-01-01',
         },
       ])
+      // 2nd read: edge count for CREATE_PERSON block check
       .mockResolvedValueOnce([{ edges: 0 }])
 
     const result = await revertChange('c1', REVERTER)
@@ -57,6 +59,7 @@ describe('revertChange — CREATE_PERSON', () => {
 
   it('returns 409 has-relationships when person has UNION or CHILD edges', async () => {
     mockRead
+      // 1st read: fetch change row
       .mockResolvedValueOnce([
         {
           id: 'c1',
@@ -70,6 +73,7 @@ describe('revertChange — CREATE_PERSON', () => {
           appliedAt: '2026-01-01',
         },
       ])
+      // 2nd read: edge count for CREATE_PERSON block check
       .mockResolvedValueOnce([{ edges: 2 }])
 
     const result = await revertChange('c1', REVERTER)
@@ -88,6 +92,7 @@ describe('revertChange — CREATE_PERSON', () => {
 describe('revertChange — ADD_RELATIONSHIP', () => {
   it('spouse happy path: deletes union when unionEdges=2 and childEdges=0', async () => {
     mockRead
+      // 1st read: fetch change row
       .mockResolvedValueOnce([
         {
           id: 'c2',
@@ -101,6 +106,7 @@ describe('revertChange — ADD_RELATIONSHIP', () => {
           appliedAt: '2026-01-01',
         },
       ])
+      // 2nd read: union edge counts (spouse/child) for pristine check
       .mockResolvedValueOnce([{ unionEdges: 2, childEdges: 0 }])
 
     const result = await revertChange('c2', REVERTER)
@@ -118,6 +124,7 @@ describe('revertChange — ADD_RELATIONSHIP', () => {
 
   it('parent/child happy path: deletes union when unionEdges=1 and childEdges=1', async () => {
     mockRead
+      // 1st read: fetch change row
       .mockResolvedValueOnce([
         {
           id: 'c3',
@@ -131,6 +138,7 @@ describe('revertChange — ADD_RELATIONSHIP', () => {
           appliedAt: '2026-01-01',
         },
       ])
+      // 2nd read: union edge counts (spouse/child) for pristine check
       .mockResolvedValueOnce([{ unionEdges: 1, childEdges: 1 }])
 
     const result = await revertChange('c3', REVERTER)
@@ -144,6 +152,7 @@ describe('revertChange — ADD_RELATIONSHIP', () => {
 
   it('spouse block: returns 409 union-touched when union has a CHILD edge', async () => {
     mockRead
+      // 1st read: fetch change row
       .mockResolvedValueOnce([
         {
           id: 'c4',
@@ -157,6 +166,7 @@ describe('revertChange — ADD_RELATIONSHIP', () => {
           appliedAt: '2026-01-01',
         },
       ])
+      // 2nd read: union edge counts (spouse/child) for pristine check
       .mockResolvedValueOnce([{ unionEdges: 2, childEdges: 1 }])
 
     const result = await revertChange('c4', REVERTER)
@@ -173,6 +183,7 @@ describe('revertChange — ADD_RELATIONSHIP', () => {
 
   it('parent/child block: returns 409 union-touched when union has extra UNION or CHILD', async () => {
     mockRead
+      // 1st read: fetch change row
       .mockResolvedValueOnce([
         {
           id: 'c5',
@@ -186,6 +197,7 @@ describe('revertChange — ADD_RELATIONSHIP', () => {
           appliedAt: '2026-01-01',
         },
       ])
+      // 2nd read: union edge counts (spouse/child) for pristine check
       .mockResolvedValueOnce([{ unionEdges: 2, childEdges: 1 }])
 
     const result = await revertChange('c5', REVERTER)
@@ -204,6 +216,7 @@ describe('revertChange — ADD_RELATIONSHIP', () => {
 describe('revertChange — UPDATE_PERSON', () => {
   it('happy path: applies previousValue to Person, flips status=reverted', async () => {
     mockRead
+      // 1st read: fetch change row
       .mockResolvedValueOnce([
         {
           id: 'c6',
@@ -217,7 +230,7 @@ describe('revertChange — UPDATE_PERSON', () => {
           appliedAt: '2026-01-01',
         },
       ])
-      // later-change lookup returns nothing
+      // 2nd read: later-change lookup for field-updated-later conflict (empty = no later edits)
       .mockResolvedValueOnce([])
 
     const result = await revertChange('c6', REVERTER)
@@ -246,6 +259,7 @@ describe('revertChange — UPDATE_PERSON', () => {
 
   it('block: returns 409 field-updated-later when a later UPDATE_PERSON touches an overlapping field', async () => {
     mockRead
+      // 1st read: fetch change row
       .mockResolvedValueOnce([
         {
           id: 'c7',
@@ -259,6 +273,7 @@ describe('revertChange — UPDATE_PERSON', () => {
           appliedAt: '2026-01-01',
         },
       ])
+      // 2nd read: later-change lookup (one later UPDATE_PERSON touching 'name')
       .mockResolvedValueOnce([
         { id: 'c8', newValue: JSON.stringify({ name: 'Newer' }) },
       ])
@@ -274,10 +289,47 @@ describe('revertChange — UPDATE_PERSON', () => {
     )
     expect(mockWrite).not.toHaveBeenCalled()
   })
+
+  it('no false-positive block: later UPDATE_PERSON with only disallowed keys does not conflict', async () => {
+    mockRead
+      // 1st read: fetch change row
+      .mockResolvedValueOnce([
+        {
+          id: 'c10',
+          changeType: 'UPDATE_PERSON',
+          targetId: 'I001',
+          previousValue: JSON.stringify({ name: 'Old', birthYear: 1900 }),
+          newValue: JSON.stringify({ name: 'Mid' }),
+          status: 'live',
+          authorEmail: 'a@b',
+          authorName: 'A',
+          appliedAt: '2026-01-01',
+        },
+      ])
+      // 2nd read: later-change lookup returns a change whose newValue contains ONLY
+      // disallowed keys (not in ALLOWED_PATCH_FIELDS). The revert-keys set is filtered
+      // through ALLOWED_PATCH_FIELDS, so overlap must be empty and revert must succeed.
+      .mockResolvedValueOnce([
+        { id: 'c11', newValue: JSON.stringify({ bogusField: 'x', anotherJunk: 42 }) },
+      ])
+
+    const result = await revertChange('c10', REVERTER)
+
+    expect(result).toEqual({ ok: true })
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.stringContaining('SET p += $prevValue'),
+      expect.objectContaining({ targetId: 'I001' })
+    )
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.stringContaining("SET c.status = 'reverted'"),
+      expect.objectContaining({ id: 'c10' })
+    )
+  })
 })
 
 describe('revertChange — edge cases', () => {
   it('returns 404 when the change id does not match', async () => {
+    // 1st read: fetch change row (empty = not found)
     mockRead.mockResolvedValueOnce([])
 
     const result = await revertChange('missing', REVERTER)
@@ -287,6 +339,7 @@ describe('revertChange — edge cases', () => {
   })
 
   it('returns 409 Change is not live when status !== live', async () => {
+    // 1st read: fetch change row (already reverted)
     mockRead.mockResolvedValueOnce([
       {
         id: 'c9',

@@ -275,3 +275,35 @@ describe('revertChange — UPDATE_PERSON', () => {
     expect(mockWrite).not.toHaveBeenCalled()
   })
 })
+
+describe('revertChange — edge cases', () => {
+  it('returns 404 when the change id does not match', async () => {
+    mockRead.mockResolvedValueOnce([])
+
+    const result = await revertChange('missing', REVERTER)
+
+    expect(result).toEqual({ ok: false, status: 404, error: 'Change not found' })
+    expect(mockWrite).not.toHaveBeenCalled()
+  })
+
+  it('returns 409 Change is not live when status !== live', async () => {
+    mockRead.mockResolvedValueOnce([
+      {
+        id: 'c9',
+        changeType: 'CREATE_PERSON',
+        targetId: 'I001',
+        previousValue: null,
+        newValue: '{}',
+        status: 'reverted',
+        authorEmail: 'a@b',
+        authorName: 'A',
+        appliedAt: '2026-01-01',
+      },
+    ])
+
+    const result = await revertChange('c9', REVERTER)
+
+    expect(result).toEqual({ ok: false, status: 409, error: 'Change is not live' })
+    expect(mockWrite).not.toHaveBeenCalled()
+  })
+})

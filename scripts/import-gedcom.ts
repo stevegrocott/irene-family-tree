@@ -226,7 +226,7 @@ async function main() {
         tx.run(
           `UNWIND $rows AS row
            MATCH (p:Person {gedcomId: row.pid}), (u:Union {gedcomId: row.uid})
-           MERGE (p)-[:CHILD]->(u)`,
+           MERGE (u)-[:CHILD]->(p)`,
           { rows: childRows }
         )
       )

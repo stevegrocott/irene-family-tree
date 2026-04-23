@@ -19,7 +19,7 @@ async function main() {
 
   // Also check duplicate CHILD edges
   const r2 = await session.run(`
-    MATCH (p:Person)-[r:CHILD]->(u:Union)
+    MATCH (u:Union)-[r:CHILD]->(p:Person)
     WITH p, u, count(r) AS edgeCount
     WHERE edgeCount > 1
     RETURN p.name AS person, p.gedcomId AS id, u.gedcomId AS union, edgeCount

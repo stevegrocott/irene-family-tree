@@ -76,6 +76,16 @@ describe('POST /api/person/[id]/relationships', () => {
     )
   })
 
+  // AC#3 (issue #58): Ideally we would execute the Cypher against a live Neo4j
+  // instance and query the resulting graph to confirm the CHILD edge points
+  // Union → Person. That is not feasible here because `@/lib/neo4j` is mocked
+  // at the top of this file — `write` never touches a real database, so no
+  // post-write graph query can be issued. Asserting the Cypher string contains
+  // the canonical pattern `(u)-[:CHILD]->(child)` (see the two tests below)
+  // is the accepted substitute: it fails if the direction is reversed to
+  // `(child)-[:CHILD]->(u)` (the PR #57 regression) while staying within the
+  // unit-test boundary. Real-graph direction verification belongs in an
+  // integration/E2E suite running against a live Neo4j.
   it('creates a parent relationship with UNION for target and CHILD for id', async () => {
     mockWrite.mockResolvedValue([{ unionId: '@F12345678@' }])
 
@@ -120,6 +130,27 @@ describe('POST /api/person/[id]/relationships', () => {
     const response = await POST(makeRequest({ type: 'spouse', targetId: 'I002' }), makeParams('I001'))
 
     expect(response.status).toBe(500)
+  })
+
+  it('returns 404 when write returns no rows (person not found)', async () => {
+    mockWrite.mockResolvedValue([])
+
+    const response = await POST(makeRequest({ type: 'spouse', targetId: 'I002' }), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(404)
+    expect(body.error).toBe('Person not found')
+  })
+
+  it('returns 404 when write returns a row with a null unionId (person not found)', async () => {
+    mockWrite.mockResolvedValue([{ unionId: null as unknown as string, created: false }])
+
+    const response = await POST(makeRequest({ type: 'spouse', targetId: 'I002' }), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(404)
+    expect(body.error).toBe('Person not found')
+    expect(mockRecordChange).not.toHaveBeenCalled()
   })
 
   it('calls recordChange with relationship details and session author after successful POST', async () => {

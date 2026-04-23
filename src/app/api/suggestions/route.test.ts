@@ -55,6 +55,17 @@ describe('POST /api/suggestions', () => {
     expect(body).toEqual({ error: 'changeType and payload are required' })
   })
 
+  it('returns 400 when changeType is not in the allowed enum', async () => {
+    const response = await POST(
+      makeRequest({ changeType: 'DELETE_PERSON', payload: { id: '123' } })
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body).toEqual({ error: 'Invalid changeType' })
+    expect(mockWrite).not.toHaveBeenCalled()
+  })
+
   it('returns 400 when body is invalid JSON', async () => {
     const request = new Request('http://localhost/api/suggestions', {
       method: 'POST',

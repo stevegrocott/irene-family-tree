@@ -749,7 +749,7 @@ export function PersonDrawer({
               + Add notes
             </button>
           )}
-          {myChanges && Array.isArray(myChanges.updateChanges) && myChanges.updateChanges.length > 0 && (
+          {myChanges && myChanges.updateChanges.length > 0 && (
             <section
               data-testid="person-drawer-your-edits"
               className="pt-3 mt-3 border-t border-white/10 space-y-2"

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { mockPersonsAndTree, mockSignedInSession } from './helpers/revert-mocks'
 
 /**
  * E2E tests for the PersonDrawer "Your edits to this person" list in edit mode
@@ -12,12 +13,6 @@ import { test, expect } from '@playwright/test'
  */
 
 // ─── Shared fixtures ────────────────────────────────────────────────────────
-
-const signedInUser = {
-  name: 'E2E Test User',
-  email: 'e2e@example.com',
-  image: null,
-}
 
 const mockDonald = {
   gedcomId: '@IDONALD@',
@@ -93,40 +88,12 @@ const myChangesOneEditAfterRevert = {
   ],
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+const donaldPersonsList = [
+  { gedcomId: '@IDONALD@', name: 'Donald Grocott', sex: 'M', birthYear: '1920', deathYear: null, birthPlace: 'Melbourne, Victoria' },
+]
 
-async function mockSignedInSession(page: import('@playwright/test').Page) {
-  await page.route(/\/api\/auth\/session\b/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        user: signedInUser,
-        expires: '2099-01-01T00:00:00.000Z',
-      }),
-    })
-  )
-}
-
-async function mockPersonsAndTree(page: import('@playwright/test').Page) {
-  await page.route(/\/api\/persons/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify([
-        { gedcomId: '@IDONALD@', name: 'Donald Grocott', sex: 'M', birthYear: '1920', deathYear: null, birthPlace: 'Melbourne, Victoria' },
-      ]),
-    })
-  )
-
-  await page.route(/\/api\/tree\//, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(donaldTreeResponse),
-    })
-  )
-}
+const mockDonaldCanvas = (page: import('@playwright/test').Page) =>
+  mockPersonsAndTree(page, donaldPersonsList, donaldTreeResponse)
 
 async function openEditMode(page: import('@playwright/test').Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' })
@@ -146,7 +113,7 @@ async function openEditMode(page: import('@playwright/test').Page) {
 test.describe('Revert: "Your edits" list in edit mode', () => {
   test('section hidden when no updateChanges', async ({ page }) => {
     await mockSignedInSession(page)
-    await mockPersonsAndTree(page)
+    await mockDonaldCanvas(page)
 
     await page.route(/\/api\/person\/[^/]+\/my-changes/, (route) =>
       route.fulfill({
@@ -170,7 +137,7 @@ test.describe('Revert: "Your edits" list in edit mode', () => {
 
   test('section shown with row per updateChange: keys + ISO timestamp + Revert button', async ({ page }) => {
     await mockSignedInSession(page)
-    await mockPersonsAndTree(page)
+    await mockDonaldCanvas(page)
 
     await page.route(/\/api\/person\/[^/]+\/my-changes/, (route) =>
       route.fulfill({
@@ -211,7 +178,7 @@ test.describe('Revert: "Your edits" list in edit mode', () => {
     let revertPostCount = 0
 
     await mockSignedInSession(page)
-    await mockPersonsAndTree(page)
+    await mockDonaldCanvas(page)
 
     await page.route(/\/api\/person\/[^/]+\/my-changes/, (route) =>
       route.fulfill({
@@ -260,7 +227,7 @@ test.describe('Revert: "Your edits" list in edit mode', () => {
 
   test('409 surfaces conflictingChange.detail inline', async ({ page }) => {
     await mockSignedInSession(page)
-    await mockPersonsAndTree(page)
+    await mockDonaldCanvas(page)
 
     await page.route(/\/api\/person\/[^/]+\/my-changes/, (route) =>
       route.fulfill({

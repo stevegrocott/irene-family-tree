@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { mockPersonsAndTree, mockSignedInSession } from './helpers/revert-mocks'
 
 /**
  * E2E tests for the PersonDrawer "Delete this person" button (Task 11).
@@ -16,12 +17,6 @@ import { test, expect } from '@playwright/test'
  */
 
 // ─── Shared fixtures ────────────────────────────────────────────────────────
-
-const signedInUser = {
-  name: 'E2E Test User',
-  email: 'e2e@example.com',
-  image: null,
-}
 
 const mockAlice = {
   gedcomId: '@IALICE@',
@@ -80,47 +75,19 @@ const myChangesEmpty = {
   updateChanges: [],
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+const alicePersonsList = [
+  {
+    gedcomId: '@IALICE@',
+    name: 'Alice NewPerson',
+    sex: 'F',
+    birthYear: '1990',
+    deathYear: null,
+    birthPlace: null,
+  },
+]
 
-async function mockSignedInSession(page: import('@playwright/test').Page) {
-  await page.route(/\/api\/auth\/session\b/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        user: signedInUser,
-        expires: '2099-01-01T00:00:00.000Z',
-      }),
-    })
-  )
-}
-
-async function mockPersonsAndTree(page: import('@playwright/test').Page) {
-  await page.route(/\/api\/persons/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify([
-        {
-          gedcomId: '@IALICE@',
-          name: 'Alice NewPerson',
-          sex: 'F',
-          birthYear: '1990',
-          deathYear: null,
-          birthPlace: null,
-        },
-      ]),
-    })
-  )
-
-  await page.route(/\/api\/tree\//, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(aliceTreeResponse),
-    })
-  )
-}
+const mockAliceCanvas = (page: import('@playwright/test').Page) =>
+  mockPersonsAndTree(page, alicePersonsList, aliceTreeResponse)
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -129,7 +96,7 @@ test.describe('Revert: delete-person button', () => {
     let revertPostCount = 0
 
     await mockSignedInSession(page)
-    await mockPersonsAndTree(page)
+    await mockAliceCanvas(page)
 
     await page.route(/\/api\/person\/[^/]+\/my-changes/, (route) =>
       route.fulfill({
@@ -184,7 +151,7 @@ test.describe('Revert: delete-person button', () => {
 
   test('button visible but disabled with tooltip when person has relationships', async ({ page }) => {
     await mockSignedInSession(page)
-    await mockPersonsAndTree(page)
+    await mockAliceCanvas(page)
 
     const aliceWithParent = {
       ...mockAlice,
@@ -234,7 +201,7 @@ test.describe('Revert: delete-person button', () => {
 
   test('button absent when createChange is null', async ({ page }) => {
     await mockSignedInSession(page)
-    await mockPersonsAndTree(page)
+    await mockAliceCanvas(page)
 
     await page.route(/\/api\/person\/[^/]+\/my-changes/, (route) =>
       route.fulfill({
@@ -268,7 +235,7 @@ test.describe('Revert: delete-person button', () => {
 
   test('409 from revert endpoint surfaces conflictingChange.detail inline in the drawer', async ({ page }) => {
     await mockSignedInSession(page)
-    await mockPersonsAndTree(page)
+    await mockAliceCanvas(page)
 
     await page.route(/\/api\/person\/[^/]+\/my-changes/, (route) =>
       route.fulfill({

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { mockPersonsAndTree, mockSignedInSession } from './helpers/revert-mocks'
 
 /**
  * E2E tests for the PersonDrawer per-marriage × remove button (Task 12).
@@ -12,12 +13,6 @@ import { test, expect } from '@playwright/test'
  */
 
 // ─── Shared fixtures ────────────────────────────────────────────────────────
-
-const signedInUser = {
-  name: 'E2E Test User',
-  email: 'e2e@example.com',
-  image: null,
-}
 
 const mockDonald = {
   gedcomId: '@IDONALD@',
@@ -108,47 +103,19 @@ const myChangesEmptyAfterRevert = {
   updateChanges: [],
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+const donaldPersonsList = [
+  { gedcomId: '@IDONALD@', name: 'Donald Grocott', sex: 'M', birthYear: '1920', deathYear: null, birthPlace: null },
+]
 
-async function mockSignedInSession(page: import('@playwright/test').Page) {
-  await page.route(/\/api\/auth\/session\b/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        user: signedInUser,
-        expires: '2099-01-01T00:00:00.000Z',
-      }),
-    })
-  )
-}
-
-async function mockPersonsAndTree(page: import('@playwright/test').Page) {
-  await page.route(/\/api\/persons/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify([
-        { gedcomId: '@IDONALD@', name: 'Donald Grocott', sex: 'M', birthYear: '1920', deathYear: null, birthPlace: null },
-      ]),
-    })
-  )
-
-  await page.route(/\/api\/tree\//, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(donaldTreeResponse),
-    })
-  )
-}
+const mockDonaldCanvas = (page: import('@playwright/test').Page) =>
+  mockPersonsAndTree(page, donaldPersonsList, donaldTreeResponse)
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 test.describe('Revert: per-marriage remove (×) button', () => {
   test('× visible only on marriages whose unionId appears in relationshipChanges', async ({ page }) => {
     await mockSignedInSession(page)
-    await mockPersonsAndTree(page)
+    await mockDonaldCanvas(page)
 
     await page.route(/\/api\/person\/[^/]+\/my-changes/, (route) =>
       route.fulfill({
@@ -187,7 +154,7 @@ test.describe('Revert: per-marriage remove (×) button', () => {
     let myChangesCallCount = 0
 
     await mockSignedInSession(page)
-    await mockPersonsAndTree(page)
+    await mockDonaldCanvas(page)
 
     await page.route(/\/api\/person\/[^/]+\/my-changes/, (route) => {
       myChangesCallCount += 1
@@ -249,7 +216,7 @@ test.describe('Revert: per-marriage remove (×) button', () => {
 
   test('mocked 409 surfaces conflictingChange.detail inline', async ({ page }) => {
     await mockSignedInSession(page)
-    await mockPersonsAndTree(page)
+    await mockDonaldCanvas(page)
 
     await page.route(/\/api\/person\/[^/]+\/my-changes/, (route) =>
       route.fulfill({

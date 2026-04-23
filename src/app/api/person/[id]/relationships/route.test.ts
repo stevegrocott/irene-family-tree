@@ -139,7 +139,7 @@ describe('POST /api/person/[id]/relationships', () => {
     const body = await response.json()
 
     expect(response.status).toBe(404)
-    expect(body.error).toBe('Person not found')
+    expect(body).toEqual({ error: 'Person not found' })
   })
 
   it('returns 404 when write returns a row with a null unionId (person not found)', async () => {
@@ -152,6 +152,17 @@ describe('POST /api/person/[id]/relationships', () => {
     expect(body.error).toBe('Person not found')
     expect(mockRecordChange).not.toHaveBeenCalled()
   })
+
+  it.each(['spouse', 'parent', 'child'] as const)(
+    'returns 404 when write returns null unionId (%s relationship)',
+    async (type) => {
+      mockWrite.mockResolvedValue([{ unionId: null as unknown as string }])
+
+      const response = await POST(makeRequest({ type, targetId: 'I002' }), makeParams('I001'))
+
+      expect(response.status).toBe(404)
+    }
+  )
 
   it('calls recordChange with relationship details and session author after successful POST', async () => {
     mockWrite.mockResolvedValue([{ unionId: '@F12345678@' }])

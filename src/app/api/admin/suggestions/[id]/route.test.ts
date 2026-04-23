@@ -249,6 +249,38 @@ describe('POST /api/admin/suggestions/[id]', () => {
     )
   })
 
+  it('persists declineReason on the PendingChange node when a reason is provided', async () => {
+    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockRead.mockResolvedValue([pendingSuggestion])
+    mockWrite.mockResolvedValue([])
+
+    const response = await POST(
+      makeRequest({ action: 'decline', reason: 'Insufficient evidence' }),
+      makeParams('sg-1')
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual({ success: true })
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.stringContaining('c.declineReason = $reason'),
+      { id: 'sg-1', reason: 'Insufficient evidence' }
+    )
+  })
+
+  it('passes declineReason as null when no reason is provided', async () => {
+    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockRead.mockResolvedValue([pendingSuggestion])
+    mockWrite.mockResolvedValue([])
+
+    await POST(makeRequest({ action: 'decline' }), makeParams('sg-1'))
+
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.stringContaining('c.declineReason = $reason'),
+      { id: 'sg-1', reason: null }
+    )
+  })
+
   it('does not modify the person record when declining', async () => {
     mockAuth.mockResolvedValue(ADMIN_SESSION as never)
     mockRead.mockResolvedValue([{

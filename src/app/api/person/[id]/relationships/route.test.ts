@@ -139,7 +139,7 @@ describe('POST /api/person/[id]/relationships', () => {
     const body = await response.json()
 
     expect(response.status).toBe(404)
-    expect(body.error).toBe('Person not found')
+    expect(body).toEqual({ error: 'Person not found' })
   })
 
   it('returns 404 when write returns a row with a null unionId (person not found)', async () => {

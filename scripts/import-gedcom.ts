@@ -19,7 +19,25 @@ import * as path from 'path'
 import { parse } from 'parse-gedcom'
 import neo4j from 'neo4j-driver'
 import { loadLocalEnv, validateRequiredEnv } from '../src/lib/env'
-import { GEDCOM_TYPES, extractYear } from '../src/lib/gedcom'
+
+const GEDCOM_TYPES = {
+  INDIVIDUAL: 'INDI',
+  FAMILY: 'FAM',
+  NAME: 'NAME',
+  BIRTH: 'BIRT',
+  DEATH: 'DEAT',
+  SEX: 'SEX',
+  DATE: 'DATE',
+  GIVEN_NAME: 'GIVN',
+  SURNAME: 'SURN',
+  HUSBAND: 'HUSB',
+  WIFE: 'WIFE',
+  CHILD: 'CHIL',
+  PLACE: 'PLAC',
+  OCCUPATION: 'OCCU',
+  NOTE: 'NOTE',
+  MARRIAGE: 'MARR',
+} as const
 
 loadLocalEnv()
 
@@ -54,25 +72,36 @@ interface GedNode {
 }
 
 /**
- * Finds the first child node with the specified GEDCOM type.
+ * Finds the first child node with the specified type.
  *
- * @param {GedNode[]} nodes - Array of nodes to search
- * @param {string} type - GEDCOM tag type to find (e.g. 'NAME', 'BIRT', 'DEAT')
- * @returns {GedNode | undefined} The first matching node, or undefined if not found
+ * @param {GedNode[]} nodes - Array of GEDCOM nodes to search
+ * @param {string} type - GEDCOM record type to find (e.g., 'NAME', 'BIRT')
+ * @returns {GedNode | undefined} The first node matching the type, or undefined if not found
  */
 function findChild(nodes: GedNode[], type: string): GedNode | undefined {
   return nodes.find(n => n.type === type)
 }
 
 /**
- * Extracts the value from the first child node matching the specified type.
+ * Extracts the value of a child node with the specified type.
+ * Returns an empty string if the node or its value is not found.
  *
- * @param {GedNode[]} nodes - Array of nodes to search
- * @param {string} type - GEDCOM tag type to find
- * @returns {string} The node's value, or empty string if not found
+ * @param {GedNode[]} nodes - Array of GEDCOM nodes to search
+ * @param {string} type - GEDCOM record type to find (e.g., 'NAME', 'BIRT')
+ * @returns {string} The value of the matching node, or empty string if not found
  */
 function childValue(nodes: GedNode[], type: string): string {
   return findChild(nodes, type)?.value ?? ''
+}
+
+/**
+ * Extracts a four-digit year from a GEDCOM date string.
+ *
+ * @param {string} dateString - Raw GEDCOM date value (e.g. 'ABT 1900', '15 JAN 1900')
+ * @returns {string | null} The first four-digit year found, or null if none present
+ */
+function extractYear(dateString: string): string | null {
+  return dateString.match(/\d{4}/)?.[0] ?? null
 }
 
 /**
@@ -102,11 +131,10 @@ async function main() {
   const session = driver.session()
 
   try {
-    await Promise.all([
-      session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (p:Person) REQUIRE p.gedcomId IS UNIQUE'),
-      session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (u:Union) REQUIRE u.gedcomId IS UNIQUE'),
-    ])
+    await session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (p:Person) REQUIRE p.gedcomId IS UNIQUE')
+    await session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (u:Union) REQUIRE u.gedcomId IS UNIQUE')
 
+    // Batch-build person rows
     const personRows: {
       gedcomId: string
       name: string
@@ -165,6 +193,7 @@ async function main() {
       )
     })
 
+    // Batch-build union rows and relationship rows
     const families = root.children.filter(r => r.type === GEDCOM_TYPES.FAMILY)
     const unionRows: { gedcomId: string; marriageYear: string | null; marriagePlace: string | null }[] = []
     const spouseRows: { pid: string; uid: string }[] = []
@@ -180,11 +209,11 @@ async function main() {
       const marriageYear = extractYear(childValue(marrNode?.children ?? [], GEDCOM_TYPES.DATE))
       const marriagePlace = childValue(marrNode?.children ?? [], GEDCOM_TYPES.PLACE) || null
       unionRows.push({ gedcomId: uid, marriageYear, marriagePlace })
-      const husb = findChild(fam.children, GEDCOM_TYPES.HUSB)?.data?.pointer
+      const husb = findChild(fam.children, GEDCOM_TYPES.HUSBAND)?.data?.pointer
       const wife = findChild(fam.children, GEDCOM_TYPES.WIFE)?.data?.pointer
       if (husb) spouseRows.push({ pid: husb, uid })
       if (wife) spouseRows.push({ pid: wife, uid })
-      for (const chil of fam.children.filter(n => n.type === GEDCOM_TYPES.CHIL)) {
+      for (const chil of fam.children.filter(n => n.type === GEDCOM_TYPES.CHILD)) {
         if (chil.data?.pointer) childRows.push({ pid: chil.data.pointer, uid })
       }
     }
@@ -199,30 +228,40 @@ async function main() {
       )
     )
 
-    await session.executeWrite(tx =>
-      tx.run(
-        `UNWIND $rows AS row
-         MATCH (p:Person {gedcomId: row.pid}), (u:Union {gedcomId: row.uid})
-         MERGE (p)-[:UNION]->(u)`,
-        { rows: spouseRows }
+    if (spouseRows.length > 0) {
+      await session.executeWrite(tx =>
+        tx.run(
+          `UNWIND $rows AS row
+           MATCH (p:Person {gedcomId: row.pid}), (u:Union {gedcomId: row.uid})
+           MERGE (p)-[:UNION]->(u)`,
+          { rows: spouseRows }
+        )
       )
-    )
+    }
 
-    await session.executeWrite(tx =>
-      tx.run(
-        `UNWIND $rows AS row
-         MATCH (p:Person {gedcomId: row.pid}), (u:Union {gedcomId: row.uid})
-         MERGE (p)-[:CHILD]->(u)`,
-        { rows: childRows }
+    if (childRows.length > 0) {
+      await session.executeWrite(tx =>
+        tx.run(
+          `UNWIND $rows AS row
+           MATCH (p:Person {gedcomId: row.pid}), (u:Union {gedcomId: row.uid})
+           MERGE (p)-[:CHILD]->(u)`,
+          { rows: childRows }
+        )
       )
-    )
+    }
 
-    console.log(`Imported ${personRows.length} people and ${unionRows.length} unions`)
+    const personResult = await session.run('MATCH (p:Person) RETURN count(p) AS n')
+    const unionResult = await session.run('MATCH (u:Union) RETURN count(u) AS n')
+    const personCount = personResult.records[0].get('n')
+    const unionCount = unionResult.records[0].get('n')
+    console.log(`Imported ${personCount} people and ${unionCount} unions`)
   } finally {
     await session.close()
     await driver.close()
   }
 }
+
+// Re-import is idempotent: MERGE preserves app-created nodes (Suggestions, etc.).
 
 main().catch(err => {
   console.error(err)

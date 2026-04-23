@@ -19,25 +19,7 @@ import * as path from 'path'
 import { parse } from 'parse-gedcom'
 import neo4j from 'neo4j-driver'
 import { loadLocalEnv, validateRequiredEnv } from '../src/lib/env'
-
-const GEDCOM_TYPES = {
-  INDIVIDUAL: 'INDI',
-  FAMILY: 'FAM',
-  NAME: 'NAME',
-  BIRTH: 'BIRT',
-  DEATH: 'DEAT',
-  SEX: 'SEX',
-  DATE: 'DATE',
-  GIVEN_NAME: 'GIVN',
-  SURNAME: 'SURN',
-  HUSBAND: 'HUSB',
-  WIFE: 'WIFE',
-  CHILD: 'CHIL',
-  PLACE: 'PLAC',
-  OCCUPATION: 'OCCU',
-  NOTE: 'NOTE',
-  MARRIAGE: 'MARR',
-} as const
+import { GEDCOM_TYPES } from '../src/lib/gedcom'
 
 loadLocalEnv()
 
@@ -209,11 +191,11 @@ async function main() {
       const marriageYear = extractYear(childValue(marrNode?.children ?? [], GEDCOM_TYPES.DATE))
       const marriagePlace = childValue(marrNode?.children ?? [], GEDCOM_TYPES.PLACE) || null
       unionRows.push({ gedcomId: uid, marriageYear, marriagePlace })
-      const husb = findChild(fam.children, GEDCOM_TYPES.HUSBAND)?.data?.pointer
+      const husb = findChild(fam.children, GEDCOM_TYPES.HUSB)?.data?.pointer
       const wife = findChild(fam.children, GEDCOM_TYPES.WIFE)?.data?.pointer
       if (husb) spouseRows.push({ pid: husb, uid })
       if (wife) spouseRows.push({ pid: wife, uid })
-      for (const chil of fam.children.filter(n => n.type === GEDCOM_TYPES.CHILD)) {
+      for (const chil of fam.children.filter(n => n.type === GEDCOM_TYPES.CHIL)) {
         if (chil.data?.pointer) childRows.push({ pid: chil.data.pointer, uid })
       }
     }

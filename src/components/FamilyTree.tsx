@@ -288,14 +288,21 @@ export function PersonDrawer({
   }, [person.gedcomId, detailVersion])
 
   useEffect(() => {
+    setMyChanges(null)
+    const ctrl = new AbortController()
     let cancelled = false
-    fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/my-changes`)
+    fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/my-changes`, { signal: ctrl.signal })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (cancelled || !data) return
         // Only accept responses that match the expected shape; guards against
         // unmocked test environments that might serve arbitrary JSON here.
-        if (Array.isArray(data.relationshipChanges) && Array.isArray(data.updateChanges)) {
+        if (
+          Array.isArray(data.relationshipChanges) &&
+          Array.isArray(data.updateChanges) &&
+          (data.createChange === null ||
+            (typeof data.createChange === 'object' && typeof data.createChange.id === 'string'))
+        ) {
           setMyChanges(data)
         }
       })
@@ -304,7 +311,7 @@ export function PersonDrawer({
           console.error('Failed to fetch my-changes', err)
         }
       })
-    return () => { cancelled = true }
+    return () => { cancelled = true; ctrl.abort() }
   }, [person.gedcomId, detailVersion])
 
   /**
@@ -429,16 +436,15 @@ export function PersonDrawer({
   }
 
   /**
-   * True when the detail record has any relationships (parents, siblings, marriages, or
-   * children within a marriage). Used to disable the delete-person button because a
-   * `CREATE_PERSON` revert is only safe when the Person has no UNION/CHILD edges.
+   * True when the detail record has direct edges (parents or marriages) on the Person
+   * node. Used to disable the delete-person button because a `CREATE_PERSON` revert is
+   * only safe when the Person has no UNION/CHILD edges. Siblings are intentionally
+   * omitted: they are derived from shared parents, not direct edges on this node, so
+   * they don't block `DETACH DELETE`. The server guard (edge count on the node) is the
+   * source of truth; this local check just pre-disables for obvious cases.
    */
   const detailHasRelationships = !!(
-    detail && (
-      detail.parents.length > 0 ||
-      detail.siblings.length > 0 ||
-      detail.marriages.length > 0
-    )
+    detail && (detail.parents.length > 0 || detail.marriages.length > 0)
   )
 
   /**
@@ -448,15 +454,21 @@ export function PersonDrawer({
    * On 409 surfaces the server's conflict detail inline via `actionError`.
    */
   const handleDeletePerson = async () => {
+    if (isSubmitting) return
     if (!myChanges?.createChange) return
     if (typeof window !== 'undefined' && !window.confirm(`Delete ${person.name || 'this person'}? This cannot be undone.`)) return
-    const result = await revertChangeRequest(myChanges.createChange.id)
-    if (result.ok) {
-      setMyChanges(null)
-      onSelectRoot?.(person.gedcomId) // nudges tree refetch in the parent canvas
-      onClose()
-    } else {
-      setActionError(result.detail)
+    setIsSubmitting(true)
+    try {
+      const result = await revertChangeRequest(myChanges.createChange.id)
+      if (result.ok) {
+        setMyChanges(null)
+        onSelectRoot?.(person.gedcomId) // nudges tree refetch in the parent canvas
+        onClose()
+      } else {
+        setActionError(result.detail)
+      }
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -468,13 +480,19 @@ export function PersonDrawer({
    * @param {string} changeId - id of the `ADD_RELATIONSHIP` Change to revert
    */
   const handleRemoveMarriage = async (changeId: string) => {
+    if (isSubmitting) return
     if (typeof window !== 'undefined' && !window.confirm('Remove this marriage? This cannot be undone.')) return
-    const result = await revertChangeRequest(changeId)
-    if (result.ok) {
-      onSelectRoot?.(person.gedcomId)
-      setDetailVersion(v => v + 1)
-    } else {
-      setActionError(result.detail)
+    setIsSubmitting(true)
+    try {
+      const result = await revertChangeRequest(changeId)
+      if (result.ok) {
+        onSelectRoot?.(person.gedcomId)
+        setDetailVersion(v => v + 1)
+      } else {
+        setActionError(result.detail)
+      }
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -486,13 +504,19 @@ export function PersonDrawer({
    * @param {string} changeId - id of the `UPDATE_PERSON` Change to revert
    */
   const handleRevertEdit = async (changeId: string) => {
+    if (isSubmitting) return
     if (typeof window !== 'undefined' && !window.confirm('Revert this edit? The previous values will be restored.')) return
-    const result = await revertChangeRequest(changeId)
-    if (result.ok) {
-      onSelectRoot?.(person.gedcomId)
-      setDetailVersion(v => v + 1)
-    } else {
-      setActionError(result.detail)
+    setIsSubmitting(true)
+    try {
+      const result = await revertChangeRequest(changeId)
+      if (result.ok) {
+        onSelectRoot?.(person.gedcomId)
+        setDetailVersion(v => v + 1)
+      } else {
+        setActionError(result.detail)
+      }
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -752,7 +776,8 @@ export function PersonDrawer({
                       type="button"
                       data-testid={`your-edit-revert-${c.id}`}
                       onClick={() => handleRevertEdit(c.id)}
-                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-white/80 transition-colors"
+                      disabled={isSubmitting}
+                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-white/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Revert
                     </button>
@@ -762,7 +787,7 @@ export function PersonDrawer({
             </section>
           )}
           {actionError && (
-            <p className="text-red-400 text-xs">{actionError}</p>
+            <p data-testid="person-drawer-edit-action-error" className="text-red-400 text-xs">{actionError}</p>
           )}
           <div className="flex gap-2">
             <button
@@ -995,7 +1020,8 @@ export function PersonDrawer({
                               aria-label="Remove marriage"
                               title="Remove marriage"
                               onClick={() => handleRemoveMarriage(removableChange.id)}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg text-white/40 hover:text-red-400 hover:bg-white/10 transition-colors text-sm leading-none flex-shrink-0"
+                              disabled={isSubmitting}
+                              className="w-6 h-6 flex items-center justify-center rounded-lg text-white/40 hover:text-red-400 hover:bg-white/10 transition-colors text-sm leading-none flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               ×
                             </button>
@@ -1045,7 +1071,7 @@ export function PersonDrawer({
           <button
             data-testid="person-drawer-delete"
             onClick={handleDeletePerson}
-            disabled={detailHasRelationships}
+            disabled={detailHasRelationships || isSubmitting}
             title={detailHasRelationships ? 'Has relationships — contact an admin' : undefined}
             aria-label={`Delete ${person.name || 'person'}`}
             className="w-full py-2 rounded-xl bg-red-500/80 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-500/80"

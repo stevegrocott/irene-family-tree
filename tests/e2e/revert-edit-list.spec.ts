@@ -298,7 +298,7 @@ test.describe('Revert: "Your edits" list in edit mode', () => {
     await page.getByTestId('your-edit-revert-change-upd-1').click()
 
     // The edit form stays visible; actionError renders below the inputs.
-    await expect(page.getByTestId('person-drawer-edit-form'))
+    await expect(page.getByTestId('person-drawer-edit-action-error'))
       .toContainText('birthPlace was updated by a later change', { timeout: 5_000 })
   })
 })

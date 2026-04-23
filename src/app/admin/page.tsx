@@ -12,6 +12,7 @@ interface PendingChangeRow {
   authorName: string
   authorEmail: string
   payload: string | null
+  personName: string | null
   status: string
   createdAt: string | null
 }
@@ -32,11 +33,13 @@ export default async function AdminPage() {
   try {
     const rows = await read<PendingChangeRow>(
       `MATCH (c:PendingChange {status: 'pending'})
+       OPTIONAL MATCH (p:Person {gedcomId: c.targetId})
        RETURN c.id          AS id,
               c.changeType  AS changeType,
               c.authorName  AS authorName,
               c.authorEmail AS authorEmail,
               c.payload     AS payload,
+              coalesce(p.name, c.targetId, '') AS personName,
               c.status      AS status,
               c.createdAt   AS createdAt
        ORDER BY c.createdAt DESC
@@ -50,7 +53,7 @@ export default async function AdminPage() {
         id: row.id,
         changeType: row.changeType as Change['changeType'],
         targetId: targetId ?? '',
-        personName: '',
+        personName: row.personName ?? '',
         authorName: row.authorName,
         authorEmail: row.authorEmail,
         previousValue: null,

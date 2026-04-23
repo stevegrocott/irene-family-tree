@@ -1,4 +1,4 @@
-import { buildNoteLines } from './gedcom'
+import { buildIndiRecord, buildNoteLines, type PersonNode } from './gedcom'
 
 describe('buildNoteLines', () => {
   it('emits a single NOTE line when the value has no newlines', () => {
@@ -44,5 +44,43 @@ describe('buildNoteLines', () => {
       '1 NOTE contact @@alice',
       '2 CONT ping @@bob',
     ])
+  })
+})
+
+describe('buildIndiRecord', () => {
+  const basePerson: PersonNode = {
+    gedcomId: '@I1@',
+    name: 'John Doe',
+    sex: 'M',
+    birthYear: null,
+    deathYear: null,
+    birthPlace: null,
+    deathPlace: null,
+    occupation: null,
+    notes: null,
+  }
+
+  it('emits both FAMS and FAMC back-pointers when the person is a spouse in one union and a child in another', () => {
+    const record = buildIndiRecord(basePerson, ['@U1@'], ['@U2@'])
+    const lines = record.split('\n')
+
+    expect(lines).toContain('1 FAMS @U1@')
+    expect(lines).toContain('1 FAMC @U2@')
+  })
+
+  it('emits one FAMS per union the person is a spouse in and one FAMC per union the person is a child in', () => {
+    const record = buildIndiRecord(basePerson, ['@U1@', '@U3@'], ['@U2@'])
+    const lines = record.split('\n')
+
+    expect(lines.filter(l => l === '1 FAMS @U1@')).toHaveLength(1)
+    expect(lines.filter(l => l === '1 FAMS @U3@')).toHaveLength(1)
+    expect(lines.filter(l => l === '1 FAMC @U2@')).toHaveLength(1)
+  })
+
+  it('omits FAMS and FAMC lines when the person has no union memberships', () => {
+    const record = buildIndiRecord(basePerson, [], [])
+
+    expect(record).not.toMatch(/^1 FAMS /m)
+    expect(record).not.toMatch(/^1 FAMC /m)
   })
 })

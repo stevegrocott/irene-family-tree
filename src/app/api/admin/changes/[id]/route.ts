@@ -1,21 +1,13 @@
 import { NextResponse } from 'next/server'
 import { read, write } from '@/lib/neo4j'
 import { auth } from '@/auth'
-import { ALLOWED_PATCH_FIELDS } from '@/lib/patches'
+import { revertChange } from '@/lib/revert'
 
 export const runtime = 'nodejs'
 
 interface ChangeRow {
   id: string
-  targetId: string
-  previousValue: string | null
   status: string
-}
-
-function safeParseJson(val: unknown): Record<string, unknown> | null {
-  if (val === null || val === undefined) return null
-  if (typeof val === 'object') return val as Record<string, unknown>
-  try { return JSON.parse(val as string) } catch { return null }
 }
 
 export async function POST(
@@ -48,8 +40,7 @@ export async function POST(
   try {
     rows = await read<ChangeRow>(
       `MATCH (c:Change {id: $id})
-       RETURN c.id AS id, c.targetId AS targetId,
-              c.previousValue AS previousValue, c.status AS status`,
+       RETURN c.id AS id, c.status AS status`,
       { id }
     )
   } catch (err) {
@@ -66,35 +57,27 @@ export async function POST(
     return NextResponse.json({ error: 'Change is not pending review' }, { status: 409 })
   }
 
-  try {
-    if (action === 'keep') {
+  if (action === 'keep') {
+    try {
       await write(
         `MATCH (c:Change {id: $id}) SET c.status = 'kept'`,
         { id }
       )
-    } else if (change.previousValue) {
-      const rawPrev = safeParseJson(change.previousValue) ?? {}
-      const prevValue: Record<string, unknown> = {}
-      for (const key of ALLOWED_PATCH_FIELDS) {
-        if (key in rawPrev) prevValue[key] = rawPrev[key]
-      }
-      await write(
-        `MATCH (c:Change {id: $id})
-         MATCH (p:Person {gedcomId: c.targetId})
-         SET p += $prevValue
-         SET c.status = 'reverted'`,
-        { id, prevValue }
-      )
-    } else {
-      await write(
-        `MATCH (c:Change {id: $id}) SET c.status = 'reverted'`,
-        { id }
-      )
+    } catch (err) {
+      console.error('Neo4j write failed', err)
+      return NextResponse.json({ error: 'Failed to update graph database' }, { status: 500 })
     }
-  } catch (err) {
-    console.error('Neo4j write failed', err)
-    return NextResponse.json({ error: 'Failed to update graph database' }, { status: 500 })
+    return NextResponse.json({ success: true })
   }
 
-  return NextResponse.json({ success: true })
+  const email = session.user.email ?? 'anonymous'
+  const name = session.user.name ?? email
+  const result = await revertChange(id, { email, name })
+  if (result.ok) {
+    return NextResponse.json({ success: true })
+  }
+  return NextResponse.json(
+    { error: result.error, conflictingChange: result.conflict },
+    { status: result.status }
+  )
 }

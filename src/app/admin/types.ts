@@ -1,6 +1,6 @@
 export interface Change {
   id: string
-  changeType: 'UPDATE_PERSON' | 'CREATE_PERSON' | 'ADD_RELATIONSHIP'
+  changeType: 'UPDATE_PERSON' | 'CREATE_PERSON' | 'ADD_RELATIONSHIP' | 'DELETE_PERSON'
   targetId: string
   personName: string
   authorName: string

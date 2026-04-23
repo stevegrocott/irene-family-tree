@@ -9,12 +9,19 @@ jest.mock('@/auth', () => ({
   auth: jest.fn(),
 }))
 
+jest.mock('@/lib/revert', () => ({
+  revertChange: jest.fn(),
+}))
+
 import { read, write } from '@/lib/neo4j'
 const mockRead = read as jest.MockedFunction<typeof read>
 const mockWrite = write as jest.MockedFunction<typeof write>
 
 import { auth } from '@/auth'
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+
+import { revertChange } from '@/lib/revert'
+const mockRevert = revertChange as jest.MockedFunction<typeof revertChange>
 
 const ADMIN_SESSION = { user: { email: 'admin@example.com', name: 'Admin', role: 'admin' } }
 const USER_SESSION = { user: { email: 'user@example.com', name: 'User', role: 'user' } }
@@ -30,8 +37,6 @@ const makeParams = (id: string) => ({ params: Promise.resolve({ id }) })
 
 const liveChange = {
   id: 'change-1',
-  targetId: 'I001',
-  previousValue: null,
   status: 'live',
 }
 
@@ -142,77 +147,10 @@ describe('POST /api/admin/changes/[id]', () => {
       expect.stringContaining("SET c.status = 'kept'"),
       { id: 'change-1' }
     )
+    expect(mockRevert).not.toHaveBeenCalled()
   })
 
-  it('returns 200 and reverts person fields when action is revert with a previousValue object', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
-    const prev = { name: 'Old Name', occupation: 'Farmer', notes: 'Old notes' }
-    mockRead.mockResolvedValue([{ ...liveChange, previousValue: prev }])
-    mockWrite.mockResolvedValue([])
-
-    const response = await POST(makeRequest({ action: 'revert' }), makeParams('change-1'))
-    const body = await response.json()
-
-    expect(response.status).toBe(200)
-    expect(body).toEqual({ success: true })
-    expect(mockWrite).toHaveBeenCalledWith(
-      expect.stringContaining("SET p += $prevValue"),
-      expect.objectContaining({ id: 'change-1', prevValue: prev })
-    )
-  })
-
-  it('returns 200 and reverts person fields when previousValue is a JSON string', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
-    const prev = { name: 'Old Name', birthYear: '1900' }
-    mockRead.mockResolvedValue([{ ...liveChange, previousValue: JSON.stringify(prev) }])
-    mockWrite.mockResolvedValue([])
-
-    const response = await POST(makeRequest({ action: 'revert' }), makeParams('change-1'))
-    const body = await response.json()
-
-    expect(response.status).toBe(200)
-    expect(body).toEqual({ success: true })
-    expect(mockWrite).toHaveBeenCalledWith(
-      expect.stringContaining("SET p += $prevValue"),
-      expect.objectContaining({ id: 'change-1', prevValue: prev })
-    )
-  })
-
-  it('strips disallowed fields from previousValue during revert', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
-    const prev = { name: 'Old Name', password: 'secret', admin: true }
-    mockRead.mockResolvedValue([{ ...liveChange, previousValue: prev }])
-    mockWrite.mockResolvedValue([])
-
-    await POST(makeRequest({ action: 'revert' }), makeParams('change-1'))
-
-    const callArgs = (mockWrite as jest.Mock).mock.calls[0][1] as { prevValue: Record<string, unknown> }
-    expect(callArgs.prevValue).not.toHaveProperty('password')
-    expect(callArgs.prevValue).not.toHaveProperty('admin')
-    expect(callArgs.prevValue).toHaveProperty('name', 'Old Name')
-  })
-
-  it('returns 200 and sets status to reverted without touching person when previousValue is null', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
-    mockRead.mockResolvedValue([{ ...liveChange, previousValue: null }])
-    mockWrite.mockResolvedValue([])
-
-    const response = await POST(makeRequest({ action: 'revert' }), makeParams('change-1'))
-    const body = await response.json()
-
-    expect(response.status).toBe(200)
-    expect(body).toEqual({ success: true })
-    expect(mockWrite).toHaveBeenCalledWith(
-      expect.stringContaining("SET c.status = 'reverted'"),
-      { id: 'change-1' }
-    )
-    expect(mockWrite).not.toHaveBeenCalledWith(
-      expect.stringContaining("SET p += $prevValue"),
-      expect.anything()
-    )
-  })
-
-  it('returns 500 when the Neo4j write throws', async () => {
+  it('returns 500 when the Neo4j write throws on keep action', async () => {
     mockAuth.mockResolvedValue(ADMIN_SESSION as never)
     mockRead.mockResolvedValue([liveChange])
     mockWrite.mockRejectedValue(new Error('Write failed'))
@@ -236,5 +174,62 @@ describe('POST /api/admin/changes/[id]', () => {
       expect.stringContaining('MATCH (c:Change {id: $id})'),
       { id: 'change-99' }
     )
+  })
+
+  describe('revert action delegation', () => {
+    it('delegates to revertChange with the change id and reverter derived from the admin session', async () => {
+      mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+      mockRead.mockResolvedValue([liveChange])
+      mockRevert.mockResolvedValue({ ok: true })
+
+      const response = await POST(makeRequest({ action: 'revert' }), makeParams('change-1'))
+      const body = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(body).toEqual({ success: true })
+      expect(mockRevert).toHaveBeenCalledWith('change-1', {
+        email: 'admin@example.com',
+        name: 'Admin',
+      })
+    })
+
+    it('surfaces 409 conflict from revertChange with conflictingChange payload', async () => {
+      mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+      mockRead.mockResolvedValue([liveChange])
+      const conflict = {
+        kind: 'has-relationships' as const,
+        detail: 'Person has 2 relationship(s); remove them before reverting.',
+      }
+      mockRevert.mockResolvedValue({
+        ok: false,
+        status: 409,
+        error: 'Cannot revert: person has relationships',
+        conflict,
+      })
+
+      const response = await POST(makeRequest({ action: 'revert' }), makeParams('change-1'))
+      const body = await response.json()
+
+      expect(response.status).toBe(409)
+      expect(body).toEqual({
+        error: 'Cannot revert: person has relationships',
+        conflictingChange: conflict,
+      })
+    })
+
+    it('falls back to email for name when session has no name', async () => {
+      mockAuth.mockResolvedValue({
+        user: { email: 'noname@example.com', role: 'admin' },
+      } as never)
+      mockRead.mockResolvedValue([liveChange])
+      mockRevert.mockResolvedValue({ ok: true })
+
+      await POST(makeRequest({ action: 'revert' }), makeParams('change-1'))
+
+      expect(mockRevert).toHaveBeenCalledWith('change-1', {
+        email: 'noname@example.com',
+        name: 'noname@example.com',
+      })
+    })
   })
 })

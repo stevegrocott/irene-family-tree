@@ -54,4 +54,33 @@ describe('revertChange — CREATE_PERSON', () => {
       expect.any(Object)
     )
   })
+
+  it('returns 409 has-relationships when person has UNION or CHILD edges', async () => {
+    mockRead
+      .mockResolvedValueOnce([
+        {
+          id: 'c1',
+          changeType: 'CREATE_PERSON',
+          targetId: 'I001',
+          previousValue: null,
+          newValue: '{}',
+          status: 'live',
+          authorEmail: 'a@b',
+          authorName: 'A',
+          appliedAt: '2026-01-01',
+        },
+      ])
+      .mockResolvedValueOnce([{ edges: 2 }])
+
+    const result = await revertChange('c1', REVERTER)
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: false,
+        status: 409,
+        conflict: { kind: 'has-relationships', detail: expect.stringContaining('relationship') },
+      })
+    )
+    expect(mockWrite).not.toHaveBeenCalled()
+  })
 })

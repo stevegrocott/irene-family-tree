@@ -9,12 +9,19 @@ jest.mock('@/auth', () => ({
   auth: jest.fn(),
 }))
 
+jest.mock('@/lib/changes', () => ({
+  recordChange: jest.fn(),
+}))
+
 import { read, write } from '@/lib/neo4j'
 const mockRead = read as jest.MockedFunction<typeof read>
 const mockWrite = write as jest.MockedFunction<typeof write>
 
 import { auth } from '@/auth'
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+
+import { recordChange } from '@/lib/changes'
+const mockRecordChange = recordChange as jest.MockedFunction<typeof recordChange>
 
 const ADMIN_SESSION = { user: { email: 'admin@example.com', name: 'Admin', role: 'admin' } }
 const USER_SESSION = { user: { email: 'user@example.com', name: 'User', role: 'user' } }
@@ -33,6 +40,8 @@ const pendingSuggestion = {
   changeType: 'UPDATE_PERSON',
   payload: null,
   status: 'pending',
+  authorEmail: 'author@example.com',
+  authorName: 'Original Author',
 }
 
 describe('POST /api/admin/suggestions/[id]', () => {
@@ -151,7 +160,7 @@ describe('POST /api/admin/suggestions/[id]', () => {
       ...pendingSuggestion,
       payload: JSON.stringify({ targetId: 'I001', ...newVal }),
     }])
-    mockWrite.mockResolvedValue([])
+    mockWrite.mockResolvedValue([{ id: 'sg-1' }])
 
     const response = await POST(makeRequest({ action: 'approve' }), makeParams('sg-1'))
     const body = await response.json()
@@ -175,7 +184,7 @@ describe('POST /api/admin/suggestions/[id]', () => {
       ...pendingSuggestion,
       payload: JSON.stringify({ targetId: 'I001', ...newVal }),
     }])
-    mockWrite.mockResolvedValue([])
+    mockWrite.mockResolvedValue([{ id: 'sg-1' }])
 
     await POST(makeRequest({ action: 'approve' }), makeParams('sg-1'))
 
@@ -209,28 +218,122 @@ describe('POST /api/admin/suggestions/[id]', () => {
     )
   })
 
-  it('creates a relationship between persons and sets status to approved for ADD_RELATIONSHIP', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
-    mockRead.mockResolvedValue([{
+  describe('ADD_RELATIONSHIP (type: parent) approval', () => {
+    const parentSuggestion = {
       ...pendingSuggestion,
       changeType: 'ADD_RELATIONSHIP',
-      payload: JSON.stringify({ personId: 'I001', relativeId: 'I002', type: 'spouse' }),
-    }])
-    mockWrite.mockResolvedValue([])
+      payload: JSON.stringify({ type: 'parent', targetId: 'PARENT_ID', childId: 'CHILD_ID' }),
+    }
 
-    const response = await POST(makeRequest({ action: 'approve' }), makeParams('sg-1'))
-    const body = await response.json()
+    it('creates UNION and CHILD edges (not HAS_MEMBER) and returns 200', async () => {
+      mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+      mockRead.mockResolvedValue([parentSuggestion])
+      mockWrite.mockResolvedValue([{ unionId: '@Fabc12345@', created: true }])
 
-    expect(response.status).toBe(200)
-    expect(body).toEqual({ success: true })
-    expect(mockWrite).toHaveBeenCalledWith(
-      expect.stringContaining('MATCH (p1:Person'),
-      expect.objectContaining({ id: 'sg-1' })
-    )
-    expect(mockWrite).toHaveBeenCalledWith(
-      expect.stringContaining("SET c.status = 'approved'"),
-      expect.any(Object)
-    )
+      const response = await POST(makeRequest({ action: 'approve' }), makeParams('sg-1'))
+      const body = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(body).toEqual({ success: true })
+
+      const approvalCall = (mockWrite as jest.Mock).mock.calls.find(
+        ([cypher]: [string]) => cypher.includes('MATCH (child:Person') && cypher.includes('(parent:Person')
+      )
+      expect(approvalCall).toBeDefined()
+      const [approvalCypher, approvalParams] = approvalCall as [string, Record<string, unknown>]
+
+      expect(approvalCypher).toContain('(parent)-[:UNION]->')
+      expect(approvalCypher).toContain('-[:CHILD]->(child)')
+      expect(approvalCypher).toContain(':Union')
+      expect(approvalCypher).not.toMatch(/HAS_MEMBER/)
+      expect(approvalParams).toEqual(
+        expect.objectContaining({ id: 'sg-1', childId: 'CHILD_ID', targetId: 'PARENT_ID' })
+      )
+      expect(approvalParams.unionId).toEqual(expect.stringMatching(/^@F[0-9a-f]{8}@$/))
+    })
+
+    it('does not emit any HAS_MEMBER Cypher across all write calls', async () => {
+      mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+      mockRead.mockResolvedValue([parentSuggestion])
+      mockWrite.mockResolvedValue([{ unionId: '@Fabc12345@', created: true }])
+
+      await POST(makeRequest({ action: 'approve' }), makeParams('sg-1'))
+
+      for (const call of (mockWrite as jest.Mock).mock.calls) {
+        expect(call[0]).not.toMatch(/HAS_MEMBER/)
+      }
+    })
+
+    it('records a Change node with the ORIGINAL author (not the admin)', async () => {
+      mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+      mockRead.mockResolvedValue([parentSuggestion])
+      mockWrite.mockResolvedValue([{ unionId: '@Fabc12345@', created: true }])
+
+      const response = await POST(makeRequest({ action: 'approve' }), makeParams('sg-1'))
+
+      expect(response.status).toBe(200)
+      expect(mockRecordChange).toHaveBeenCalledTimes(1)
+      expect(mockRecordChange).toHaveBeenCalledWith(
+        'author@example.com',
+        'Original Author',
+        'ADD_RELATIONSHIP',
+        'CHILD_ID',
+        null,
+        { type: 'parent', targetId: 'PARENT_ID', unionId: '@Fabc12345@' }
+      )
+    })
+
+    it('does not use the admin email/name when recording the Change', async () => {
+      mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+      mockRead.mockResolvedValue([parentSuggestion])
+      mockWrite.mockResolvedValue([{ unionId: '@Fabc12345@', created: true }])
+
+      await POST(makeRequest({ action: 'approve' }), makeParams('sg-1'))
+
+      const [calledEmail, calledName] = mockRecordChange.mock.calls[0]
+      expect(calledEmail).not.toBe(ADMIN_SESSION.user.email)
+      expect(calledName).not.toBe(ADMIN_SESSION.user.name)
+    })
+
+    it('skips recordChange when the union already existed (created=false)', async () => {
+      mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+      mockRead.mockResolvedValue([parentSuggestion])
+      mockWrite.mockResolvedValue([{ unionId: '@Fexisting@', created: false }])
+
+      const response = await POST(makeRequest({ action: 'approve' }), makeParams('sg-1'))
+
+      expect(response.status).toBe(200)
+      expect(mockRecordChange).not.toHaveBeenCalled()
+    })
+
+    it('returns 409 when the parent or child person no longer exists', async () => {
+      mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+      mockRead.mockResolvedValue([parentSuggestion])
+      mockWrite.mockResolvedValue([])
+
+      const response = await POST(makeRequest({ action: 'approve' }), makeParams('sg-1'))
+      const body = await response.json()
+
+      expect(response.status).toBe(409)
+      expect(body).toEqual({
+        error: 'Target person(s) no longer exist; suggestion cannot be applied',
+      })
+      expect(mockRecordChange).not.toHaveBeenCalled()
+    })
+
+    it('treats recordChange failures as non-fatal and still returns 200', async () => {
+      mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+      mockRead.mockResolvedValue([parentSuggestion])
+      mockWrite.mockResolvedValue([{ unionId: '@Fabc12345@', created: true }])
+      mockRecordChange.mockRejectedValueOnce(new Error('audit db down'))
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+
+      const response = await POST(makeRequest({ action: 'approve' }), makeParams('sg-1'))
+      const body = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(body).toEqual({ success: true })
+    })
   })
 
   it('returns 200 and sets status to declined on decline action', async () => {

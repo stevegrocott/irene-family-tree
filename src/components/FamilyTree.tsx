@@ -260,6 +260,8 @@ export function PersonDrawer({
   const [showEditNotes, setShowEditNotes] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [suggestionSubmitted, setSuggestionSubmitted] = useState(false)
+  const [pendingRemoveParentId, setPendingRemoveParentId] = useState<string | null>(null)
 
   const [myChanges, setMyChanges] = useState<{
     createChange: { id: string; changeType: string; targetId: string; newValue: Record<string, unknown>; appliedAt: string } | null
@@ -369,6 +371,7 @@ export function PersonDrawer({
     setAddRelativeType(type)
     resetAddRelativeForm()
     setActionError(null)
+    setSuggestionSubmitted(false)
     setMode('add-relative')
   }
 
@@ -380,6 +383,19 @@ export function PersonDrawer({
   const handleSelectRelative = async (relative: Person) => {
     setIsSubmitting(true)
     try {
+      if (addRelativeType === 'parent' && !isAdmin) {
+        const res = await fetch('/api/suggestions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            changeType: 'ADD_RELATIONSHIP',
+            payload: { type: 'parent', targetId: relative.gedcomId, childId: person.gedcomId },
+          }),
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        setSuggestionSubmitted(true)
+        return
+      }
       const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -392,7 +408,9 @@ export function PersonDrawer({
       onSelectRoot?.(person.gedcomId)
     } catch (err) {
       console.error('Failed to add relative', err)
-      setActionError('Failed to add relative. Please try again.')
+      setActionError(addRelativeType === 'parent' && !isAdmin
+        ? 'Failed to submit suggestion. Please try again.'
+        : 'Failed to add relative. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -493,6 +511,28 @@ export function PersonDrawer({
       }
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  /**
+   * Reverts an `ADD_RELATIONSHIP` change of `type: 'parent'`, removing the
+   * Union node and its UNION/CHILD edges. Bumps `detailVersion` so the drawer
+   * refetches detail and `my-changes`. On 409 surfaces the detail inline.
+   */
+  const handleRemoveParent = async (changeId: string) => {
+    if (isSubmitting) return
+    setIsSubmitting(true)
+    try {
+      const result = await revertChangeRequest(changeId)
+      if (result.ok) {
+        onSelectRoot?.(person.gedcomId)
+        setDetailVersion(v => v + 1)
+      } else {
+        setActionError(result.detail)
+      }
+    } finally {
+      setIsSubmitting(false)
+      setPendingRemoveParentId(null)
     }
   }
 
@@ -820,6 +860,29 @@ export function PersonDrawer({
   }
 
   if (mode === 'add-relative') {
+    if (suggestionSubmitted) {
+      return (
+        <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => { setSuggestionSubmitted(false); setMode('view') }}>
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            <p
+              data-testid="suggestion-submitted"
+              className="text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2"
+            >
+              Suggestion submitted
+            </p>
+            <p className="text-xs text-slate-400">
+              An admin will review your suggestion before it appears on the tree.
+            </p>
+            <button
+              onClick={() => { setSuggestionSubmitted(false); setMode('view') }}
+              className="w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </DrawerSubView>
+      )
+    }
     return (
       <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => setMode('view')}>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
@@ -973,7 +1036,56 @@ export function PersonDrawer({
                 <p className="text-slate-600 text-xs italic">None recorded</p>
               ) : (
                 <ul className="space-y-1">
-                  {detail.parents.map(p => <li key={p.gedcomId}><RelativeRow person={p} onSelect={onSelectPerson} onReroot={onReroot} /></li>)}
+                  {detail.parents.map(p => {
+                    const removableChange = myChanges?.relationshipChanges?.find(
+                      c => c.newValue.type === 'parent' && c.newValue.targetId === p.gedcomId
+                    )
+                    return (
+                      <li key={p.gedcomId} className="flex items-center gap-1">
+                        <div className="flex-1 min-w-0">
+                          <RelativeRow person={p} onSelect={onSelectPerson} onReroot={onReroot} />
+                        </div>
+                        {removableChange && pendingRemoveParentId !== removableChange.id && (
+                          <button
+                            type="button"
+                            data-testid={`parent-remove-${p.gedcomId}`}
+                            aria-label="Remove parent"
+                            title="Remove parent"
+                            onClick={() => setPendingRemoveParentId(removableChange.id)}
+                            disabled={isSubmitting}
+                            className="w-6 h-6 flex items-center justify-center rounded-lg text-white/40 hover:text-red-400 hover:bg-white/10 transition-colors text-sm leading-none flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            ×
+                          </button>
+                        )}
+                        {removableChange && pendingRemoveParentId === removableChange.id && (
+                          <div className="flex items-center gap-1 flex-shrink-0" role="group" aria-label="Confirm remove parent">
+                            <span className="text-xs text-slate-400">Remove?</span>
+                            <button
+                              type="button"
+                              data-testid={`parent-remove-confirm-${p.gedcomId}`}
+                              aria-label="Confirm remove parent"
+                              onClick={() => handleRemoveParent(removableChange.id)}
+                              disabled={isSubmitting}
+                              className="px-2 h-6 flex items-center justify-center rounded-lg bg-red-500/80 hover:bg-red-500 text-white transition-colors text-xs leading-none disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              type="button"
+                              data-testid={`parent-remove-cancel-${p.gedcomId}`}
+                              aria-label="Cancel remove parent"
+                              onClick={() => setPendingRemoveParentId(null)}
+                              disabled={isSubmitting}
+                              className="px-2 h-6 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 transition-colors text-xs leading-none disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              No
+                            </button>
+                          </div>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
               {isSignedIn && (

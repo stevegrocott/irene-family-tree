@@ -42,7 +42,7 @@ export async function cascadeRevertPerson(
        RETURN DISTINCT u.gedcomId AS unionId
        LIMIT 100`,
       { personId }
-    ),
+    ), // Limits reverting to people with ≤100 unions
   ])
 
   if (createRows.length === 0) {
@@ -67,10 +67,11 @@ export async function cascadeRevertPerson(
   if (unionIds.length > 0) {
     const allRelRows = await read<ChangeQueryRow>(
       `MATCH (c:Change { changeType: $relType, status: $live })
-       WHERE c.targetId = $personId
+       WHERE any(uid IN $unionIds WHERE c.newValue CONTAINS uid)
        RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
-       LIMIT 1000`,
-      { personId, relType: CHANGE_TYPE.ADD_RELATIONSHIP, live: CHANGE_STATUS.LIVE }
+       LIMIT $limit`,
+      // Each union produces one ADD_RELATIONSHIP change; multiply by 2 as a safety margin for retries or dual-direction entries.
+      { unionIds, relType: CHANGE_TYPE.ADD_RELATIONSHIP, live: CHANGE_STATUS.LIVE, limit: unionIds.length * 2 }
     )
 
     const unionIdSet = new Set(unionIds)
@@ -84,24 +85,31 @@ export async function cascadeRevertPerson(
             authorName: row.authorName,
           })
         }
-      } catch {
-        // skip malformed newValue
+      } catch (e) {
+        console.warn('cascade-revert: failed to parse ADD_RELATIONSHIP newValue for change', row.id, e)
       }
     }
 
     if (!requester.isAdmin) {
-      const blockedBy = unionIds.flatMap(unionId => {
+      const requesterEmailLower = requester.email.toLowerCase()
+      const blockedBy: BlockedEdge[] = []
+      for (const unionId of unionIds) {
         const change = relChangesByUnion.get(unionId)
-        if (change && change.authorEmail.toLowerCase() === requester.email.toLowerCase()) return []
-        return [{ unionId, authorEmail: change?.authorEmail ?? 'unknown', authorName: change?.authorName ?? 'unknown' }]
-      })
+        if (!change || change.authorEmail.toLowerCase() !== requesterEmailLower) {
+          blockedBy.push({
+            unionId,
+            authorEmail: change?.authorEmail ?? 'unknown',
+            authorName: change?.authorName ?? 'unknown',
+          })
+        }
+      }
       if (blockedBy.length > 0) {
         return { ok: false, status: 403, error: 'blocked', blockedBy }
       }
     }
   }
 
-  const relChangeIds = Array.from(relChangesByUnion.values()).map(c => c.id)
+  const relChangeIds = Array.from(relChangesByUnion.values(), c => c.id)
 
   // All mutations run in a single transaction to prevent partial revert on failure
   const statements: Array<{ cypher: string; params?: Record<string, unknown> }> = []
@@ -127,8 +135,8 @@ export async function cascadeRevertPerson(
 
   try {
     await recordChange(requester.email, requester.name, CHANGE_TYPE.DELETE_PERSON, personId, prevFromCreate, {})
-  } catch (auditErr) {
-    console.error('Audit recordChange failed (non-fatal)', auditErr)
+  } catch (err) {
+    console.error('Audit recordChange failed', err)
   }
 
   return { ok: true, unionsReverted: unionIds.length }

@@ -15,22 +15,20 @@ export async function POST(
 
   const { id } = await params
 
-  let result
   try {
-    result = await cascadeRevertPerson(id, {
+    const result = await cascadeRevertPerson(id, {
       email: session.user.email,
       name: session.user.name ?? session.user.email,
       isAdmin: session.user.role === 'admin',
     })
+    if (result.ok) {
+      return NextResponse.json({ success: true, unionsReverted: result.unionsReverted })
+    }
+    return NextResponse.json(
+      { error: result.error, blockedBy: result.blockedBy },
+      { status: result.status }
+    )
   } catch {
     return NextResponse.json({ error: 'Failed to revert person' }, { status: 500 })
   }
-
-  if (result.ok) {
-    return NextResponse.json({ success: true, unionsReverted: result.unionsReverted })
-  }
-  return NextResponse.json(
-    { error: result.error, blockedBy: result.blockedBy },
-    { status: result.status }
-  )
 }

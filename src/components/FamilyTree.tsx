@@ -261,6 +261,7 @@ export function PersonDrawer({
   const [actionError, setActionError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [suggestionSubmitted, setSuggestionSubmitted] = useState(false)
+  const [pendingRemoveParentId, setPendingRemoveParentId] = useState<string | null>(null)
 
   const [myChanges, setMyChanges] = useState<{
     createChange: { id: string; changeType: string; targetId: string; newValue: Record<string, unknown>; appliedAt: string } | null
@@ -520,7 +521,6 @@ export function PersonDrawer({
    */
   const handleRemoveParent = async (changeId: string) => {
     if (isSubmitting) return
-    if (typeof window !== 'undefined' && !window.confirm('Remove this parent? This cannot be undone.')) return
     setIsSubmitting(true)
     try {
       const result = await revertChangeRequest(changeId)
@@ -532,6 +532,7 @@ export function PersonDrawer({
       }
     } finally {
       setIsSubmitting(false)
+      setPendingRemoveParentId(null)
     }
   }
 
@@ -1044,18 +1045,43 @@ export function PersonDrawer({
                         <div className="flex-1 min-w-0">
                           <RelativeRow person={p} onSelect={onSelectPerson} onReroot={onReroot} />
                         </div>
-                        {removableChange && (
+                        {removableChange && pendingRemoveParentId !== removableChange.id && (
                           <button
                             type="button"
                             data-testid={`parent-remove-${p.gedcomId}`}
                             aria-label="Remove parent"
                             title="Remove parent"
-                            onClick={() => handleRemoveParent(removableChange.id)}
+                            onClick={() => setPendingRemoveParentId(removableChange.id)}
                             disabled={isSubmitting}
                             className="w-6 h-6 flex items-center justify-center rounded-lg text-white/40 hover:text-red-400 hover:bg-white/10 transition-colors text-sm leading-none flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             ×
                           </button>
+                        )}
+                        {removableChange && pendingRemoveParentId === removableChange.id && (
+                          <div className="flex items-center gap-1 flex-shrink-0" role="group" aria-label="Confirm remove parent">
+                            <span className="text-xs text-slate-400">Remove?</span>
+                            <button
+                              type="button"
+                              data-testid={`parent-remove-confirm-${p.gedcomId}`}
+                              aria-label="Confirm remove parent"
+                              onClick={() => handleRemoveParent(removableChange.id)}
+                              disabled={isSubmitting}
+                              className="px-2 h-6 flex items-center justify-center rounded-lg bg-red-500/80 hover:bg-red-500 text-white transition-colors text-xs leading-none disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              type="button"
+                              data-testid={`parent-remove-cancel-${p.gedcomId}`}
+                              aria-label="Cancel remove parent"
+                              onClick={() => setPendingRemoveParentId(null)}
+                              disabled={isSubmitting}
+                              className="px-2 h-6 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 transition-colors text-xs leading-none disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              No
+                            </button>
+                          </div>
                         )}
                       </li>
                     )

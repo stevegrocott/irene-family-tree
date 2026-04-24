@@ -270,9 +270,11 @@ test.describe('Add-parent suggestion → admin approval → revert', () => {
     const revertBtn = page.getByTestId(`parent-remove-${parentFixture.gedcomId}`)
     await expect(revertBtn).toBeVisible()
 
-    // Clicking the × triggers a confirm dialog; accept and observe the revert POST.
-    page.once('dialog', (d) => d.accept())
+    // Clicking × reveals inline confirm/cancel; clicking Yes triggers the revert POST.
     await revertBtn.click()
+    const confirmBtn = page.getByTestId(`parent-remove-confirm-${parentFixture.gedcomId}`)
+    await expect(confirmBtn).toBeVisible()
+    await confirmBtn.click()
 
     // After revert the drawer refetches — parent is gone, list is empty again.
     await expect(drawerAfter.getByTestId('person-drawer-parents'))

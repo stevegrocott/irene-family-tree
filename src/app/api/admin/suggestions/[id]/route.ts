@@ -91,8 +91,14 @@ export async function POST(
           { id, newId, personFields }
         )
       } else if (suggestion.changeType === 'ADD_RELATIONSHIP') {
-        const targetId = rawPayload.targetId as string
-        const childId = rawPayload.childId as string
+        const targetId = rawPayload.targetId
+        const childId = rawPayload.childId
+        if (typeof targetId !== 'string' || !targetId || typeof childId !== 'string' || !childId) {
+          return NextResponse.json(
+            { error: 'Suggestion payload missing required targetId/childId' },
+            { status: 400 }
+          )
+        }
         const unionId = '@F' + randomUUID().slice(0, 8) + '@'
         const result = await write<{ unionId: string; created: boolean }>(
           `MATCH (c:PendingChange {id: $id})

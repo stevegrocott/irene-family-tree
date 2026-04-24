@@ -269,4 +269,17 @@ describe('POST /api/person/[id]/relationships', () => {
 
     expect(response.status).toBe(500)
   })
+
+  it('returns 403 when a non-admin user attempts to create a parent relationship', async () => {
+    mockAuth.mockResolvedValueOnce({
+      user: { email: 'user@example.com', name: 'Regular User', role: 'user' },
+    } as never)
+
+    const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(body).toEqual({ error: 'Only admins can add parent relationships directly' })
+    expect(mockWrite).not.toHaveBeenCalled()
+  })
 })

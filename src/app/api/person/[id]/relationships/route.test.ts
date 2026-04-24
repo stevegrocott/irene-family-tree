@@ -13,8 +13,7 @@ jest.mock('@/auth', () => ({
   auth: jest.fn().mockResolvedValue({ user: { email: 'editor@example.com', name: 'Editor User' } }),
 }))
 
-import { read, write } from '@/lib/neo4j'
-const mockRead = read as jest.MockedFunction<typeof read>
+import { write } from '@/lib/neo4j'
 const mockWrite = write as jest.MockedFunction<typeof write>
 
 import { recordChange } from '@/lib/changes'
@@ -35,8 +34,6 @@ const makeParams = (id: string) => ({ params: Promise.resolve({ id }) })
 describe('POST /api/person/[id]/relationships', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    // Default: no existing union found
-    mockRead.mockResolvedValue([{ unionId: null }])
   })
 
   it('returns 400 when body is invalid JSON', async () => {
@@ -65,12 +62,14 @@ describe('POST /api/person/[id]/relationships', () => {
     expect(body).toEqual({ error: 'type must be spouse, parent, or child' })
   })
 
-  it('returns 403 when non-admin user tries to create a parent relationship directly', async () => {
+  it('returns 403 when non-admin user (no role) tries to create a parent relationship directly', async () => {
+    mockAuth.mockResolvedValueOnce({ user: { email: 'editor@example.com', name: 'Editor User' } } as never)
+
     const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))
     const body = await response.json()
 
     expect(response.status).toBe(403)
-    expect(body).toEqual({ error: 'Forbidden' })
+    expect(body).toEqual({ error: 'Only admins can add parent relationships directly' })
     expect(mockWrite).not.toHaveBeenCalled()
   })
 
@@ -228,46 +227,34 @@ describe('POST /api/person/[id]/relationships', () => {
   })
 
   it('returns 409 when a spouse union already exists between the two persons', async () => {
-    mockRead.mockResolvedValue([{ unionId: '@Fexisting1@' }])
+    mockWrite.mockResolvedValue([{ unionId: '@Fexisting1@', existed: true }])
 
     const response = await POST(makeRequest({ type: 'spouse', targetId: 'I002' }), makeParams('I001'))
     const body = await response.json()
 
     expect(response.status).toBe(409)
     expect(body).toEqual({ error: 'Relationship already exists', unionId: '@Fexisting1@' })
-    expect(mockWrite).not.toHaveBeenCalled()
   })
 
   it('returns 409 when a parent-child union already exists', async () => {
     mockAuth.mockResolvedValueOnce({ user: { email: 'admin@example.com', name: 'Admin', role: 'admin' } })
-    mockRead.mockResolvedValue([{ unionId: '@Fexisting2@' }])
+    mockWrite.mockResolvedValue([{ unionId: '@Fexisting2@', existed: true }])
 
     const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))
     const body = await response.json()
 
     expect(response.status).toBe(409)
     expect(body).toEqual({ error: 'Relationship already exists', unionId: '@Fexisting2@' })
-    expect(mockWrite).not.toHaveBeenCalled()
   })
 
   it('returns 409 when a child union already exists', async () => {
-    mockRead.mockResolvedValue([{ unionId: '@Fexisting3@' }])
+    mockWrite.mockResolvedValue([{ unionId: '@Fexisting3@', existed: true }])
 
     const response = await POST(makeRequest({ type: 'child', targetId: 'I002' }), makeParams('I001'))
     const body = await response.json()
 
     expect(response.status).toBe(409)
     expect(body).toEqual({ error: 'Relationship already exists', unionId: '@Fexisting3@' })
-    expect(mockWrite).not.toHaveBeenCalled()
-  })
-
-  it('returns 500 when Neo4j read throws during existence check', async () => {
-    mockRead.mockRejectedValue(new Error('DB read error'))
-    jest.spyOn(console, 'error').mockImplementation(() => {})
-
-    const response = await POST(makeRequest({ type: 'spouse', targetId: 'I002' }), makeParams('I001'))
-
-    expect(response.status).toBe(500)
   })
 
   it('returns 403 when a non-admin user attempts to create a parent relationship', async () => {

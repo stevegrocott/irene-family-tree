@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
-import { read, write } from '@/lib/neo4j'
+import { write } from '@/lib/neo4j'
 import { recordChange } from '@/lib/changes'
 import { auth } from '@/auth'
 
@@ -9,41 +9,60 @@ export const runtime = 'nodejs'
 const VALID_TYPES = ['spouse', 'parent', 'child'] as const
 type RelationshipType = typeof VALID_TYPES[number]
 
-function existenceCheckCypher(type: RelationshipType): string {
+function atomicUpsertCypher(type: RelationshipType): string {
   if (type === 'spouse') {
     return `OPTIONAL MATCH (a:Person {gedcomId: $id})-[:UNION]->(u:Union)<-[:UNION]-(b:Person {gedcomId: $targetId})
-RETURN u.gedcomId AS unionId LIMIT 1`
+WITH u AS existingUnion
+CALL {
+  WITH existingUnion
+  WITH existingUnion WHERE existingUnion IS NULL
+  MATCH (a:Person {gedcomId: $id}), (b:Person {gedcomId: $targetId})
+  MERGE (u:Union {gedcomId: $unionId})
+  MERGE (a)-[:UNION]->(u)
+  MERGE (b)-[:UNION]->(u)
+  RETURN u.gedcomId AS unionId, false AS existed
+UNION ALL
+  WITH existingUnion
+  WITH existingUnion WHERE existingUnion IS NOT NULL
+  RETURN existingUnion.gedcomId AS unionId, true AS existed
+}
+RETURN unionId, existed`
   }
   if (type === 'parent') {
     return `OPTIONAL MATCH (parent:Person {gedcomId: $targetId})-[:UNION]->(u:Union)-[:CHILD]->(child:Person {gedcomId: $id})
-RETURN u.gedcomId AS unionId LIMIT 1`
+WITH u AS existingUnion
+CALL {
+  WITH existingUnion
+  WITH existingUnion WHERE existingUnion IS NULL
+  MATCH (child:Person {gedcomId: $id}), (parent:Person {gedcomId: $targetId})
+  MERGE (u:Union {gedcomId: $unionId})
+  MERGE (parent)-[:UNION]->(u)
+  MERGE (u)-[:CHILD]->(child)
+  RETURN u.gedcomId AS unionId, false AS existed
+UNION ALL
+  WITH existingUnion
+  WITH existingUnion WHERE existingUnion IS NOT NULL
+  RETURN existingUnion.gedcomId AS unionId, true AS existed
+}
+RETURN unionId, existed`
   }
   // child
   return `OPTIONAL MATCH (parent:Person {gedcomId: $id})-[:UNION]->(u:Union)-[:CHILD]->(child:Person {gedcomId: $targetId})
-RETURN u.gedcomId AS unionId LIMIT 1`
+WITH u AS existingUnion
+CALL {
+  WITH existingUnion
+  WITH existingUnion WHERE existingUnion IS NULL
+  MATCH (parent:Person {gedcomId: $id}), (child:Person {gedcomId: $targetId})
+  MERGE (u:Union {gedcomId: $unionId})
+  MERGE (parent)-[:UNION]->(u)
+  MERGE (u)-[:CHILD]->(child)
+  RETURN u.gedcomId AS unionId, false AS existed
+UNION ALL
+  WITH existingUnion
+  WITH existingUnion WHERE existingUnion IS NOT NULL
+  RETURN existingUnion.gedcomId AS unionId, true AS existed
 }
-
-function createCypher(type: RelationshipType): string {
-  if (type === 'spouse') {
-    return `MATCH (a:Person {gedcomId: $id}), (b:Person {gedcomId: $targetId})
-MERGE (u:Union {gedcomId: $unionId})
-MERGE (a)-[:UNION]->(u)
-MERGE (b)-[:UNION]->(u)
-RETURN u.gedcomId AS unionId`
-  }
-  if (type === 'parent') {
-    return `MATCH (child:Person {gedcomId: $id}), (parent:Person {gedcomId: $targetId})
-MERGE (u:Union {gedcomId: $unionId})
-MERGE (parent)-[:UNION]->(u)
-MERGE (u)-[:CHILD]->(child)
-RETURN u.gedcomId AS unionId`
-  }
-  // child
-  return `MATCH (parent:Person {gedcomId: $id}), (child:Person {gedcomId: $targetId})
-MERGE (u:Union {gedcomId: $unionId})
-MERGE (parent)-[:UNION]->(u)
-MERGE (u)-[:CHILD]->(child)
-RETURN u.gedcomId AS unionId`
+RETURN unionId, existed`
 }
 
 export async function POST(
@@ -73,32 +92,15 @@ export async function POST(
   const type = body.type as RelationshipType
 
   if (type === 'parent' && session.user.role !== 'admin') {
-    const error = session.user.role
-      ? 'Only admins can add parent relationships directly'
-      : 'Forbidden'
-    return NextResponse.json({ error }, { status: 403 })
+    return NextResponse.json({ error: 'Only admins can add parent relationships directly' }, { status: 403 })
   }
 
   const targetId = body.targetId as string
-
-  let existingRows: { unionId: string | null }[]
-  try {
-    existingRows = await read<{ unionId: string | null }>(existenceCheckCypher(type), { id, targetId })
-  } catch (err) {
-    console.error('Neo4j read failed', err)
-    return NextResponse.json({ error: 'Failed to check graph database' }, { status: 500 })
-  }
-
-  const existingUnionId = existingRows[0]?.unionId ?? null
-  if (existingUnionId) {
-    return NextResponse.json({ error: 'Relationship already exists', unionId: existingUnionId }, { status: 409 })
-  }
-
   const unionId = '@F' + randomUUID().slice(0, 8) + '@'
 
-  let rows: { unionId: string }[]
+  let rows: { unionId: string; existed: boolean }[]
   try {
-    rows = await write<{ unionId: string }>(createCypher(type), { id, targetId, unionId })
+    rows = await write<{ unionId: string; existed: boolean }>(atomicUpsertCypher(type), { id, targetId, unionId })
   } catch (err) {
     console.error('Neo4j write failed', err)
     return NextResponse.json({ error: 'Failed to write to graph database' }, { status: 500 })
@@ -109,6 +111,10 @@ export async function POST(
   }
 
   const resultUnionId = rows[0].unionId
+
+  if (rows[0].existed) {
+    return NextResponse.json({ error: 'Relationship already exists', unionId: resultUnionId }, { status: 409 })
+  }
 
   const authorEmail = session?.user?.email ?? 'anonymous'
   const authorName = session?.user?.name ?? 'anonymous'

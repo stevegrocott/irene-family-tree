@@ -1,4 +1,4 @@
-import { read, write } from '@/lib/neo4j'
+import { read, writeTransaction } from '@/lib/neo4j'
 import { recordChange } from '@/lib/changes'
 
 export type CascadeRevertOutcome =
@@ -11,14 +11,7 @@ export interface BlockedEdge {
   authorName: string
 }
 
-interface CreateChangeRow {
-  id: string
-  authorEmail: string
-  authorName: string
-  newValue: string
-}
-
-interface RelChangeRow {
+interface ChangeQueryRow {
   id: string
   authorEmail: string
   authorName: string
@@ -29,8 +22,7 @@ export async function cascadeRevertPerson(
   personId: string,
   requester: { email: string; name: string; isAdmin: boolean }
 ): Promise<CascadeRevertOutcome> {
-  // 1. Find the CREATE_PERSON change (by requester, or any if admin)
-  const createRows = await read<CreateChangeRow>(
+  const createRows = await read<ChangeQueryRow>(
     requester.isAdmin
       ? `MATCH (c:Change { changeType: 'CREATE_PERSON', status: 'live', targetId: $personId })
          RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
@@ -56,8 +48,6 @@ export async function cascadeRevertPerson(
     return { ok: false, status: 409, error: 'Malformed change record: cannot parse newValue' }
   }
 
-  // 2. Find all Union nodes where the person is a UNION member (spouse/parent role)
-  //    Mirrors the my-changes endpoint union lookup approach
   const unionRows = await read<{ unionId: string }>(
     `MATCH (p:Person {gedcomId: $personId})-[:UNION]->(u:Union)
      RETURN DISTINCT u.gedcomId AS unionId`,
@@ -65,15 +55,16 @@ export async function cascadeRevertPerson(
   )
   const unionIds = unionRows.map(r => r.unionId).filter(Boolean)
 
-  // 3. Find live ADD_RELATIONSHIP changes matching these union IDs (by parsing newValue in JS,
-  //    since Neo4j Community/Aura may not have APOC for server-side JSON parsing)
+  // Filter ADD_RELATIONSHIP changes in JS since Neo4j Community/Aura may lack APOC for server-side JSON parsing
   const relChangesByUnion = new Map<string, { id: string; authorEmail: string; authorName: string }>()
 
   if (unionIds.length > 0) {
-    const allRelRows = await read<RelChangeRow>(
+    const allRelRows = await read<ChangeQueryRow>(
       `MATCH (c:Change { changeType: 'ADD_RELATIONSHIP', status: 'live' })
-       RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue`,
-      {}
+       WHERE c.targetId = $personId
+       RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
+       LIMIT 1000`,
+      { personId }
     )
 
     const unionIdSet = new Set(unionIds)
@@ -92,7 +83,6 @@ export async function cascadeRevertPerson(
       }
     }
 
-    // 4. Check authorship — admins bypass, non-admins must own every union
     if (!requester.isAdmin) {
       const blockedBy: BlockedEdge[] = []
       for (const unionId of unionIds) {
@@ -109,17 +99,32 @@ export async function cascadeRevertPerson(
         return { ok: false, status: 403, error: 'blocked', blockedBy }
       }
     }
+
   }
 
-  // 5. Atomic writes (sequential; each write is its own Neo4j transaction)
-  for (const unionId of unionIds) {
-    await write(`MATCH (u:Union {gedcomId: $unionId}) DETACH DELETE u`, { unionId })
+  const relChangeIds = Array.from(relChangesByUnion.values()).map(c => c.id)
+
+  // All mutations run in a single transaction to prevent partial revert on failure
+  const statements: Array<{ cypher: string; params?: Record<string, unknown> }> = []
+  if (unionIds.length > 0) {
+    statements.push({
+      cypher: `UNWIND $unionIds AS unionId
+               MATCH (u:Union {gedcomId: unionId}) DETACH DELETE u`,
+      params: { unionIds },
+    })
+    if (relChangeIds.length > 0) {
+      statements.push({
+        cypher: `UNWIND $ids AS id MATCH (c:Change {id: id}) SET c.status = 'reverted'`,
+        params: { ids: relChangeIds },
+      })
+    }
   }
-  for (const [, relChange] of relChangesByUnion) {
-    await write(`MATCH (c:Change {id: $id}) SET c.status = 'reverted'`, { id: relChange.id })
-  }
-  await write(`MATCH (p:Person {gedcomId: $personId}) DETACH DELETE p`, { personId })
-  await write(`MATCH (c:Change {id: $id}) SET c.status = 'reverted'`, { id: createChange.id })
+  statements.push(
+    { cypher: `MATCH (p:Person {gedcomId: $personId}) DETACH DELETE p`, params: { personId } },
+    { cypher: `MATCH (c:Change {id: $id}) SET c.status = 'reverted'`, params: { id: createChange.id } }
+  )
+
+  await writeTransaction(statements)
 
   try {
     await recordChange(requester.email, requester.name, 'DELETE_PERSON', personId, prevFromCreate, {})

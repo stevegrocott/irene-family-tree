@@ -149,7 +149,9 @@ test.describe('Revert: delete-person button', () => {
     expect(revertPostCount).toBe(1)
   })
 
-  test('button visible but disabled with tooltip when person has relationships', async ({ page }) => {
+  test('button enabled for person with relationships; cascade-revert called on click', async ({ page }) => {
+    let cascadeRevertCount = 0
+
     await mockSignedInSession(page)
     await mockAliceCanvas(page)
 
@@ -174,6 +176,19 @@ test.describe('Revert: delete-person button', () => {
       })
     )
 
+    await page.route(/\/api\/person\/[^/]+\/cascade-revert/, async (route) => {
+      if (route.request().method() === 'POST') {
+        cascadeRevertCount += 1
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true, unionsReverted: 1 }),
+        })
+        return
+      }
+      await route.continue()
+    })
+
     await page.route(/\/api\/person\/[^/]+$/, (route) =>
       route.fulfill({
         status: 200,
@@ -195,8 +210,13 @@ test.describe('Revert: delete-person button', () => {
 
     const deleteBtn = page.getByTestId('person-drawer-delete')
     await expect(deleteBtn).toBeVisible()
-    await expect(deleteBtn).toBeDisabled()
-    await expect(deleteBtn).toHaveAttribute('title', /relationships/i)
+    await expect(deleteBtn).toBeEnabled()
+
+    page.once('dialog', d => d.accept())
+    await deleteBtn.click()
+
+    await expect(drawer).not.toBeVisible({ timeout: 5_000 })
+    expect(cascadeRevertCount).toBe(1)
   })
 
   test('button absent when createChange is null', async ({ page }) => {

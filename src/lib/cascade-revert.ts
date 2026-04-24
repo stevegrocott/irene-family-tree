@@ -38,7 +38,8 @@ export async function cascadeRevertPerson(
       { personId, email: requester.email, isAdmin: requester.isAdmin, createType: CHANGE_TYPE.CREATE_PERSON, live: CHANGE_STATUS.LIVE }
     ),
     read<{ unionId: string }>(
-      `MATCH (p:Person {gedcomId: $personId})-[:UNION]->(u:Union)
+      `MATCH (p:Person {gedcomId: $personId})
+       MATCH (u:Union) WHERE (p)-[:UNION]->(u) OR (u)-[:CHILD]->(p)
        RETURN DISTINCT u.gedcomId AS unionId
        LIMIT 100`,
       { personId }

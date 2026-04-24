@@ -474,32 +474,55 @@ export function PersonDrawer({
 
   /**
    * True when the detail record has direct edges (parents or marriages) on the Person
-   * node. Used to disable the delete-person button because a `CREATE_PERSON` revert is
-   * only safe when the Person has no UNION/CHILD edges. Siblings are intentionally
-   * omitted: they are derived from shared parents, not direct edges on this node, so
-   * they don't block `DETACH DELETE`. The server guard (edge count on the node) is the
-   * source of truth; this local check just pre-disables for obvious cases.
+   * node. When true, delete uses the cascade-revert endpoint instead of the simple
+   * change revert, so all connected Union nodes are cleaned up atomically.
    */
   const detailHasRelationships = !!(
     detail && (detail.parents.length > 0 || detail.marriages.length > 0)
   )
 
   /**
-   * Deletes the current person by reverting the author's CREATE_PERSON change.
-   * Only callable when `myChanges.createChange` is present (caller enforces button visibility).
-   * Prompts for confirmation, then on success closes the drawer and refreshes the tree.
-   * On 409 surfaces the server's conflict detail inline via `actionError`.
+   * Deletes the current person. When the person has relationships, calls the
+   * cascade-revert endpoint to atomically remove all connected unions. When
+   * blocked by other-authored connections, shows a "contact an admin" message.
+   * For persons with no relationships, reverts the CREATE_PERSON change directly.
    */
   const handleDeletePerson = async () => {
     if (isSubmitting) return
     if (!myChanges?.createChange) return
+
+    if (detailHasRelationships) {
+      if (typeof window !== 'undefined' && !window.confirm(`Delete ${person.name || 'this person'} and remove all their connections? This cannot be undone.`)) return
+      setIsSubmitting(true)
+      try {
+        const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/cascade-revert`, { method: 'POST' })
+        if (res.ok) {
+          setMyChanges(null)
+          onSelectRoot?.(person.gedcomId)
+          onClose()
+        } else if (res.status === 403) {
+          const body = await res.json().catch(() => ({})) as { blockedBy?: Array<{ authorName: string }> }
+          const names = body.blockedBy?.map(b => b.authorName).filter(Boolean).join(', ')
+          setActionError(names
+            ? `Connections added by ${names} cannot be removed. Contact an admin.`
+            : 'Some connections cannot be removed. Contact an admin.')
+        } else {
+          const body = await res.json().catch(() => ({})) as { error?: string }
+          setActionError(body.error ?? 'Failed to delete person. Please try again.')
+        }
+      } finally {
+        setIsSubmitting(false)
+      }
+      return
+    }
+
     if (typeof window !== 'undefined' && !window.confirm(`Delete ${person.name || 'this person'}? This cannot be undone.`)) return
     setIsSubmitting(true)
     try {
       const result = await revertChangeRequest(myChanges.createChange.id)
       if (result.ok) {
         setMyChanges(null)
-        onSelectRoot?.(person.gedcomId) // nudges tree refetch in the parent canvas
+        onSelectRoot?.(person.gedcomId)
         onClose()
       } else {
         setActionError(result.detail)
@@ -1203,18 +1226,12 @@ export function PersonDrawer({
             <button
               data-testid="person-drawer-delete"
               onClick={handleDeletePerson}
-              disabled={detailHasRelationships || isSubmitting}
-              title={detailHasRelationships ? 'This person has connections — an admin can remove them if needed' : undefined}
+              disabled={isSubmitting}
               aria-label={`Delete ${person.name || 'person'}`}
               className="w-full py-2 rounded-xl bg-red-500/80 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-500/80"
             >
               Delete this person
             </button>
-            {detailHasRelationships && (
-              <p className="text-xs text-amber-400/80 text-center">
-                This person has connections — an admin can remove them if needed
-              </p>
-            )}
           </>
         )}
         {actionError && (

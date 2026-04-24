@@ -463,7 +463,7 @@ export function PersonDrawer({
     } catch (err) {
       console.error('Failed to create and link relative', err)
       if (addRelativeType === 'parent' && !isAdmin && createdPerson) {
-        setActionError('Person was created, but the suggestion could not be submitted. Please try again from the suggestions queue.')
+        setActionError('Person was created, but the suggestion could not be submitted. Please contact an admin to complete the link.')
       } else {
         setActionError('Failed to create and link person. Please try again.')
       }

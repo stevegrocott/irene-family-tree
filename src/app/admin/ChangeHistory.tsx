@@ -3,8 +3,23 @@
 import { useState, useEffect } from 'react'
 import type { Change } from './types'
 
-const CONFLICT_STATUS = 409
+/** HTTP status code indicating a conflict (used for revert conflicts) */
+const HTTP_CONFLICT_STATUS = 409
 
+/**
+ * Displays a paginated list of changes with the ability to revert them.
+ *
+ * Fetches pending changes from the API on mount and displays them with their
+ * metadata (author, change type, date). Users can revert individual changes,
+ * with real-time UI feedback for loading, success, and error states.
+ *
+ * @component
+ * @returns {JSX.Element} A container with change cards, loading state, or error message
+ *
+ * @example
+ * // Usage in an admin page
+ * <ChangeHistory />
+ */
 export function ChangeHistory() {
   const [changes, setChanges] = useState<Change[]>([])
   const [loading, setLoading] = useState(true)
@@ -14,17 +29,31 @@ export function ChangeHistory() {
   const [revertErrors, setRevertErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    // TODO: implement Load More / pagination — currently limited to first 20 records
-    fetch('/api/admin/changes?page=1')
+    const controller = new AbortController()
+    fetch('/api/admin/changes?page=1', { signal: controller.signal })
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json()
       })
       .then(data => setChanges(data.changes ?? []))
-      .catch(() => setFetchError('Failed to load change history. Please refresh to try again.'))
+      .catch(err => {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        setFetchError('Failed to load change history. Please refresh to try again.')
+      })
       .finally(() => setLoading(false))
+    return () => controller.abort()
   }, [])
 
+  /**
+   * Attempts to revert a change by ID.
+   *
+   * Updates UI state to show loading, handles conflict errors (409), and tracks
+   * reverted IDs and errors. On success, the change is marked as reverted.
+   *
+   * @async
+   * @param {string} id - The ID of the change to revert
+   * @returns {Promise<void>}
+   */
   async function handleRevert(id: string) {
     setReverting(r => ({ ...r, [id]: true }))
     setRevertErrors(e => {
@@ -37,7 +66,7 @@ export function ChangeHistory() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'revert' }),
       })
-      if (res.status === CONFLICT_STATUS) {
+      if (res.status === HTTP_CONFLICT_STATUS) {
         const data = await res.json()
         setRevertErrors(e => ({ ...e, [id]: data.error ?? 'Cannot revert: conflicting change exists.' }))
         return

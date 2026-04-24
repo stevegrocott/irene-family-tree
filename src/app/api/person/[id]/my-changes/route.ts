@@ -69,9 +69,10 @@ export async function GET(
   // ADD_RELATIONSHIP is filtered broadly then narrowed to this person's unions in JS,
   // to avoid needing APOC (not guaranteed on Aura/Neo4j Community).
   const changeRows = await read<ChangeRow>(
-    `MATCH (c:Change { status: 'live', authorEmail: $email })
-     WHERE (c.changeType IN ['CREATE_PERSON','UPDATE_PERSON'] AND c.targetId = $id)
-        OR c.changeType = 'ADD_RELATIONSHIP'
+    `MATCH (c:Change { status: 'live' })
+     WHERE toLower(c.authorEmail) = toLower($email)
+       AND ((c.changeType IN ['CREATE_PERSON','UPDATE_PERSON'] AND c.targetId = $id)
+        OR c.changeType = 'ADD_RELATIONSHIP')
      RETURN c.id            AS id,
             c.changeType    AS changeType,
             c.targetId      AS targetId,

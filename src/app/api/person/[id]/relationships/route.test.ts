@@ -62,8 +62,15 @@ describe('POST /api/person/[id]/relationships', () => {
     expect(body).toEqual({ error: 'type must be spouse, parent, or child' })
   })
 
-  it('returns 403 when non-admin user (no role) tries to create a parent relationship directly', async () => {
-    mockAuth.mockResolvedValueOnce({ user: { email: 'editor@example.com', name: 'Editor User' } } as never)
+  // Parameterized: both a user with no role field and a user with role: 'user'
+  // hit the same guard (session.user.role !== 'admin') and must produce
+  // identical 403 responses. Covers both shapes explicitly so a future change
+  // that special-cases one shape can't silently pass by only handling the other.
+  it.each([
+    ['no role field', { email: 'editor@example.com', name: 'Editor User' }],
+    ['role: user', { email: 'user@example.com', name: 'Regular User', role: 'user' }],
+  ])('returns 403 when non-admin (%s) tries to create a parent relationship directly', async (_label, user) => {
+    mockAuth.mockResolvedValueOnce({ user } as never)
 
     const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))
     const body = await response.json()
@@ -257,16 +264,4 @@ describe('POST /api/person/[id]/relationships', () => {
     expect(body).toEqual({ error: 'Relationship already exists', unionId: '@Fexisting3@' })
   })
 
-  it('returns 403 when a non-admin user attempts to create a parent relationship', async () => {
-    mockAuth.mockResolvedValueOnce({
-      user: { email: 'user@example.com', name: 'Regular User', role: 'user' },
-    } as never)
-
-    const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))
-    const body = await response.json()
-
-    expect(response.status).toBe(403)
-    expect(body).toEqual({ error: 'Only admins can add parent relationships directly' })
-    expect(mockWrite).not.toHaveBeenCalled()
-  })
 })

@@ -30,6 +30,7 @@ export function ChangeHistory() {
 
   useEffect(() => {
     const controller = new AbortController()
+    // Only loads the first page (PAGE_SIZE=20). Full pagination is not yet implemented.
     fetch('/api/admin/changes?page=1', { signal: controller.signal })
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -150,6 +151,7 @@ export function ChangeHistory() {
             )}
 
             <button
+              type="button"
               onClick={() => handleRevert(c.id)}
               disabled={isReverted || isReverting}
               className="w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium border border-white/20 transition-colors"

@@ -1203,12 +1203,17 @@ export function PersonDrawer({
             data-testid="person-drawer-delete"
             onClick={handleDeletePerson}
             disabled={detailHasRelationships || isSubmitting}
-            title={detailHasRelationships ? 'Has relationships — contact an admin' : undefined}
+            title={detailHasRelationships ? 'This person has connections — an admin can remove them if needed' : undefined}
             aria-label={`Delete ${person.name || 'person'}`}
             className="w-full py-2 rounded-xl bg-red-500/80 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-500/80"
           >
             Delete this person
           </button>
+          {detailHasRelationships && (
+            <p className="text-xs text-amber-400/80 text-center">
+              This person has connections — an admin can remove them if needed
+            </p>
+          )}
         )}
         {actionError && (
           <p data-testid="person-drawer-action-error" className="text-red-400 text-xs">{actionError}</p>

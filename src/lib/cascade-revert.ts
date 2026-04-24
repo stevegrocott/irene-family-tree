@@ -29,13 +29,19 @@ export async function cascadeRevertPerson(
   personId: string,
   requester: { email: string; name: string; isAdmin: boolean }
 ): Promise<CascadeRevertOutcome> {
+  const createQueryCypher = requester.isAdmin
+    ? `MATCH (c:Change { changeType: $createType, status: $live, targetId: $personId })
+       RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
+       LIMIT 1`
+    : `MATCH (c:Change { changeType: $createType, status: $live, targetId: $personId })
+       WHERE toLower(c.authorEmail) = toLower($email)
+       RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
+       LIMIT 1`
+
   const [createRows, unionRows] = await Promise.all([
     read<ChangeQueryRow>(
-      `MATCH (c:Change { changeType: $createType, status: $live, targetId: $personId })
-       WHERE $isAdmin OR toLower(c.authorEmail) = toLower($email)
-       RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
-       LIMIT 1`,
-      { personId, email: requester.email, isAdmin: requester.isAdmin, createType: CHANGE_TYPE.CREATE_PERSON, live: CHANGE_STATUS.LIVE }
+      createQueryCypher,
+      { personId, email: requester.email, createType: CHANGE_TYPE.CREATE_PERSON, live: CHANGE_STATUS.LIVE }
     ),
     read<{ unionId: string }>(
       `MATCH (p:Person {gedcomId: $personId})
@@ -70,7 +76,7 @@ export async function cascadeRevertPerson(
       `MATCH (c:Change { changeType: $relType, status: $live })
        WHERE any(uid IN $unionIds WHERE c.newValue CONTAINS uid)
        RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
-       LIMIT $limit`,
+       LIMIT toInteger($limit)`,
       // Each union produces one ADD_RELATIONSHIP change; multiply by 2 as a safety margin for retries or dual-direction entries.
       { unionIds, relType: CHANGE_TYPE.ADD_RELATIONSHIP, live: CHANGE_STATUS.LIVE, limit: unionIds.length * 2 }
     )
@@ -132,7 +138,12 @@ export async function cascadeRevertPerson(
     { cypher: `MATCH (c:Change {id: $id}) SET c.status = $reverted`, params: { id: createChange.id, reverted: CHANGE_STATUS.REVERTED } }
   )
 
-  await writeTransaction(statements)
+  try {
+    await writeTransaction(statements)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return { ok: false, status: 409, error: `Failed to write revert transaction: ${message}` }
+  }
 
   try {
     await recordChange(requester.email, requester.name, CHANGE_TYPE.DELETE_PERSON, personId, prevFromCreate, {})

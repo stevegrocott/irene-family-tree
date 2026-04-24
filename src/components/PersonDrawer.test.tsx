@@ -283,4 +283,84 @@ describe('PersonDrawer', () => {
       expect(confirmation!.textContent).toContain('Suggestion submitted')
     })
   })
+
+  describe('Add parent via create-and-link — role-based routing', () => {
+    function installCreateFetchMock() {
+      const calls: Array<{ url: string; init?: RequestInit }> = []
+      const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+      const setNativeValue = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype, 'value'
+      )!.set!
+      const fetchMock = jest.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url === `${personPath}/my-changes`) {
+          return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
+        }
+        if (url === '/api/persons' && (init as RequestInit)?.method === 'POST') {
+          return { ok: true, json: async () => ({ gedcomId: '@I99@', name: 'New Parent', sex: 'M', birthYear: null, birthPlace: null }) }
+        }
+        if (url === '/api/suggestions') {
+          return { ok: true, status: 201, json: async () => ({ id: 'new-suggestion-id' }) }
+        }
+        if (url === `${personPath}/relationships`) {
+          return { ok: true, status: 201, json: async () => ({ unionId: '@F_new@' }) }
+        }
+        if (url.startsWith(personPath)) {
+          return { ok: true, json: async () => mockDetailResponse }
+        }
+        return { ok: true, json: async () => ({}) }
+      })
+      global.fetch = fetchMock as unknown as typeof fetch
+      return { calls, setNativeValue }
+    }
+
+    async function openAddParentAndFillCreateForm() {
+      const parentsSection = container.querySelector('[data-testid="person-drawer-parents"]')!
+      const addParentBtn = Array.from(parentsSection.querySelectorAll('button'))
+        .find(b => b.textContent?.includes('Add parent')) as HTMLButtonElement
+      await act(async () => { addParentBtn.click() })
+
+      const setNativeValue = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype, 'value'
+      )!.set!
+
+      const givenNameInput = container.querySelector('#create-given-name') as HTMLInputElement
+      await act(async () => {
+        setNativeValue.call(givenNameInput, 'New')
+        givenNameInput.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+
+      const familyNameInput = container.querySelector('#create-family-name') as HTMLInputElement
+      await act(async () => {
+        setNativeValue.call(familyNameInput, 'Parent')
+        familyNameInput.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+
+      const saveBtn = Array.from(container.querySelectorAll('button'))
+        .find(b => b.textContent?.trim() === 'Save change') as HTMLButtonElement
+      await act(async () => { saveBtn.click() })
+      await act(async () => { await Promise.resolve() })
+    }
+
+    it('non-admin: handleCreateAndLink POSTs to /api/suggestions with ADD_RELATIONSHIP payload', async () => {
+      mockSession('user')
+      const { calls } = installCreateFetchMock()
+      await renderDrawer()
+      await openAddParentAndFillCreateForm()
+
+      const createPersonCall = calls.find(c => c.url === '/api/persons' && c.init?.method === 'POST')
+      expect(createPersonCall).toBeDefined()
+
+      const suggestionCall = calls.find(c => c.url === '/api/suggestions')
+      expect(suggestionCall).toBeDefined()
+      expect(suggestionCall!.init?.method).toBe('POST')
+      expect(JSON.parse(suggestionCall!.init!.body as string)).toEqual({
+        changeType: 'ADD_RELATIONSHIP',
+        payload: { type: 'parent', targetId: '@I99@', childId: '@I1@' },
+      })
+
+      const linkCall = calls.find(c => c.url.includes('/relationships') && c.init?.method === 'POST')
+      expect(linkCall).toBeUndefined()
+    })
+  })
 })

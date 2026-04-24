@@ -20,6 +20,9 @@ const mockWrite = write as jest.MockedFunction<typeof write>
 import { recordChange } from '@/lib/changes'
 const mockRecordChange = recordChange as jest.MockedFunction<typeof recordChange>
 
+import { auth } from '@/auth'
+const mockAuth = auth as jest.MockedFunction<typeof auth>
+
 const makeRequest = (body: unknown) =>
   new Request('http://localhost/api/person/I001/relationships', {
     method: 'POST',
@@ -219,5 +222,18 @@ describe('POST /api/person/[id]/relationships', () => {
     const response = await POST(makeRequest({ type: 'spouse', targetId: 'I002' }), makeParams('I001'))
 
     expect(response.status).toBe(500)
+  })
+
+  it('returns 403 when a non-admin user attempts to create a parent relationship', async () => {
+    mockAuth.mockResolvedValueOnce({
+      user: { email: 'user@example.com', name: 'Regular User', role: 'user' },
+    } as never)
+
+    const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(body).toEqual({ error: 'Only admins can add parent relationships directly' })
+    expect(mockWrite).not.toHaveBeenCalled()
   })
 })

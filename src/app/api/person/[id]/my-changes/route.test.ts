@@ -75,7 +75,7 @@ describe('GET /api/person/[id]/my-changes', () => {
     // Second call is the changes query
     const secondCall = mockRead.mock.calls[1]
     expect(secondCall[0]).toMatch(/status:\s*'live'/)
-    expect(secondCall[0]).toMatch(/authorEmail:\s*\$email/)
+    expect(secondCall[0]).toMatch(/toLower\(c\.authorEmail\)\s*=\s*toLower\(\$email\)/)
     expect(secondCall[1]).toEqual(
       expect.objectContaining({ email: 'user@example.com', id: 'I001' })
     )
@@ -227,6 +227,31 @@ describe('GET /api/person/[id]/my-changes', () => {
     expect(response.status).toBe(200)
     expect(body.updateChanges).toHaveLength(1)
     expect(body.updateChanges[0].newValue).toEqual({})
+  })
+
+  it('returns createChange when session email case differs from stored author email', async () => {
+    mockAuth.mockResolvedValue({ user: { email: 'USER@EXAMPLE.COM', name: 'User', role: 'user' } } as never)
+    mockRead.mockResolvedValueOnce([])
+    mockRead.mockResolvedValueOnce([
+      {
+        id: 'c-create-case',
+        changeType: 'CREATE_PERSON',
+        targetId: 'I001',
+        newValue: JSON.stringify({ name: 'X', sex: 'M' }),
+        previousValue: null,
+        appliedAt: '2026-04-20T10:00:00Z',
+      },
+    ])
+
+    const response = await GET(makeRequest(), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.createChange).not.toBeNull()
+    expect(body.createChange.id).toBe('c-create-case')
+    // Cypher must use toLower on both sides for case-insensitive email matching
+    const changeQueryCypher = mockRead.mock.calls[1][0] as string
+    expect(changeQueryCypher).toMatch(/toLower\(c\.authorEmail\)\s*=\s*toLower\(\$email\)/)
   })
 
   it('returns only the newest when multiple CREATE_PERSON rows exist', async () => {

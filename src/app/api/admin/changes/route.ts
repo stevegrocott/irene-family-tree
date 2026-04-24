@@ -66,8 +66,9 @@ export async function GET(request: Request) {
       { skip, limit: PAGE_SIZE }
     )
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
     console.error('Neo4j query failed', err)
-    return NextResponse.json({ error: 'Failed to query graph database' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to query graph database', detail: msg }, { status: 500 })
   }
 
   const changes = rows.map(row => ({

@@ -18,6 +18,15 @@ const PANEL_IDS: Record<Tab, string> = {
 const TAB_ACTIVE = 'px-4 py-2 rounded-xl text-sm font-medium bg-white/10 backdrop-blur-md border border-white/20 text-white shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-colors'
 const TAB_INACTIVE = 'px-4 py-2 rounded-xl text-sm font-medium bg-transparent border border-transparent text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors'
 
+/**
+ * Accessible tab container for the admin page.
+ *
+ * Renders ARIA-compliant tab buttons and a single tab panel whose content
+ * is supplied via slots, keeping tab-state logic out of the server page.
+ *
+ * @param suggestionsSlot - Content rendered when the "Pending Suggestions" tab is active
+ * @param historySlot - Content rendered when the "Change History" tab is active
+ */
 export function AdminTabs({
   suggestionsSlot,
   historySlot,

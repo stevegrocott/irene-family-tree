@@ -9,17 +9,27 @@ import type { Change } from './types'
 
 const PAGE_SIZE = 20
 
+/** Raw Neo4j row returned by the pending-changes query. */
 interface PendingChangeRow {
   id: string
   changeType: string
   authorName: string
   authorEmail: string
+  /** JSON-serialised change payload, or null if not yet stored. */
   payload: string | null
+  /** Resolved from the linked Person node; null when the node cannot be found. */
   personName: string | null
   status: string
   createdAt: string | null
 }
 
+/**
+ * Server component for `/admin`.
+ *
+ * Redirects unauthenticated or non-admin visitors to the sign-in page,
+ * fetches the first page of pending suggestions from Neo4j, and renders
+ * the tabbed admin UI with the data pre-loaded.
+ */
 export default async function AdminPage() {
   const session = await auth()
   if (!session || session.user?.role !== 'admin') {

@@ -1,18 +1,48 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type BrowserContext } from '@playwright/test'
+import { encode } from '@auth/core/jwt'
 import { mockPersonsAndTree, mockSignedInSession } from './helpers/revert-mocks'
 
 /**
- * E2E tests for the cascade-revert flow (issue #119).
+ * E2E tests for the cascade-revert flow (issue #127).
  *
  * Scenarios:
- *   1. Happy path — person with relationships; user is the author of all connections.
- *      Click delete → confirm cascade dialog → POST /api/person/[id]/cascade-revert →
- *      drawer closes and tree refreshes.
- *   2. Blocked path — some connections were added by another user.
- *      POST returns 403 with blockedBy; "Contact an admin" message is shown inline.
+ *   1. Admin deletes a person they created (with connections they also created) →
+ *      cascade-revert is called, drawer closes, person removed from tree.
+ *   2. Non-admin deletes a person they created with no connections →
+ *      simple /api/changes/[id]/revert is called, drawer closes (success).
+ *   3. Non-admin attempt where another user added a connection →
+ *      delete button is pre-disabled and error message is shown inline.
  */
 
-const mockAlice = {
+// ── Admin auth helper ────────────────────────────────────────────────────────
+
+async function setAdminCookie(context: BrowserContext): Promise<void> {
+  const token = await encode({
+    token: {
+      name: 'E2E Admin',
+      email: 'admin@test.com',
+      picture: null,
+      sub: 'e2e-admin-001',
+      role: 'admin',
+    },
+    secret: process.env.AUTH_SECRET ?? 'e2e-test-auth-secret',
+    salt: 'authjs.session-token',
+  })
+  await context.addCookies([{
+    name: 'authjs.session-token',
+    value: token,
+    domain: 'localhost',
+    path: '/',
+    httpOnly: true,
+    secure: false,
+    sameSite: 'Lax',
+  }])
+}
+
+// ── Shared mock data ─────────────────────────────────────────────────────────
+
+// Alice with one parent — used in admin test (scenario 1) and foreign-connection test (scenario 3)
+const mockAliceWithParent = {
   gedcomId: '@IALICE@',
   name: 'Alice Connected',
   sex: 'F',
@@ -27,32 +57,68 @@ const mockAlice = {
   marriages: [],
 }
 
-const aliceTreeResponse = {
-  nodes: [
-    {
-      id: 'node-@IALICE@',
-      type: 'person',
-      data: {
-        gedcomId: '@IALICE@',
-        name: 'Alice Connected',
-        sex: 'F',
-        birthYear: '1990',
-        deathYear: null,
-        birthPlace: null,
-        deathPlace: null,
-        occupation: null,
-        notes: null,
-        isRoot: true,
-        generation: 0,
-      },
-      position: { x: 0, y: 0 },
+// Alice with no connections — used in non-admin simple-revert test (scenario 2)
+const mockAliceNoConnections = {
+  gedcomId: '@IALICE@',
+  name: 'Alice Simple',
+  sex: 'F',
+  birthYear: '1990',
+  deathYear: null,
+  birthPlace: null,
+  deathPlace: null,
+  occupation: null,
+  notes: null,
+  parents: [],
+  siblings: [],
+  marriages: [],
+}
+
+const aliceWithParentTreeResponse = {
+  nodes: [{
+    id: 'node-@IALICE@',
+    type: 'person',
+    data: {
+      gedcomId: '@IALICE@',
+      name: 'Alice Connected',
+      sex: 'F',
+      birthYear: '1990',
+      deathYear: null,
+      birthPlace: null,
+      deathPlace: null,
+      occupation: null,
+      notes: null,
+      isRoot: true,
+      generation: 0,
     },
-  ],
+    position: { x: 0, y: 0 },
+  }],
   edges: [],
 }
 
-// Happy path: user authored all connections (1 relationship change matches 1 parent)
-const myChangesWithRelationship = {
+const aliceSimpleTreeResponse = {
+  nodes: [{
+    id: 'node-@IALICE@',
+    type: 'person',
+    data: {
+      gedcomId: '@IALICE@',
+      name: 'Alice Simple',
+      sex: 'F',
+      birthYear: '1990',
+      deathYear: null,
+      birthPlace: null,
+      deathPlace: null,
+      occupation: null,
+      notes: null,
+      isRoot: true,
+      generation: 0,
+    },
+    position: { x: 0, y: 0 },
+  }],
+  edges: [],
+}
+
+// Admin's my-changes: created Alice and added the parent relationship themselves
+const adminChangesWithRelationship = {
   createChange: {
     id: 'change-create-1',
     changeType: 'CREATE_PERSON',
@@ -61,45 +127,46 @@ const myChangesWithRelationship = {
     appliedAt: '2026-04-01T10:00:00.000Z',
   },
   relationshipChanges: [
-    { id: 'change-rel-1', newValue: { unionId: '@UBOB@' }, appliedAt: '2026-04-01T10:00:00.000Z' },
+    { id: 'change-rel-1', newValue: { unionId: '@UBOB@' }, appliedAt: '2026-04-01T10:01:00.000Z' },
   ],
   updateChanges: [],
 }
 
-// Blocked path: user authored no relationship changes, but Alice has 1 parent
-// → hasForeignConnections = true → button pre-disabled without a server round-trip
-const myChangesWithCreate = {
+// Non-admin's my-changes: created Alice, owns no relationship changes
+// Used for both scenario 2 (Alice has no connections) and scenario 3 (another user added them)
+const userChangesCreateOnly = {
   createChange: {
-    id: 'change-create-1',
+    id: 'change-create-2',
     changeType: 'CREATE_PERSON',
     targetId: '@IALICE@',
-    newValue: { name: 'Alice Connected' },
+    newValue: { name: 'Alice Simple' },
     appliedAt: '2026-04-01T10:00:00.000Z',
   },
   relationshipChanges: [],
   updateChanges: [],
 }
 
-const alicePersonsList = [
-  { gedcomId: '@IALICE@', name: 'Alice Connected', sex: 'F', birthYear: '1990', deathYear: null, birthPlace: null },
-]
+// ── Tests ────────────────────────────────────────────────────────────────────
 
-test.describe('cascade-revert: delete person with connections', () => {
-  test('happy path — cascade-revert called, drawer closes on success', async ({ page }) => {
+test.describe('cascade-revert: delete person', () => {
+  test('admin deletes a person they created with connections they also created — person removed from tree, success shown', async ({ page, context }) => {
     let cascadePostCount = 0
 
-    await mockSignedInSession(page)
-    await mockPersonsAndTree(page, alicePersonsList, aliceTreeResponse)
+    await setAdminCookie(context)
+    await mockPersonsAndTree(page,
+      [{ gedcomId: '@IALICE@', name: 'Alice Connected', sex: 'F', birthYear: '1990', deathYear: null, birthPlace: null }],
+      aliceWithParentTreeResponse,
+    )
 
-    await page.route(/\/api\/person\/[^/]+\/my-changes/, (route) =>
+    await page.route(/\/api\/person\/[^/]+\/my-changes/, route =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(myChangesWithRelationship),
+        body: JSON.stringify(adminChangesWithRelationship),
       })
     )
 
-    await page.route(/\/api\/person\/[^/]+\/cascade-revert/, async (route) => {
+    await page.route(/\/api\/person\/[^/]+\/cascade-revert/, async route => {
       if (route.request().method() === 'POST') {
         cascadePostCount += 1
         await route.fulfill({
@@ -112,11 +179,11 @@ test.describe('cascade-revert: delete person with connections', () => {
       await route.continue()
     })
 
-    await page.route(/\/api\/person\/[^/]+$/, (route) =>
+    await page.route(/\/api\/person\/[^/]+$/, route =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(mockAlice),
+        body: JSON.stringify(mockAliceWithParent),
       })
     )
 
@@ -135,7 +202,7 @@ test.describe('cascade-revert: delete person with connections', () => {
     await expect(deleteBtn).toBeVisible()
     await expect(deleteBtn).toBeEnabled()
 
-    page.once('dialog', (d) => {
+    page.once('dialog', d => {
       expect(d.message()).toMatch(/1.*connections?/i)
       d.accept()
     })
@@ -145,26 +212,86 @@ test.describe('cascade-revert: delete person with connections', () => {
     expect(cascadePostCount).toBe(1)
   })
 
-  test('blocked path — button pre-disabled when foreign connections exist', async ({ page }) => {
-    // myChangesWithCreate has 0 relationship changes but Alice has 1 parent connection.
-    // The client-side count comparison detects this and disables the button immediately,
-    // showing the "contact an admin" message without a server round-trip.
-    await mockSignedInSession(page)
-    await mockPersonsAndTree(page, alicePersonsList, aliceTreeResponse)
+  test('non-admin deletes a person they created with no connections — success', async ({ page }) => {
+    let revertPostCount = 0
 
-    await page.route(/\/api\/person\/[^/]+\/my-changes/, (route) =>
+    await mockSignedInSession(page)
+    await mockPersonsAndTree(page,
+      [{ gedcomId: '@IALICE@', name: 'Alice Simple', sex: 'F', birthYear: '1990', deathYear: null, birthPlace: null }],
+      aliceSimpleTreeResponse,
+    )
+
+    await page.route(/\/api\/person\/[^/]+\/my-changes/, route =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(myChangesWithCreate),
+        body: JSON.stringify(userChangesCreateOnly),
       })
     )
 
-    await page.route(/\/api\/person\/[^/]+$/, (route) =>
+    await page.route(/\/api\/person\/[^/]+$/, route =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(mockAlice),
+        body: JSON.stringify(mockAliceNoConnections),
+      })
+    )
+
+    await page.route(/\/api\/changes\/[^/]+\/revert/, async route => {
+      if (route.request().method() === 'POST') {
+        revertPostCount += 1
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true }),
+        })
+        return
+      }
+      await route.continue()
+    })
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('toolbar-viewing')).toContainText('Alice', { timeout: 15_000 })
+
+    const personNode = page.locator('.react-flow__node-person').first()
+    await expect(personNode).toBeVisible({ timeout: 10_000 })
+    await personNode.click()
+
+    const drawer = page.getByTestId('person-drawer')
+    await expect(drawer).toBeVisible()
+    await expect(page.getByTestId('person-drawer-marriages')).toBeVisible({ timeout: 5_000 })
+
+    const deleteBtn = page.getByTestId('person-drawer-delete')
+    await expect(deleteBtn).toBeVisible()
+    await expect(deleteBtn).toBeEnabled()
+
+    page.once('dialog', d => d.accept())
+    await deleteBtn.click()
+
+    await expect(drawer).not.toBeVisible({ timeout: 5_000 })
+    expect(revertPostCount).toBe(1)
+  })
+
+  test('non-admin attempt where another user added a connection — error message shown', async ({ page }) => {
+    await mockSignedInSession(page)
+    await mockPersonsAndTree(page,
+      [{ gedcomId: '@IALICE@', name: 'Alice Connected', sex: 'F', birthYear: '1990', deathYear: null, birthPlace: null }],
+      aliceWithParentTreeResponse,
+    )
+
+    await page.route(/\/api\/person\/[^/]+\/my-changes/, route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(userChangesCreateOnly),
+      })
+    )
+
+    await page.route(/\/api\/person\/[^/]+$/, route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(mockAliceWithParent),
       })
     )
 
@@ -183,8 +310,7 @@ test.describe('cascade-revert: delete person with connections', () => {
     await expect(deleteBtn).toBeVisible()
     await expect(deleteBtn).toBeDisabled()
 
-    const errorMsg = page.getByTestId('person-drawer-action-error')
-    await expect(errorMsg).toContainText(/admin/i, { timeout: 5_000 })
+    await expect(page.getByTestId('person-drawer-action-error')).toContainText(/admin/i, { timeout: 5_000 })
     await expect(drawer).toBeVisible()
   })
 })

@@ -28,7 +28,8 @@ export async function POST(
       { error: result.error, blockedBy: result.blockedBy },
       { status: result.status }
     )
-  } catch {
+  } catch (err) {
+    console.error('[cascade-revert] unhandled error for person', id, err)
     return NextResponse.json({ error: 'Failed to revert person' }, { status: 500 })
   }
 }

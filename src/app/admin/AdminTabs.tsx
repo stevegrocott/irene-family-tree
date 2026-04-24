@@ -64,10 +64,19 @@ export function AdminTabs({
       </div>
       <div
         role="tabpanel"
-        id={PANEL_IDS[activeTab]}
-        aria-labelledby={TAB_IDS[activeTab]}
+        id={PANEL_IDS[TABS.SUGGESTIONS]}
+        aria-labelledby={TAB_IDS[TABS.SUGGESTIONS]}
+        hidden={activeTab !== TABS.SUGGESTIONS}
       >
-        {activeTab === TABS.SUGGESTIONS ? suggestionsSlot : historySlot}
+        {suggestionsSlot}
+      </div>
+      <div
+        role="tabpanel"
+        id={PANEL_IDS[TABS.HISTORY]}
+        aria-labelledby={TAB_IDS[TABS.HISTORY]}
+        hidden={activeTab !== TABS.HISTORY}
+      >
+        {historySlot}
       </div>
     </>
   )

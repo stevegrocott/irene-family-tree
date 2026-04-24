@@ -507,7 +507,11 @@ export function PersonDrawer({
         const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/cascade-revert`, { method: 'POST' })
         if (res.ok) {
           setMyChanges(null)
-          const refreshId = rootId && rootId !== person.gedcomId ? rootId : ''
+          const connectedId =
+            detail?.parents[0]?.gedcomId ??
+            detail?.marriages[0]?.spouse?.gedcomId ??
+            null
+          const refreshId = connectedId ?? (rootId && rootId !== person.gedcomId ? rootId : '')
           onSelectRoot?.(refreshId)
           onClose()
         } else if (res.status === 403) {

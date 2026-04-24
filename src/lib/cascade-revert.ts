@@ -1,6 +1,13 @@
 import { read, writeTransaction } from '@/lib/neo4j'
 import { recordChange } from '@/lib/changes'
 
+const CHANGE_STATUS = { LIVE: 'live', REVERTED: 'reverted' } as const
+const CHANGE_TYPE = {
+  CREATE_PERSON: 'CREATE_PERSON',
+  ADD_RELATIONSHIP: 'ADD_RELATIONSHIP',
+  DELETE_PERSON: 'DELETE_PERSON',
+} as const
+
 export type CascadeRevertOutcome =
   | { ok: true; unionsReverted: number }
   | { ok: false; status: 403 | 404 | 409; error: string; blockedBy?: BlockedEdge[] }
@@ -22,17 +29,21 @@ export async function cascadeRevertPerson(
   personId: string,
   requester: { email: string; name: string; isAdmin: boolean }
 ): Promise<CascadeRevertOutcome> {
-  const createRows = await read<ChangeQueryRow>(
-    requester.isAdmin
-      ? `MATCH (c:Change { changeType: 'CREATE_PERSON', status: 'live', targetId: $personId })
-         RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
-         LIMIT 1`
-      : `MATCH (c:Change { changeType: 'CREATE_PERSON', status: 'live', targetId: $personId })
-         WHERE toLower(c.authorEmail) = toLower($email)
-         RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
-         LIMIT 1`,
-    { personId, email: requester.email }
-  )
+  const [createRows, unionRows] = await Promise.all([
+    read<ChangeQueryRow>(
+      `MATCH (c:Change { changeType: $createType, status: $live, targetId: $personId })
+       WHERE $isAdmin OR toLower(c.authorEmail) = toLower($email)
+       RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
+       LIMIT 1`,
+      { personId, email: requester.email, isAdmin: requester.isAdmin, createType: CHANGE_TYPE.CREATE_PERSON, live: CHANGE_STATUS.LIVE }
+    ),
+    read<{ unionId: string }>(
+      `MATCH (p:Person {gedcomId: $personId})-[:UNION]->(u:Union)
+       RETURN DISTINCT u.gedcomId AS unionId
+       LIMIT 100`,
+      { personId }
+    ),
+  ])
 
   if (createRows.length === 0) {
     return { ok: false, status: 404, error: 'No CREATE_PERSON change found for this person' }
@@ -48,11 +59,6 @@ export async function cascadeRevertPerson(
     return { ok: false, status: 409, error: 'Malformed change record: cannot parse newValue' }
   }
 
-  const unionRows = await read<{ unionId: string }>(
-    `MATCH (p:Person {gedcomId: $personId})-[:UNION]->(u:Union)
-     RETURN DISTINCT u.gedcomId AS unionId`,
-    { personId }
-  )
   const unionIds = unionRows.map(r => r.unionId).filter(Boolean)
 
   // Filter ADD_RELATIONSHIP changes in JS since Neo4j Community/Aura may lack APOC for server-side JSON parsing
@@ -60,11 +66,11 @@ export async function cascadeRevertPerson(
 
   if (unionIds.length > 0) {
     const allRelRows = await read<ChangeQueryRow>(
-      `MATCH (c:Change { changeType: 'ADD_RELATIONSHIP', status: 'live' })
+      `MATCH (c:Change { changeType: $relType, status: $live })
        WHERE c.targetId = $personId
        RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
        LIMIT 1000`,
-      { personId }
+      { personId, relType: CHANGE_TYPE.ADD_RELATIONSHIP, live: CHANGE_STATUS.LIVE }
     )
 
     const unionIdSet = new Set(unionIds)
@@ -84,22 +90,15 @@ export async function cascadeRevertPerson(
     }
 
     if (!requester.isAdmin) {
-      const blockedBy: BlockedEdge[] = []
-      for (const unionId of unionIds) {
+      const blockedBy = unionIds.flatMap(unionId => {
         const change = relChangesByUnion.get(unionId)
-        if (!change || change.authorEmail.toLowerCase() !== requester.email.toLowerCase()) {
-          blockedBy.push({
-            unionId,
-            authorEmail: change?.authorEmail ?? 'unknown',
-            authorName: change?.authorName ?? 'unknown',
-          })
-        }
-      }
+        if (change && change.authorEmail.toLowerCase() === requester.email.toLowerCase()) return []
+        return [{ unionId, authorEmail: change?.authorEmail ?? 'unknown', authorName: change?.authorName ?? 'unknown' }]
+      })
       if (blockedBy.length > 0) {
         return { ok: false, status: 403, error: 'blocked', blockedBy }
       }
     }
-
   }
 
   const relChangeIds = Array.from(relChangesByUnion.values()).map(c => c.id)
@@ -114,20 +113,20 @@ export async function cascadeRevertPerson(
     })
     if (relChangeIds.length > 0) {
       statements.push({
-        cypher: `UNWIND $ids AS id MATCH (c:Change {id: id}) SET c.status = 'reverted'`,
-        params: { ids: relChangeIds },
+        cypher: `UNWIND $ids AS id MATCH (c:Change {id: id}) SET c.status = $reverted`,
+        params: { ids: relChangeIds, reverted: CHANGE_STATUS.REVERTED },
       })
     }
   }
   statements.push(
     { cypher: `MATCH (p:Person {gedcomId: $personId}) DETACH DELETE p`, params: { personId } },
-    { cypher: `MATCH (c:Change {id: $id}) SET c.status = 'reverted'`, params: { id: createChange.id } }
+    { cypher: `MATCH (c:Change {id: $id}) SET c.status = $reverted`, params: { id: createChange.id, reverted: CHANGE_STATUS.REVERTED } }
   )
 
   await writeTransaction(statements)
 
   try {
-    await recordChange(requester.email, requester.name, 'DELETE_PERSON', personId, prevFromCreate, {})
+    await recordChange(requester.email, requester.name, CHANGE_TYPE.DELETE_PERSON, personId, prevFromCreate, {})
   } catch (auditErr) {
     console.error('Audit recordChange failed (non-fatal)', auditErr)
   }

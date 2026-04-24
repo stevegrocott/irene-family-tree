@@ -15,11 +15,16 @@ export async function POST(
 
   const { id } = await params
 
-  const result = await cascadeRevertPerson(id, {
-    email: session.user.email,
-    name: session.user.name ?? session.user.email,
-    isAdmin: session.user.role === 'admin',
-  })
+  let result
+  try {
+    result = await cascadeRevertPerson(id, {
+      email: session.user.email,
+      name: session.user.name ?? session.user.email,
+      isAdmin: session.user.role === 'admin',
+    })
+  } catch {
+    return NextResponse.json({ error: 'Failed to revert person' }, { status: 500 })
+  }
 
   if (result.ok) {
     return NextResponse.json({ success: true, unionsReverted: result.unionsReverted })

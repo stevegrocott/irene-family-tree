@@ -427,6 +427,7 @@ export function PersonDrawer({
     }
     const fullName = `${givenName.trim()} ${familyName.trim()}`
     setIsSubmitting(true)
+    let createdPerson: Person | null = null
     try {
       const createRes = await fetch('/api/persons', {
         method: 'POST',
@@ -435,6 +436,20 @@ export function PersonDrawer({
       })
       if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`)
       const newPerson = await createRes.json() as Person
+      createdPerson = newPerson
+      if (addRelativeType === 'parent' && !isAdmin) {
+        const suggestionRes = await fetch('/api/suggestions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            changeType: 'ADD_RELATIONSHIP',
+            payload: { type: 'parent', targetId: newPerson.gedcomId, childId: person.gedcomId },
+          }),
+        })
+        if (!suggestionRes.ok) throw new Error(`HTTP ${suggestionRes.status}`)
+        setSuggestionSubmitted(true)
+        return
+      }
       const linkRes = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -447,7 +462,11 @@ export function PersonDrawer({
       onSelectRoot?.(person.gedcomId)
     } catch (err) {
       console.error('Failed to create and link relative', err)
-      setActionError('Failed to create and link person. Please try again.')
+      if (addRelativeType === 'parent' && !isAdmin && createdPerson) {
+        setActionError('Person was created, but the suggestion could not be submitted. Please contact an admin to complete the link.')
+      } else {
+        setActionError('Failed to create and link person. Please try again.')
+      }
     } finally {
       setIsSubmitting(false)
     }

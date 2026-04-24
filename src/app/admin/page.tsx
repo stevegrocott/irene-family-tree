@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { auth } from '@/auth'
 import { read } from '@/lib/neo4j'
+import { safeParseJson } from '@/lib/utils'
 import { SuggestionsReview } from './SuggestionsReview'
 import { ChangeHistory } from './ChangeHistory'
 import { AdminTabs } from './AdminTabs'
@@ -17,12 +18,6 @@ interface PendingChangeRow {
   personName: string | null
   status: string
   createdAt: string | null
-}
-
-function safeParseJson(val: unknown): Record<string, unknown> | null {
-  if (val === null || val === undefined) return null
-  if (typeof val === 'object') return val as Record<string, unknown>
-  try { return JSON.parse(val as string) } catch { return null }
 }
 
 export default async function AdminPage() {
@@ -64,8 +59,8 @@ export default async function AdminPage() {
         status: row.status,
       }
     })
-  } catch {
-    // Render with empty list; the component shows a friendly message
+  } catch (err) {
+    console.error('Failed to fetch pending suggestions:', err)
   }
 
   return (

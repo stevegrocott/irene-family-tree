@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { read } from '@/lib/neo4j'
 import { auth } from '@/auth'
+import { safeParseJson } from '@/lib/utils'
 
 export const runtime = 'nodejs'
 
@@ -17,12 +18,6 @@ interface ChangeRow {
   newValue: string
   appliedAt: string
   status: string
-}
-
-function safeParseJson(val: unknown): Record<string, unknown> | null {
-  if (val === null || val === undefined) return null
-  if (typeof val === 'object') return val as Record<string, unknown>
-  try { return JSON.parse(val as string) } catch { return null }
 }
 
 export async function GET(request: Request) {

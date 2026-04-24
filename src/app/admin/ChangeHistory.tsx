@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import type { Change } from './types'
 
+const CONFLICT_STATUS = 409
+
 export function ChangeHistory() {
   const [changes, setChanges] = useState<Change[]>([])
   const [loading, setLoading] = useState(true)
@@ -12,6 +14,7 @@ export function ChangeHistory() {
   const [revertErrors, setRevertErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
+    // TODO: implement Load More / pagination — currently limited to first 20 records
     fetch('/api/admin/changes?page=1')
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -24,14 +27,17 @@ export function ChangeHistory() {
 
   async function handleRevert(id: string) {
     setReverting(r => ({ ...r, [id]: true }))
-    setRevertErrors(e => { const next = { ...e }; delete next[id]; return next })
+    setRevertErrors(e => {
+      const { [id]: _, ...rest } = e
+      return rest
+    })
     try {
       const res = await fetch(`/api/admin/changes/${encodeURIComponent(id)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'revert' }),
       })
-      if (res.status === 409) {
+      if (res.status === CONFLICT_STATUS) {
         const data = await res.json()
         setRevertErrors(e => ({ ...e, [id]: data.error ?? 'Cannot revert: conflicting change exists.' }))
         return
@@ -41,7 +47,10 @@ export function ChangeHistory() {
     } catch {
       setRevertErrors(e => ({ ...e, [id]: 'Failed to revert change. Please try again.' }))
     } finally {
-      setReverting(r => { const next = { ...r }; delete next[id]; return next })
+      setReverting(r => {
+        const { [id]: _, ...rest } = r
+        return rest
+      })
     }
   }
 

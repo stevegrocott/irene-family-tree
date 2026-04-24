@@ -260,6 +260,7 @@ export function PersonDrawer({
   const [showEditNotes, setShowEditNotes] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [suggestionSubmitted, setSuggestionSubmitted] = useState(false)
 
   const [myChanges, setMyChanges] = useState<{
     createChange: { id: string; changeType: string; targetId: string; newValue: Record<string, unknown>; appliedAt: string } | null
@@ -369,6 +370,7 @@ export function PersonDrawer({
     setAddRelativeType(type)
     resetAddRelativeForm()
     setActionError(null)
+    setSuggestionSubmitted(false)
     setMode('add-relative')
   }
 
@@ -380,6 +382,19 @@ export function PersonDrawer({
   const handleSelectRelative = async (relative: Person) => {
     setIsSubmitting(true)
     try {
+      if (addRelativeType === 'parent' && !isAdmin) {
+        const res = await fetch('/api/suggestions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            changeType: 'ADD_RELATIONSHIP',
+            payload: { type: 'parent', targetId: relative.gedcomId, childId: person.gedcomId },
+          }),
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        setSuggestionSubmitted(true)
+        return
+      }
       const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -392,7 +407,9 @@ export function PersonDrawer({
       onSelectRoot?.(person.gedcomId)
     } catch (err) {
       console.error('Failed to add relative', err)
-      setActionError('Failed to add relative. Please try again.')
+      setActionError(addRelativeType === 'parent' && !isAdmin
+        ? 'Failed to submit suggestion. Please try again.'
+        : 'Failed to add relative. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -820,6 +837,29 @@ export function PersonDrawer({
   }
 
   if (mode === 'add-relative') {
+    if (suggestionSubmitted) {
+      return (
+        <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => { setSuggestionSubmitted(false); setMode('view') }}>
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            <p
+              data-testid="suggestion-submitted"
+              className="text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2"
+            >
+              Suggestion submitted
+            </p>
+            <p className="text-xs text-slate-400">
+              An admin will review your suggestion before it appears on the tree.
+            </p>
+            <button
+              onClick={() => { setSuggestionSubmitted(false); setMode('view') }}
+              className="w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </DrawerSubView>
+      )
+    }
     return (
       <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => setMode('view')}>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">

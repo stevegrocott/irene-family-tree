@@ -1,9 +1,24 @@
 import { NextResponse } from 'next/server'
 import { read } from '@/lib/neo4j'
 import { auth } from '@/auth'
+import { safeParseJson } from '@/lib/utils'
 
 export const runtime = 'nodejs'
 
+/**
+ * Represents a pending change row from the database query.
+ * @typedef {Object} PendingChangeRow
+ * @property {string} id - Unique identifier for the pending change
+ * @property {string} changeType - Type of change (CREATE_PERSON, ADD_RELATIONSHIP, or field update)
+ * @property {string} authorName - Name of the user who suggested the change
+ * @property {string} authorEmail - Email of the user who suggested the change
+ * @property {string | null} payload - JSON-stringified object with new/updated values
+ * @property {string | null} previousValue - JSON-stringified previous value for the field
+ * @property {string | null} targetId - GEDCOM ID of the person being modified (null for CREATE_PERSON)
+ * @property {string | null} personName - Display name of the target person
+ * @property {string} status - Current status of the change (pending, approved, declined, etc.)
+ * @property {string | null} createdAt - ISO timestamp when the change was created
+ */
 interface PendingChangeRow {
   id: string
   changeType: string
@@ -17,12 +32,39 @@ interface PendingChangeRow {
   createdAt: string | null
 }
 
-function safeParseJson(val: unknown): Record<string, unknown> | null {
-  if (val === null || val === undefined) return null
-  if (typeof val === 'object') return val as Record<string, unknown>
-  try { return JSON.parse(val as string) } catch { return null }
-}
-
+/**
+ * Fetches pending change suggestions for admin review.
+ *
+ * Requires admin authentication. Returns paginated pending changes with:
+ * - Change metadata (type, author, creation timestamp)
+ * - Previous value and new value for the change
+ * - Target person information (name, ID)
+ * - Current change status
+ *
+ * Results are sorted by creation date (newest first) and limited to 20 per page.
+ *
+ * @async
+ * @returns {Promise<NextResponse<{suggestions: Object[]}>>} JSON response with array of suggestion objects
+ *
+ * @example
+ * // Response structure
+ * {
+ *   suggestions: [
+ *     {
+ *       id: "uuid",
+ *       changeType: "CREATE_PERSON",
+ *       targetId: "I123",
+ *       personName: "John Doe",
+ *       authorName: "Jane Smith",
+ *       authorEmail: "jane@example.com",
+ *       previousValue: null,
+ *       newValue: { givenName: "John", surname: "Doe" },
+ *       appliedAt: "2024-04-24T10:30:00Z",
+ *       status: "pending"
+ *     }
+ *   ]
+ * }
+ */
 export async function GET() {
   const session = await auth()
   if (!session?.user) {

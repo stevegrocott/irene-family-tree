@@ -46,3 +46,6 @@ status.json
 
 # worktrees
 .worktrees/
+
+# Claude Code runtime artifacts
+.claude/*.lock

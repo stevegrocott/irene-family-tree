@@ -4,9 +4,20 @@ import { read, write } from '@/lib/neo4j'
 import { recordChange } from '@/lib/changes'
 import { auth } from '@/auth'
 import { ALLOWED_PATCH_FIELDS } from '@/lib/patches'
+import { safeParseJson } from '@/lib/utils'
 
 export const runtime = 'nodejs'
 
+/**
+ * Represents a pending change row from the database.
+ * @typedef {Object} PendingChangeRow
+ * @property {string} id - Unique identifier for the pending change
+ * @property {string} changeType - Type of change (e.g., CREATE_PERSON, ADD_RELATIONSHIP)
+ * @property {string | null} payload - JSON-stringified payload containing change details
+ * @property {string} status - Current status (pending, approved, declined, etc.)
+ * @property {string} authorEmail - Email of the person who suggested the change
+ * @property {string} authorName - Name of the person who suggested the change
+ */
 interface PendingChangeRow {
   id: string
   changeType: string
@@ -16,12 +27,31 @@ interface PendingChangeRow {
   authorName: string
 }
 
-function safeParseJson(val: unknown): Record<string, unknown> | null {
-  if (val === null || val === undefined) return null
-  if (typeof val === 'object') return val as Record<string, unknown>
-  try { return JSON.parse(val as string) } catch { return null }
-}
-
+/**
+ * Handles approval or decline of a pending change suggestion.
+ *
+ * Requires admin authentication. Processes the specified action (approve/decline)
+ * and applies changes to the database accordingly:
+ * - CREATE_PERSON: Creates a new person node with allowed fields
+ * - ADD_RELATIONSHIP: Creates or reuses a union between a parent and child
+ * - Other types: Updates person properties with allowed fields
+ *
+ * Handles conflicts gracefully (409) when target persons no longer exist.
+ *
+ * @async
+ * @param {Request} request - HTTP request containing JSON body with action and optional reason
+ * @param {Object} params - Route parameters
+ * @param {Promise<{ id: string }>} params.params - Promise resolving to route params with suggestion ID
+ * @returns {Promise<NextResponse<{success: true} | {error: string}>>} JSON response with success or error
+ *
+ * @example
+ * // Request body for approval
+ * { "action": "approve" }
+ *
+ * @example
+ * // Request body for decline
+ * { "action": "decline", "reason": "Duplicate entry" }
+ */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

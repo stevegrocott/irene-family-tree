@@ -1,30 +1,38 @@
 import { NextResponse } from 'next/server'
 import { read } from '@/lib/neo4j'
 import { auth } from '@/auth'
+import { safeParseJson } from '@/lib/utils'
 
 export const runtime = 'nodejs'
 
 const PAGE_SIZE = 20
 
+/** Raw Neo4j row returned by the applied-changes query. */
 interface ChangeRow {
   id: string
   changeType: string
   targetId: string
+  /** Resolved from the linked Person node; null when the node no longer exists. */
   personName: string | null
   authorName: string
   authorEmail: string
+  /** JSON-serialised snapshot of the field before the change, or null. */
   previousValue: string | null
+  /** JSON-serialised snapshot of the field after the change. */
   newValue: string
   appliedAt: string
   status: string
 }
 
-function safeParseJson(val: unknown): Record<string, unknown> | null {
-  if (val === null || val === undefined) return null
-  if (typeof val === 'object') return val as Record<string, unknown>
-  try { return JSON.parse(val as string) } catch { return null }
-}
-
+/**
+ * Returns a paginated list of applied (live) changes for the admin change-history view.
+ *
+ * Query params:
+ * - `page` (optional, default 1) — 1-based page number
+ *
+ * @param request - Incoming Next.js request (used to read search params)
+ * @returns JSON `{ changes, page }` on success, or an error response with status 401/403/500
+ */
 export async function GET(request: Request) {
   const session = await auth()
   if (!session?.user) {

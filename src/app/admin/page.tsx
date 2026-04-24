@@ -1,28 +1,35 @@
 import { redirect } from 'next/navigation'
 import { auth } from '@/auth'
 import { read } from '@/lib/neo4j'
+import { safeParseJson } from '@/lib/utils'
 import { SuggestionsReview } from './SuggestionsReview'
+import { ChangeHistory } from './ChangeHistory'
+import { AdminTabs } from './AdminTabs'
 import type { Change } from './types'
 
 const PAGE_SIZE = 20
 
+/** Raw Neo4j row returned by the pending-changes query. */
 interface PendingChangeRow {
   id: string
   changeType: string
   authorName: string
   authorEmail: string
+  /** JSON-serialised change payload, or null if not yet stored. */
   payload: string | null
+  /** Resolved from the linked Person node; null when the node cannot be found. */
   personName: string | null
   status: string
   createdAt: string | null
 }
 
-function safeParseJson(val: unknown): Record<string, unknown> | null {
-  if (val === null || val === undefined) return null
-  if (typeof val === 'object') return val as Record<string, unknown>
-  try { return JSON.parse(val as string) } catch { return null }
-}
-
+/**
+ * Server component for `/admin`.
+ *
+ * Redirects unauthenticated or non-admin visitors to the sign-in page,
+ * fetches the first page of pending suggestions from Neo4j, and renders
+ * the tabbed admin UI with the data pre-loaded.
+ */
 export default async function AdminPage() {
   const session = await auth()
   if (!session || session.user?.role !== 'admin') {
@@ -62,20 +69,17 @@ export default async function AdminPage() {
         status: row.status,
       }
     })
-  } catch {
-    // Render with empty list; the component shows a friendly message
+  } catch (err) {
+    console.error('Failed to fetch pending suggestions:', err)
   }
 
   return (
     <main className="min-h-screen bg-[#050a18] text-white px-4 py-8 sm:px-8">
       <div className="max-w-2xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-white">Pending Suggestions</h1>
-          <p className="text-white/50 text-sm mt-1">
-            Review suggested edits from contributors. Approve to apply changes or decline to dismiss them.
-          </p>
-        </div>
-        <SuggestionsReview initialSuggestions={suggestions} />
+        <AdminTabs
+          suggestionsSlot={<SuggestionsReview initialSuggestions={suggestions} />}
+          historySlot={<ChangeHistory />}
+        />
       </div>
     </main>
   )

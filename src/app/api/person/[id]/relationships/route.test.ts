@@ -20,6 +20,9 @@ const mockWrite = write as jest.MockedFunction<typeof write>
 import { recordChange } from '@/lib/changes'
 const mockRecordChange = recordChange as jest.MockedFunction<typeof recordChange>
 
+import { auth } from '@/auth'
+const mockAuth = auth as jest.MockedFunction<typeof auth>
+
 const makeRequest = (body: unknown) =>
   new Request('http://localhost/api/person/I001/relationships', {
     method: 'POST',
@@ -62,6 +65,41 @@ describe('POST /api/person/[id]/relationships', () => {
     expect(body).toEqual({ error: 'type must be spouse, parent, or child' })
   })
 
+  it('returns 403 when non-admin user tries to create a parent relationship directly', async () => {
+    const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(body).toEqual({ error: 'Forbidden' })
+    expect(mockWrite).not.toHaveBeenCalled()
+  })
+
+  it('allows admin to create a parent relationship directly', async () => {
+    mockAuth.mockResolvedValueOnce({ user: { email: 'admin@example.com', name: 'Admin', role: 'admin' } })
+    mockWrite.mockResolvedValue([{ unionId: '@F12345678@', created: true }])
+
+    const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))
+
+    expect(response.status).toBe(201)
+    expect(mockWrite).toHaveBeenCalled()
+  })
+
+  it('does not restrict non-admin from creating spouse relationships', async () => {
+    mockWrite.mockResolvedValue([{ unionId: '@F12345678@', created: true }])
+
+    const response = await POST(makeRequest({ type: 'spouse', targetId: 'I002' }), makeParams('I001'))
+
+    expect(response.status).toBe(201)
+  })
+
+  it('does not restrict non-admin from creating child relationships', async () => {
+    mockWrite.mockResolvedValue([{ unionId: '@F12345678@', created: true }])
+
+    const response = await POST(makeRequest({ type: 'child', targetId: 'I002' }), makeParams('I001'))
+
+    expect(response.status).toBe(201)
+  })
+
   it('creates a spouse union with UNION edges for both persons', async () => {
     mockWrite.mockResolvedValue([{ unionId: '@F12345678@' }])
 
@@ -87,6 +125,7 @@ describe('POST /api/person/[id]/relationships', () => {
   // unit-test boundary. Real-graph direction verification belongs in an
   // integration/E2E suite running against a live Neo4j.
   it('creates a parent relationship with UNION for target and CHILD for id', async () => {
+    mockAuth.mockResolvedValueOnce({ user: { email: 'admin@example.com', name: 'Admin', role: 'admin' } })
     mockWrite.mockResolvedValue([{ unionId: '@F12345678@' }])
 
     const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))
@@ -153,7 +192,7 @@ describe('POST /api/person/[id]/relationships', () => {
     expect(mockRecordChange).not.toHaveBeenCalled()
   })
 
-  it.each(['spouse', 'parent', 'child'] as const)(
+  it.each(['spouse', 'child'] as const)(
     'returns 404 when write returns null unionId (%s relationship)',
     async (type) => {
       mockWrite.mockResolvedValue([{ unionId: null as unknown as string }])
@@ -163,6 +202,15 @@ describe('POST /api/person/[id]/relationships', () => {
       expect(response.status).toBe(404)
     }
   )
+
+  it('returns 404 when admin creates parent relationship but write returns null unionId', async () => {
+    mockAuth.mockResolvedValueOnce({ user: { email: 'admin@example.com', name: 'Admin', role: 'admin' } })
+    mockWrite.mockResolvedValue([{ unionId: null as unknown as string }])
+
+    const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))
+
+    expect(response.status).toBe(404)
+  })
 
   it('calls recordChange with relationship details and session author after successful POST', async () => {
     mockWrite.mockResolvedValue([{ unionId: '@F12345678@' }])
@@ -191,6 +239,7 @@ describe('POST /api/person/[id]/relationships', () => {
   })
 
   it('returns 409 when a parent-child union already exists', async () => {
+    mockAuth.mockResolvedValueOnce({ user: { email: 'admin@example.com', name: 'Admin', role: 'admin' } })
     mockRead.mockResolvedValue([{ unionId: '@Fexisting2@' }])
 
     const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))

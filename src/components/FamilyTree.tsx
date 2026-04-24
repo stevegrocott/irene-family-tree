@@ -481,6 +481,12 @@ export function PersonDrawer({
     detail && (detail.parents.length > 0 || detail.marriages.length > 0)
   )
 
+  // True when connections exist that the current user did not author — determined
+  // client-side by comparing the user's own relationship changes against the total
+  // connection count, avoiding a server round-trip.
+  const hasForeignConnections = detailHasRelationships && !!myChanges &&
+    myChanges.relationshipChanges.length < (detail!.parents.length + detail!.marriages.length)
+
   /**
    * Deletes the current person. When the person has relationships, calls the
    * cascade-revert endpoint to atomically remove all connected unions. When
@@ -492,7 +498,8 @@ export function PersonDrawer({
     if (!myChanges?.createChange) return
 
     if (detailHasRelationships) {
-      if (typeof window !== 'undefined' && !window.confirm(`Delete ${person.name || 'this person'} and remove all their connections? This cannot be undone.`)) return
+      const connCount = myChanges.relationshipChanges?.length ?? 0
+      if (typeof window !== 'undefined' && !window.confirm(`Delete ${person.name || 'this person'} and remove all ${connCount} of their connections? This cannot be undone.`)) return
       setIsSubmitting(true)
       try {
         const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/cascade-revert`, { method: 'POST' })
@@ -1226,7 +1233,7 @@ export function PersonDrawer({
             <button
               data-testid="person-drawer-delete"
               onClick={handleDeletePerson}
-              disabled={isSubmitting}
+              disabled={isSubmitting || hasForeignConnections}
               aria-label={`Delete ${person.name || 'person'}`}
               className="w-full py-2 rounded-xl bg-red-500/80 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-500/80"
             >
@@ -1234,8 +1241,10 @@ export function PersonDrawer({
             </button>
           </>
         )}
-        {actionError && (
-          <p data-testid="person-drawer-action-error" className="text-red-400 text-xs">{actionError}</p>
+        {(hasForeignConnections || actionError) && (
+          <p data-testid="person-drawer-action-error" className="text-red-400 text-xs">
+            {actionError ?? 'Some connections cannot be removed. Contact an admin.'}
+          </p>
         )}
         {!isSignedIn && (
           <button

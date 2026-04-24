@@ -51,6 +51,23 @@ const aliceTreeResponse = {
   edges: [],
 }
 
+// Happy path: user authored all connections (1 relationship change matches 1 parent)
+const myChangesWithRelationship = {
+  createChange: {
+    id: 'change-create-1',
+    changeType: 'CREATE_PERSON',
+    targetId: '@IALICE@',
+    newValue: { name: 'Alice Connected' },
+    appliedAt: '2026-04-01T10:00:00.000Z',
+  },
+  relationshipChanges: [
+    { id: 'change-rel-1', newValue: { unionId: '@UBOB@' }, appliedAt: '2026-04-01T10:00:00.000Z' },
+  ],
+  updateChanges: [],
+}
+
+// Blocked path: user authored no relationship changes, but Alice has 1 parent
+// → hasForeignConnections = true → button pre-disabled without a server round-trip
 const myChangesWithCreate = {
   createChange: {
     id: 'change-create-1',
@@ -78,7 +95,7 @@ test.describe('cascade-revert: delete person with connections', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(myChangesWithCreate),
+        body: JSON.stringify(myChangesWithRelationship),
       })
     )
 
@@ -119,7 +136,7 @@ test.describe('cascade-revert: delete person with connections', () => {
     await expect(deleteBtn).toBeEnabled()
 
     page.once('dialog', (d) => {
-      expect(d.message()).toMatch(/connections/i)
+      expect(d.message()).toMatch(/1.*connections?/i)
       d.accept()
     })
     await deleteBtn.click()
@@ -128,7 +145,10 @@ test.describe('cascade-revert: delete person with connections', () => {
     expect(cascadePostCount).toBe(1)
   })
 
-  test('blocked path — 403 from cascade-revert shows contact-admin message', async ({ page }) => {
+  test('blocked path — button pre-disabled when foreign connections exist', async ({ page }) => {
+    // myChangesWithCreate has 0 relationship changes but Alice has 1 parent connection.
+    // The client-side count comparison detects this and disables the button immediately,
+    // showing the "contact an admin" message without a server round-trip.
     await mockSignedInSession(page)
     await mockPersonsAndTree(page, alicePersonsList, aliceTreeResponse)
 
@@ -137,17 +157,6 @@ test.describe('cascade-revert: delete person with connections', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(myChangesWithCreate),
-      })
-    )
-
-    await page.route(/\/api\/person\/[^/]+\/cascade-revert/, (route) =>
-      route.fulfill({
-        status: 403,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'blocked',
-          blockedBy: [{ unionId: 'U001', authorEmail: 'charlie@example.com', authorName: 'Charlie' }],
-        }),
       })
     )
 
@@ -170,12 +179,12 @@ test.describe('cascade-revert: delete person with connections', () => {
     await expect(drawer).toBeVisible()
     await expect(page.getByTestId('person-drawer-parents')).toContainText('Bob Parent', { timeout: 5_000 })
 
-    page.once('dialog', (d) => d.accept())
-    await page.getByTestId('person-drawer-delete').click()
+    const deleteBtn = page.getByTestId('person-drawer-delete')
+    await expect(deleteBtn).toBeVisible()
+    await expect(deleteBtn).toBeDisabled()
 
-    await expect(drawer).toBeVisible()
     const errorMsg = page.getByTestId('person-drawer-action-error')
-    await expect(errorMsg).toContainText('Charlie', { timeout: 5_000 })
-    await expect(errorMsg).toContainText(/admin/i)
+    await expect(errorMsg).toContainText(/admin/i, { timeout: 5_000 })
+    await expect(drawer).toBeVisible()
   })
 })

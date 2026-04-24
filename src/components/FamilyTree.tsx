@@ -215,12 +215,14 @@ export function PersonDrawer({
   onReroot,
   onSelectPerson,
   onSelectRoot,
+  rootId,
 }: {
   person: PersonData
   onClose: () => void
   onReroot: (id: string) => void
   onSelectPerson: (id: string) => void
   onSelectRoot?: (id: string) => void
+  rootId?: string
 }) {
   const { data: session, status } = useSession()
   const isSignedIn = status === 'authenticated'
@@ -505,7 +507,8 @@ export function PersonDrawer({
         const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/cascade-revert`, { method: 'POST' })
         if (res.ok) {
           setMyChanges(null)
-          onSelectRoot?.(person.gedcomId)
+          const refreshId = rootId && rootId !== person.gedcomId ? rootId : ''
+          onSelectRoot?.(refreshId)
           onClose()
         } else if (res.status === 403) {
           const body = await res.json().catch(() => ({})) as { blockedBy?: Array<{ authorName: string }> }
@@ -529,7 +532,8 @@ export function PersonDrawer({
       const result = await revertChangeRequest(myChanges.createChange.id)
       if (result.ok) {
         setMyChanges(null)
-        onSelectRoot?.(person.gedcomId)
+        const refreshId = rootId && rootId !== person.gedcomId ? rootId : ''
+        onSelectRoot?.(refreshId)
         onClose()
       } else {
         setActionError(result.detail)
@@ -1456,6 +1460,7 @@ function FlowCanvas({
             }
           }}
           onSelectRoot={onSelectRoot}
+          rootId={rootId}
         />
       )}
     </>
@@ -1482,9 +1487,10 @@ export default function FamilyTree() {
    * @param {string} id - GEDCOM ID of the newly selected root person
    */
   const handleSelectRoot = (id: string) => {
-    setRootId(id)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(TREE_ROOT_STORAGE_KEY, id)
+    const resolved = id || persons[0]?.gedcomId || ''
+    setRootId(resolved)
+    if (typeof window !== 'undefined' && resolved) {
+      localStorage.setItem(TREE_ROOT_STORAGE_KEY, resolved)
     }
   }
 

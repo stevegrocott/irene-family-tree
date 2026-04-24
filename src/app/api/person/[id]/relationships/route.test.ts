@@ -62,26 +62,12 @@ describe('POST /api/person/[id]/relationships', () => {
     expect(body).toEqual({ error: 'type must be spouse, parent, or child' })
   })
 
-  // Parameterized: both a user with no role field and a user with role: 'user'
-  // hit the same guard (session.user.role !== 'admin') and must produce
-  // identical 403 responses. Covers both shapes explicitly so a future change
-  // that special-cases one shape can't silently pass by only handling the other.
   it.each([
     ['no role field', { email: 'editor@example.com', name: 'Editor User' }],
     ['role: user', { email: 'user@example.com', name: 'Regular User', role: 'user' }],
-  ])('returns 403 when non-admin (%s) tries to create a parent relationship directly', async (_label, user) => {
+    ['role: admin', { email: 'admin@example.com', name: 'Admin', role: 'admin' }],
+  ])('allows %s to create a parent relationship directly', async (_label, user) => {
     mockAuth.mockResolvedValueOnce({ user } as never)
-
-    const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))
-    const body = await response.json()
-
-    expect(response.status).toBe(403)
-    expect(body).toEqual({ error: 'Only admins can add parent relationships directly' })
-    expect(mockWrite).not.toHaveBeenCalled()
-  })
-
-  it('allows admin to create a parent relationship directly', async () => {
-    mockAuth.mockResolvedValueOnce({ user: { email: 'admin@example.com', name: 'Admin', role: 'admin' } })
     mockWrite.mockResolvedValue([{ unionId: '@F12345678@', created: true }])
 
     const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))
@@ -131,7 +117,6 @@ describe('POST /api/person/[id]/relationships', () => {
   // unit-test boundary. Real-graph direction verification belongs in an
   // integration/E2E suite running against a live Neo4j.
   it('creates a parent relationship with UNION for target and CHILD for id', async () => {
-    mockAuth.mockResolvedValueOnce({ user: { email: 'admin@example.com', name: 'Admin', role: 'admin' } })
     mockWrite.mockResolvedValue([{ unionId: '@F12345678@' }])
 
     const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))

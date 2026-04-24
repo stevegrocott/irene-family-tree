@@ -62,7 +62,7 @@ export async function GET(request: Request) {
               c.appliedAt     AS appliedAt,
               c.status        AS status
        ORDER BY c.appliedAt DESC
-       SKIP $skip LIMIT $limit`,
+       SKIP toInteger($skip) LIMIT toInteger($limit)`,
       { skip, limit: PAGE_SIZE }
     )
   } catch (err) {

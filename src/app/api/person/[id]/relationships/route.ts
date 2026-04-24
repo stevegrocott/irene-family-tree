@@ -91,10 +91,6 @@ export async function POST(
 
   const type = body.type as RelationshipType
 
-  if (type === 'parent' && session.user.role !== 'admin') {
-    return NextResponse.json({ error: 'Only admins can add parent relationships directly' }, { status: 403 })
-  }
-
   const targetId = body.targetId as string
   const unionId = '@F' + randomUUID().slice(0, 8) + '@'
 

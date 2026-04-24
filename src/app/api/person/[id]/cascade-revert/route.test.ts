@@ -68,16 +68,25 @@ describe('POST /api/person/[id]/cascade-revert', () => {
     mockCascade.mockResolvedValue({
       ok: false,
       status: 403,
-      error: 'blocked',
+      error: 'Blocked by foreign connection',
       blockedBy: [{ unionId: 'U001', authorEmail: 'bob@example.com', authorName: 'Bob' }],
     })
 
     const res = await POST(makeRequest(), makeParams('I001'))
     expect(res.status).toBe(403)
     const body = await res.json()
-    expect(body.error).toBe('blocked')
+    expect(body.error).toBe('Blocked by foreign connection')
     expect(body.blockedBy).toHaveLength(1)
     expect(body.blockedBy[0]).toMatchObject({ authorEmail: 'bob@example.com' })
+  })
+
+  it('returns 500 with "Database error" when cascadeRevertPerson returns a database error outcome', async () => {
+    mockAuth.mockResolvedValue(USER_SESSION as never)
+    mockCascade.mockResolvedValue({ ok: false, status: 500, error: 'Database error' })
+
+    const res = await POST(makeRequest(), makeParams('I001'))
+    expect(res.status).toBe(500)
+    expect(await res.json()).toMatchObject({ error: 'Database error' })
   })
 
   it('returns 500 when cascadeRevertPerson throws', async () => {

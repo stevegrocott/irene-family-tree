@@ -10,7 +10,7 @@ const CHANGE_TYPE = {
 
 export type CascadeRevertOutcome =
   | { ok: true; unionsReverted: number }
-  | { ok: false; status: 403 | 404 | 409; error: string; blockedBy?: BlockedEdge[] }
+  | { ok: false; status: 403 | 404 | 409 | 500; error: string; blockedBy?: BlockedEdge[] }
 
 export interface BlockedEdge {
   unionId: string
@@ -38,19 +38,38 @@ export async function cascadeRevertPerson(
        RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
        LIMIT 1`
 
-  const [createRows, unionRows] = await Promise.all([
-    read<ChangeQueryRow>(
-      createQueryCypher,
-      { personId, email: requester.email, createType: CHANGE_TYPE.CREATE_PERSON, live: CHANGE_STATUS.LIVE }
-    ),
-    read<{ unionId: string }>(
-      `MATCH (p:Person {gedcomId: $personId})
-       MATCH (u:Union) WHERE (p)-[:UNION]->(u) OR (u)-[:CHILD]->(p)
-       RETURN DISTINCT u.gedcomId AS unionId
-       LIMIT 100`,
-      { personId }
-    ), // Limits reverting to people with ≤100 unions
-  ])
+  let createRows: ChangeQueryRow[]
+  let unionRows: { unionId: string }[]
+  let personExists: boolean
+
+  try {
+    const [cr, ur, pr] = await Promise.all([
+      read<ChangeQueryRow>(
+        createQueryCypher,
+        { personId, email: requester.email, createType: CHANGE_TYPE.CREATE_PERSON, live: CHANGE_STATUS.LIVE }
+      ),
+      read<{ unionId: string }>(
+        `MATCH (p:Person {gedcomId: $personId})
+         MATCH (u:Union) WHERE (p)-[:UNION]->(u) OR (u)-[:CHILD]->(p)
+         RETURN DISTINCT u.gedcomId AS unionId
+         LIMIT 100`,
+        { personId }
+      ), // Limits reverting to people with ≤100 unions
+      read<{ exists: boolean }>(
+        `MATCH (p:Person {gedcomId: $personId}) RETURN true AS exists LIMIT 1`,
+        { personId }
+      ),
+    ])
+    createRows = cr
+    unionRows = ur
+    personExists = pr.length > 0
+  } catch {
+    return { ok: false, status: 500, error: 'Database error' }
+  }
+
+  if (!personExists) {
+    return { ok: false, status: 404, error: 'Person not found' }
+  }
 
   if (createRows.length === 0) {
     return { ok: false, status: 404, error: 'No CREATE_PERSON change found for this person' }
@@ -72,14 +91,19 @@ export async function cascadeRevertPerson(
   const relChangesByUnion = new Map<string, { id: string; authorEmail: string; authorName: string }>()
 
   if (unionIds.length > 0) {
-    const allRelRows = await read<ChangeQueryRow>(
-      `MATCH (c:Change { changeType: $relType, status: $live })
-       WHERE any(uid IN $unionIds WHERE c.newValue CONTAINS uid)
-       RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
-       LIMIT toInteger($limit)`,
-      // Each union produces one ADD_RELATIONSHIP change; multiply by 2 as a safety margin for retries or dual-direction entries.
-      { unionIds, relType: CHANGE_TYPE.ADD_RELATIONSHIP, live: CHANGE_STATUS.LIVE, limit: unionIds.length * 2 }
-    )
+    let allRelRows: ChangeQueryRow[]
+    try {
+      allRelRows = await read<ChangeQueryRow>(
+        `MATCH (c:Change { changeType: $relType, status: $live })
+         WHERE any(uid IN $unionIds WHERE c.newValue CONTAINS uid)
+         RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
+         LIMIT toInteger($limit)`,
+        // Each union produces one ADD_RELATIONSHIP change; multiply by 2 as a safety margin for retries or dual-direction entries.
+        { unionIds, relType: CHANGE_TYPE.ADD_RELATIONSHIP, live: CHANGE_STATUS.LIVE, limit: unionIds.length * 2 }
+      )
+    } catch {
+      return { ok: false, status: 500, error: 'Database error' }
+    }
 
     const unionIdSet = new Set(unionIds)
     for (const row of allRelRows) {
@@ -111,7 +135,7 @@ export async function cascadeRevertPerson(
         }
       }
       if (blockedBy.length > 0) {
-        return { ok: false, status: 403, error: 'blocked', blockedBy }
+        return { ok: false, status: 403, error: 'Blocked by foreign connection', blockedBy }
       }
     }
   }
@@ -140,9 +164,8 @@ export async function cascadeRevertPerson(
 
   try {
     await writeTransaction(statements)
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    return { ok: false, status: 409, error: `Failed to write revert transaction: ${message}` }
+  } catch {
+    return { ok: false, status: 500, error: 'Database error' }
   }
 
   try {

@@ -47,5 +47,5 @@ status.json
 # worktrees
 .worktrees/
 
-# Claude Code runtime artifacts
-.claude/*.lock
+# Claude Code pipeline (managed in claude-pipeline repo)
+.claude/

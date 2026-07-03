@@ -466,7 +466,7 @@ export function PersonDrawer({
     if (!myChanges?.createChange) return
 
     if (detailHasRelationships) {
-      const connCount = myChanges.relationshipChanges?.length ?? 0
+      const connCount = myChanges.relationshipChanges?.length ?? (detail!.parents.length + detail!.marriages.length)
       if (typeof window !== 'undefined' && !window.confirm(`Delete ${person.name || 'this person'} and remove all ${connCount} of their connections? This cannot be undone.`)) return
       setIsSubmitting(true)
       try {

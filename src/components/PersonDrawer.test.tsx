@@ -8,7 +8,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import * as NextAuthReact from 'next-auth/react'
-import { PersonDrawer } from '@/components/FamilyTree'
+import { PersonDrawer, computeCascadeDeleteConnectionCount } from '@/components/FamilyTree'
 import type { PersonData } from '@/types/tree'
 
 jest.mock('reactflow', () => ({
@@ -77,6 +77,20 @@ const basePerson: PersonData = {
   occupation: null,
   notes: null,
 }
+
+describe('computeCascadeDeleteConnectionCount', () => {
+  it('falls back to totalConnections when relationshipChanges is undefined', () => {
+    expect(computeCascadeDeleteConnectionCount(undefined, 3)).toBe(3)
+  })
+
+  it('falls back to totalConnections when relationshipChanges is null', () => {
+    expect(computeCascadeDeleteConnectionCount(null, 2)).toBe(2)
+  })
+
+  it('uses relationshipChanges.length when present', () => {
+    expect(computeCascadeDeleteConnectionCount(['a', 'b'], 5)).toBe(2)
+  })
+})
 
 describe('PersonDrawer', () => {
   let container: HTMLDivElement

@@ -2,7 +2,7 @@ import neo4j, { Driver } from 'neo4j-driver'
 
 const g = globalThis as unknown as { neo4jDriver?: Driver }
 
-function getDriver(): Driver {
+export function getDriver(): Driver {
   if (!g.neo4jDriver) {
     g.neo4jDriver = neo4j.driver(
       process.env.NEO4J_URI!,
@@ -11,6 +11,13 @@ function getDriver(): Driver {
     )
   }
   return g.neo4jDriver
+}
+
+export async function closeDriver(): Promise<void> {
+  if (g.neo4jDriver) {
+    await g.neo4jDriver.close()
+    g.neo4jDriver = undefined
+  }
 }
 
 export async function read<T>(cypher: string, params: Record<string, unknown> = {}): Promise<T[]> {

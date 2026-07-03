@@ -9,6 +9,10 @@ import { GET } from './route'
 
 jest.mock('@/lib/neo4j', () => ({
   read: jest.fn(),
+  neo4jErrorResponse: jest.fn((err: unknown, publicMessage: string, status = 500) => {
+    const detail = err instanceof Error ? err.message : String(err)
+    return Response.json({ error: publicMessage, detail }, { status })
+  }),
 }))
 
 import { read } from '@/lib/neo4j'
@@ -63,7 +67,7 @@ describe('GET /api/tree/[rootId]', () => {
     const body = await response.json()
 
     expect(response.status).toBe(500)
-    expect(body).toEqual({ error: 'Failed to query graph database' })
+    expect(body).toEqual({ error: 'Failed to query graph database', detail: 'Connection refused' })
   })
 
   it('returns 200 with nodes and edges arrays on success', async () => {

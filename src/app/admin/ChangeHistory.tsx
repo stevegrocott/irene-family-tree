@@ -9,9 +9,11 @@ const HTTP_CONFLICT_STATUS = 409
 /**
  * Displays a paginated list of changes with the ability to revert them.
  *
- * Fetches pending changes from the API on mount and displays them with their
- * metadata (author, change type, date). Users can revert individual changes,
- * with real-time UI feedback for loading, success, and error states.
+ * Fetches the first page of changes on mount and displays them with their
+ * metadata (author, change type, date). A "Load more" button appends
+ * subsequent pages to the list until the API reports no more are available.
+ * Users can revert individual changes, with real-time UI feedback for
+ * loading, success, and error states.
  *
  * @component
  * @returns {JSX.Element} A container with change cards, loading state, or error message
@@ -22,21 +24,27 @@ const HTTP_CONFLICT_STATUS = 409
  */
 export function ChangeHistory() {
   const [changes, setChanges] = useState<Change[]>([])
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [reverting, setReverting] = useState<Record<string, boolean>>({})
   const [revertedIds, setRevertedIds] = useState<Set<string>>(new Set())
   const [revertErrors, setRevertErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     const controller = new AbortController()
-    // Only loads the first page (PAGE_SIZE=20). Full pagination is not yet implemented.
     fetch('/api/admin/changes?page=1', { signal: controller.signal })
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json()
       })
-      .then(data => setChanges(data.changes ?? []))
+      .then(data => {
+        setChanges(data.changes ?? [])
+        setHasMore(!!data.hasMore)
+      })
       .catch(err => {
         if (err instanceof DOMException && err.name === 'AbortError') return
         setFetchError('Failed to load change history. Please refresh to try again.')
@@ -44,6 +52,30 @@ export function ChangeHistory() {
       .finally(() => setLoading(false))
     return () => controller.abort()
   }, [])
+
+  /**
+   * Fetches the next page of changes and appends them to the existing list.
+   *
+   * @async
+   * @returns {Promise<void>}
+   */
+  async function handleLoadMore() {
+    const nextPage = page + 1
+    setLoadingMore(true)
+    setLoadMoreError(null)
+    try {
+      const res = await fetch(`/api/admin/changes?page=${nextPage}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setChanges(prev => [...prev, ...(data.changes ?? [])])
+      setHasMore(!!data.hasMore)
+      setPage(nextPage)
+    } catch {
+      setLoadMoreError('Failed to load more changes. Please try again.')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   /**
    * Attempts to revert a change by ID.
@@ -166,6 +198,26 @@ export function ChangeHistory() {
           </div>
         )
       })}
+
+      {loadMoreError && (
+        <p className="text-red-400 text-xs text-center">{loadMoreError}</p>
+      )}
+
+      {hasMore && (
+        <button
+          type="button"
+          onClick={handleLoadMore}
+          disabled={loadingMore}
+          className="w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium border border-white/20 transition-colors"
+        >
+          {loadingMore ? (
+            <span className="flex items-center justify-center gap-2">
+              <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              Loading…
+            </span>
+          ) : 'Load more'}
+        </button>
+      )}
     </div>
   )
 }

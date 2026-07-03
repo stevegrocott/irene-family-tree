@@ -37,6 +37,9 @@ interface Person {
  *
  * Returns up to 2 000 persons from the Neo4j graph, sorted alphabetically by name.
  *
+ * Intentionally has no auth check: this endpoint powers public genealogy search,
+ * so unauthenticated read access is by design.
+ *
  * @returns A JSON response containing an array of {@link Person} objects on success,
  *          or `{ error: "Failed to query graph database" }` (500) on a Neo4j error.
  */

@@ -198,6 +198,18 @@ function DrawerSubView({ title, onBack, children }: { title: string; onBack: () 
 }
 
 /**
+ * Number of connections to show in the cascade-delete confirm dialog.
+ * Falls back to the total parent/marriage count when relationshipChanges is
+ * missing, so the dialog never understates what will be deleted as "0".
+ */
+export function computeCascadeDeleteConnectionCount(
+  relationshipChanges: Array<unknown> | null | undefined,
+  totalConnections: number
+): number {
+  return relationshipChanges?.length ?? totalConnections
+}
+
+/**
  * Side drawer panel showing details for a selected person.
  * Fetches and displays name, dates, GEDCOM ID, and immediate relatives
  * (parents, siblings, marriages). Allows re-rooting or navigating to relatives.
@@ -466,7 +478,10 @@ export function PersonDrawer({
     if (!myChanges?.createChange) return
 
     if (detailHasRelationships) {
-      const connCount = myChanges.relationshipChanges?.length ?? 0
+      const connCount = computeCascadeDeleteConnectionCount(
+        myChanges.relationshipChanges,
+        detail!.parents.length + detail!.marriages.length
+      )
       if (typeof window !== 'undefined' && !window.confirm(`Delete ${person.name || 'this person'} and remove all ${connCount} of their connections? This cannot be undone.`)) return
       setIsSubmitting(true)
       try {

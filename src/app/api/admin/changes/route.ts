@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { read } from '@/lib/neo4j'
+import { read, neo4jErrorResponse } from '@/lib/neo4j'
 import { auth } from '@/auth'
 import { safeParseJson } from '@/lib/utils'
 
@@ -66,9 +66,7 @@ export async function GET(request: Request) {
       { skip, limit: PAGE_SIZE }
     )
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('Neo4j query failed', err)
-    return NextResponse.json({ error: 'Failed to query graph database', detail: msg }, { status: 500 })
+    return neo4jErrorResponse(err, 'Failed to query graph database')
   }
 
   const changes = rows.map(row => ({

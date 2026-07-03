@@ -31,7 +31,7 @@ interface ChangeRow {
  * - `page` (optional, default 1) — 1-based page number
  *
  * @param request - Incoming Next.js request (used to read search params)
- * @returns JSON `{ changes, page }` on success, or an error response with status 401/403/500
+ * @returns JSON `{ changes, page, hasMore }` on success, or an error response with status 401/403/500
  */
 export async function GET(request: Request) {
   const session = await auth()
@@ -63,17 +63,18 @@ export async function GET(request: Request) {
               c.status        AS status
        ORDER BY c.appliedAt DESC
        SKIP toInteger($skip) LIMIT toInteger($limit)`,
-      { skip, limit: PAGE_SIZE }
+      { skip, limit: PAGE_SIZE + 1 }
     )
   } catch (err) {
     return neo4jErrorResponse(err, 'Failed to query graph database')
   }
 
-  const changes = rows.map(row => ({
+  const hasMore = rows.length > PAGE_SIZE
+  const changes = rows.slice(0, PAGE_SIZE).map(row => ({
     ...row,
     previousValue: safeParseJson(row.previousValue),
     newValue: safeParseJson(row.newValue) ?? {},
   }))
 
-  return NextResponse.json({ changes, page })
+  return NextResponse.json({ changes, page, hasMore })
 }

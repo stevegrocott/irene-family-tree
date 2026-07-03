@@ -1223,10 +1223,12 @@ function FlowCanvas({
   rootId,
   onSelectRoot,
   persons,
+  treeVersion,
 }: {
   rootId: string
   onSelectRoot: (id: string) => void
   persons: Person[]
+  treeVersion: number
 }) {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
@@ -1313,9 +1315,9 @@ function FlowCanvas({
     } finally {
       setLoading(false)
     }
-  }, [rootId, hops])
+  }, [rootId, hops, treeVersion])
 
-  /** Re-fetches the tree whenever `rootId` or `hops` changes. */
+  /** Re-fetches the tree whenever `rootId`, `hops`, or `treeVersion` changes. */
   useEffect(() => {
     fetchTree()
   }, [fetchTree])
@@ -1427,15 +1429,21 @@ export default function FamilyTree() {
   const [rootId, setRootId] = useState('')
   const [persons, setPersons] = useState<Person[]>([])
   const [personsError, setPersonsError] = useState<string | null>(null)
+  const [treeVersion, setTreeVersion] = useState(0)
+  const [personsVersion, setPersonsVersion] = useState(0)
 
   /**
    * Updates the active root person and persists the selection to localStorage
-   * so the same person is shown on next page load.
+   * so the same person is shown on next page load. Bumps `treeVersion` and
+   * `personsVersion` so the tree and persons list re-fetch even when the
+   * resolved root id is unchanged (e.g. after a delete).
    * @param {string} id - GEDCOM ID of the newly selected root person
    */
   const handleSelectRoot = (id: string) => {
     const resolved = id || persons[0]?.gedcomId || ''
     setRootId(resolved)
+    setTreeVersion(v => v + 1)
+    setPersonsVersion(v => v + 1)
     if (typeof window !== 'undefined' && resolved) {
       localStorage.setItem(TREE_ROOT_STORAGE_KEY, resolved)
     }
@@ -1461,7 +1469,7 @@ export default function FamilyTree() {
         setPersonsError('Could not load family members. Please check your database connection and refresh.')
       })
     return () => ctrl.abort()
-  }, [])
+  }, [personsVersion])
 
   if (personsError) {
     return (
@@ -1476,7 +1484,7 @@ export default function FamilyTree() {
   return (
     <div className="relative w-screen h-screen bg-[#050a18]">
       <ReactFlowProvider>
-        <FlowCanvas rootId={rootId} onSelectRoot={handleSelectRoot} persons={persons} />
+        <FlowCanvas rootId={rootId} onSelectRoot={handleSelectRoot} persons={persons} treeVersion={treeVersion} />
       </ReactFlowProvider>
     </div>
   )

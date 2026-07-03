@@ -196,14 +196,14 @@ describe('GET /api/tree/[rootId]', () => {
   })
 
   describe('hops query parameter', () => {
-    it('uses default hops of 8 when no hops param is provided', async () => {
+    it('uses default hops of 60 when no hops param is provided', async () => {
       mockRead.mockResolvedValue([{ nodes: [], rels: [] }])
 
       const request = new Request('http://localhost/api/tree/I001')
       await GET(request, makeParams('I001'))
 
       expect(mockRead).toHaveBeenCalledWith(
-        expect.stringContaining('*1..8'),
+        expect.stringContaining('*1..60'),
         expect.any(Object)
       )
     })
@@ -220,50 +220,50 @@ describe('GET /api/tree/[rootId]', () => {
       )
     })
 
-    it('clamps hops to 16 when a value greater than 16 is provided', async () => {
+    it('clamps hops to 60 when a value greater than 60 is provided', async () => {
       mockRead.mockResolvedValue([{ nodes: [], rels: [] }])
 
-      const request = new Request('http://localhost/api/tree/I001?hops=20')
+      const request = new Request('http://localhost/api/tree/I001?hops=70')
       await GET(request, makeParams('I001'))
 
       expect(mockRead).toHaveBeenCalledWith(
-        expect.stringContaining('*1..16'),
+        expect.stringContaining('*1..60'),
         expect.any(Object)
       )
     })
 
-    it('falls back to default hops of 8 when hops is not a valid integer string', async () => {
+    it('falls back to default hops of 60 when hops is not a valid integer string', async () => {
       mockRead.mockResolvedValue([{ nodes: [], rels: [] }])
 
       const request = new Request('http://localhost/api/tree/I001?hops=abc')
       await GET(request, makeParams('I001'))
 
       expect(mockRead).toHaveBeenCalledWith(
-        expect.stringContaining('*1..8'),
+        expect.stringContaining('*1..60'),
         expect.any(Object)
       )
     })
 
-    it('falls back to default hops of 8 when hops is a float', async () => {
+    it('falls back to default hops of 60 when hops is a float', async () => {
       mockRead.mockResolvedValue([{ nodes: [], rels: [] }])
 
       const request = new Request('http://localhost/api/tree/I001?hops=2.5')
       await GET(request, makeParams('I001'))
 
       expect(mockRead).toHaveBeenCalledWith(
-        expect.stringContaining('*1..8'),
+        expect.stringContaining('*1..60'),
         expect.any(Object)
       )
     })
 
-    it('falls back to default hops of 8 when hops is less than 1', async () => {
+    it('falls back to default hops of 60 when hops is less than 1', async () => {
       mockRead.mockResolvedValue([{ nodes: [], rels: [] }])
 
       const request = new Request('http://localhost/api/tree/I001?hops=0')
       await GET(request, makeParams('I001'))
 
       expect(mockRead).toHaveBeenCalledWith(
-        expect.stringContaining('*1..8'),
+        expect.stringContaining('*1..60'),
         expect.any(Object)
       )
     })

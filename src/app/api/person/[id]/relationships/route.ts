@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
-import { write } from '@/lib/neo4j'
+import { write, neo4jErrorResponse } from '@/lib/neo4j'
 import { recordChange } from '@/lib/changes'
 import { auth } from '@/auth'
 
@@ -98,8 +98,7 @@ export async function POST(
   try {
     rows = await write<{ unionId: string; existed: boolean }>(atomicUpsertCypher(type), { id, targetId, unionId })
   } catch (err) {
-    console.error('Neo4j write failed', err)
-    return NextResponse.json({ error: 'Failed to write to graph database' }, { status: 500 })
+    return neo4jErrorResponse(err, 'Failed to write to graph database')
   }
 
   if (!rows.length || !rows[0].unionId) {

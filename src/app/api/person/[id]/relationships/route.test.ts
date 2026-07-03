@@ -3,6 +3,10 @@ import { POST } from './route'
 jest.mock('@/lib/neo4j', () => ({
   read: jest.fn(),
   write: jest.fn(),
+  neo4jErrorResponse: jest.fn((err: unknown, publicMessage: string, status = 500) => {
+    const detail = err instanceof Error ? err.message : String(err)
+    return Response.json({ error: publicMessage, detail }, { status })
+  }),
 }))
 
 jest.mock('@/lib/changes', () => ({
@@ -158,8 +162,10 @@ describe('POST /api/person/[id]/relationships', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {})
 
     const response = await POST(makeRequest({ type: 'spouse', targetId: 'I002' }), makeParams('I001'))
+    const body = await response.json()
 
     expect(response.status).toBe(500)
+    expect(body.detail).toBe('DB error')
   })
 
   it('returns 404 when write returns no rows (person not found)', async () => {

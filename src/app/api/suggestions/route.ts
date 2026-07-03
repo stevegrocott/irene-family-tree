@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
-import { write } from '@/lib/neo4j'
+import { write, neo4jErrorResponse } from '@/lib/neo4j'
 import { auth } from '@/auth'
 
 export const runtime = 'nodejs'
@@ -51,8 +51,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       { id, authorEmail, authorName, changeType, payload, status }
     )
   } catch (err) {
-    console.error('Neo4j write failed', err)
-    return NextResponse.json({ error: 'Failed to create suggestion' }, { status: 500 })
+    return neo4jErrorResponse(err, 'Failed to create suggestion')
   }
 
   return NextResponse.json({ id }, { status: 201 })

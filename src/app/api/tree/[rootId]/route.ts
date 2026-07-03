@@ -4,7 +4,7 @@
  * centred on a given GEDCOM person ID, formatted as React Flow nodes and edges.
  */
 
-import { read } from '@/lib/neo4j'
+import { read, neo4jErrorResponse } from '@/lib/neo4j'
 import { FlowNode, FlowEdge, TreeResponse, PersonData, UnionData } from '@/types/tree'
 import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, UNION_LABEL } from '@/constants/tree'
 
@@ -132,8 +132,7 @@ export async function GET(
       { id: rootId, maxNodes: MAX_NODES }
     )
   } catch (err) {
-    console.error('Neo4j query failed', err)
-    return Response.json({ error: 'Failed to query graph database' }, { status: 500 })
+    return neo4jErrorResponse(err, 'Failed to query graph database')
   }
 
   if (!rows.length) return Response.json({ error: 'Person not found' }, { status: 404 })

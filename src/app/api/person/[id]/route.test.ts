@@ -10,6 +10,10 @@ import { GET, PATCH } from './route'
 jest.mock('@/lib/neo4j', () => ({
   read: jest.fn(),
   write: jest.fn(),
+  neo4jErrorResponse: jest.fn((err: unknown, publicMessage: string, status = 500) => {
+    const detail = err instanceof Error ? err.message : String(err)
+    return Response.json({ error: publicMessage, detail }, { status })
+  }),
 }))
 
 jest.mock('@/lib/changes', () => ({
@@ -116,7 +120,7 @@ describe('GET /api/person/[id]', () => {
     const body = await response.json()
 
     expect(response.status).toBe(500)
-    expect(body).toEqual({ error: 'Failed to query graph database' })
+    expect(body).toEqual({ error: 'Failed to query graph database', detail: 'Connection refused' })
   })
 
   /** Returns 200 with the complete PersonDetail object when a matching record is found. */
@@ -363,7 +367,7 @@ describe('PATCH /api/person/[id]', () => {
     const response = await PATCH(makePatchRequest('I001', { name: 'Alice' }), makeParams('I001'))
 
     expect(response.status).toBe(500)
-    expect((await response.json())).toEqual({ error: 'Failed to update graph database' })
+    expect((await response.json())).toEqual({ error: 'Failed to update graph database', detail: 'DB error' })
   })
 
   it('passes the id and only allowed fields to the write call', async () => {

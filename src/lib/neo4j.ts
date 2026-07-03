@@ -1,4 +1,5 @@
 import neo4j, { Driver } from 'neo4j-driver'
+import { NextResponse } from 'next/server'
 
 const g = globalThis as unknown as { neo4jDriver?: Driver }
 
@@ -31,6 +32,18 @@ export async function write<T>(cypher: string, params: Record<string, unknown> =
   } finally {
     await session.close()
   }
+}
+
+/**
+ * Builds a consistent 500 response for a failed Neo4j operation: logs the full
+ * error server-side and returns `{ error, detail }`, where `detail` is the
+ * underlying error message so operators can diagnose outages (e.g. a paused
+ * Aura instance) without needing separate log access.
+ */
+export function neo4jErrorResponse(err: unknown, publicMessage: string, status = 500) {
+  const detail = err instanceof Error ? err.message : String(err)
+  console.error(publicMessage, err)
+  return NextResponse.json({ error: publicMessage, detail }, { status })
 }
 
 export async function writeTransaction(

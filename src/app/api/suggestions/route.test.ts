@@ -2,6 +2,10 @@ import { POST } from './route'
 
 jest.mock('@/lib/neo4j', () => ({
   write: jest.fn(),
+  neo4jErrorResponse: jest.fn((err: unknown, publicMessage: string, status = 500) => {
+    const detail = err instanceof Error ? err.message : String(err)
+    return Response.json({ error: publicMessage, detail }, { status })
+  }),
 }))
 
 jest.mock('@/auth', () => ({
@@ -108,7 +112,9 @@ describe('POST /api/suggestions', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {})
 
     const response = await POST(makeRequest({ changeType: 'UPDATE_PERSON', payload: { name: 'Alice' } }))
+    const body = await response.json()
 
     expect(response.status).toBe(500)
+    expect(body.detail).toBe('DB error')
   })
 })

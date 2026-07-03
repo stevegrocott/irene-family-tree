@@ -186,8 +186,10 @@ describe('POST /api/persons', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {})
 
     const response = await POST(makePostRequest({ name: 'Alice' }))
+    const body = await response.json()
 
     expect(response.status).toBe(500)
+    expect(body.detail).toBe('DB error')
   })
 
   it('calls recordChange with null previousValue and created person data after successful POST', async () => {

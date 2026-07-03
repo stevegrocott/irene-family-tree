@@ -99,11 +99,11 @@ export async function GET() {
 
   const suggestions = rows.map(row => {
     const parsedPayload = safeParseJson(row.payload) ?? {}
-    const { targetId: _tid, ...newValueFields } = parsedPayload as { targetId?: string } & Record<string, unknown>
+    const { targetId: payloadTargetId, ...newValueFields } = parsedPayload as { targetId?: string } & Record<string, unknown>
     return {
       id: row.id,
       changeType: row.changeType,
-      targetId: row.targetId ?? '',
+      targetId: row.targetId ?? payloadTargetId ?? '',
       personName: row.personName ?? '',
       authorName: row.authorName,
       authorEmail: row.authorEmail,

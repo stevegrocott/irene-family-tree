@@ -6,7 +6,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { read, write } from '@/lib/neo4j'
+import { read, write, neo4jErrorResponse } from '@/lib/neo4j'
 import { recordChange } from '@/lib/changes'
 import { auth } from '@/auth'
 import { ALLOWED_PATCH_FIELDS } from '@/lib/patches'
@@ -131,8 +131,7 @@ export async function GET(
     { id }
     )
   } catch (err) {
-    console.error('Neo4j query failed', err)
-    return NextResponse.json({ error: 'Failed to query graph database' }, { status: 500 })
+    return neo4jErrorResponse(err, 'Failed to query graph database')
   }
 
   if (!rows.length || rows[0].gedcomId == null) {
@@ -196,8 +195,7 @@ export async function PATCH(
     )
     previousPerson = previousRows?.[0] ?? null
   } catch (err) {
-    console.error('Neo4j pre-update read failed', err)
-    return NextResponse.json({ error: 'Failed to read current state for change tracking' }, { status: 500 })
+    return neo4jErrorResponse(err, 'Failed to read current state for change tracking')
   }
 
   let rows: UpdatedPerson[]
@@ -213,8 +211,7 @@ export async function PATCH(
       { id, fields }
     )
   } catch (err) {
-    console.error('Neo4j write failed', err)
-    return NextResponse.json({ error: 'Failed to update graph database' }, { status: 500 })
+    return neo4jErrorResponse(err, 'Failed to update graph database')
   }
 
   if (!rows.length || rows[0].gedcomId == null) {

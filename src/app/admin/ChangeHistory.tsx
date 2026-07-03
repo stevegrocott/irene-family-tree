@@ -34,22 +34,26 @@ export function ChangeHistory() {
   const [revertedIds, setRevertedIds] = useState<Set<string>>(new Set())
   const [revertErrors, setRevertErrors] = useState<Record<string, string>>({})
 
+  async function fetchChangesPage(pageNum: number, signal?: AbortSignal) {
+    const res = await fetch(`/api/admin/changes?page=${pageNum}`, { signal })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.json()
+  }
+
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/api/admin/changes?page=1', { signal: controller.signal })
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
-      .then(data => {
+    ;(async () => {
+      try {
+        const data = await fetchChangesPage(1, controller.signal)
         setChanges(data.changes ?? [])
         setHasMore(!!data.hasMore)
-      })
-      .catch(err => {
+      } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return
         setFetchError('Failed to load change history. Please refresh to try again.')
-      })
-      .finally(() => setLoading(false))
+      } finally {
+        setLoading(false)
+      }
+    })()
     return () => controller.abort()
   }, [])
 
@@ -61,16 +65,16 @@ export function ChangeHistory() {
    */
   async function handleLoadMore() {
     const nextPage = page + 1
+    const controller = new AbortController()
     setLoadingMore(true)
     setLoadMoreError(null)
     try {
-      const res = await fetch(`/api/admin/changes?page=${nextPage}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
+      const data = await fetchChangesPage(nextPage, controller.signal)
       setChanges(prev => [...prev, ...(data.changes ?? [])])
       setHasMore(!!data.hasMore)
       setPage(nextPage)
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       setLoadMoreError('Failed to load more changes. Please try again.')
     } finally {
       setLoadingMore(false)

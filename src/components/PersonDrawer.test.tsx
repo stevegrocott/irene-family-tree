@@ -255,32 +255,21 @@ describe('PersonDrawer', () => {
       expect(suggestionCall).toBeUndefined()
     })
 
-    it('non-admin: selecting a parent POSTs to /api/suggestions with ADD_RELATIONSHIP payload', async () => {
+    it('non-admin: selecting a parent POSTs to /api/person/{id}/relationships', async () => {
       mockSession('user')
       const { calls } = installFetchMock()
       await renderDrawer()
       await openAddParentAndSelect()
 
-      const suggestionCall = calls.find(c => c.url === '/api/suggestions')
-      expect(suggestionCall).toBeDefined()
-      expect(suggestionCall!.init?.method).toBe('POST')
-      expect(JSON.parse(suggestionCall!.init!.body as string)).toEqual({
-        changeType: 'ADD_RELATIONSHIP',
-        payload: { type: 'parent', targetId: '@I9@', childId: '@I1@' },
+      const linkCall = calls.find(c => c.url.includes('/relationships'))
+      expect(linkCall).toBeDefined()
+      expect(linkCall!.init?.method).toBe('POST')
+      expect(JSON.parse(linkCall!.init!.body as string)).toEqual({
+        targetId: '@I9@',
+        type: 'parent',
       })
-      const linkCall = calls.find(c => c.url.includes('/relationships') && c.init?.method === 'POST')
-      expect(linkCall).toBeUndefined()
-    })
-
-    it('non-admin: shows "Suggestion submitted" confirmation after POST', async () => {
-      mockSession('user')
-      installFetchMock()
-      await renderDrawer()
-      await openAddParentAndSelect()
-
-      const confirmation = container.querySelector('[data-testid="suggestion-submitted"]')
-      expect(confirmation).not.toBeNull()
-      expect(confirmation!.textContent).toContain('Suggestion submitted')
+      const suggestionCall = calls.find(c => c.url === '/api/suggestions')
+      expect(suggestionCall).toBeUndefined()
     })
   })
 

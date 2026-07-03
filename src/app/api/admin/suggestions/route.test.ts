@@ -61,6 +61,7 @@ describe('GET /api/admin/suggestions', () => {
       authorName: 'Jane Smith',
       authorEmail: 'jane@example.com',
       payload: JSON.stringify({ targetId: 'I001', name: 'John Doe' }),
+      targetId: 'I001',
       status: 'pending',
       createdAt: '2024-01-01T00:00:00Z',
     }

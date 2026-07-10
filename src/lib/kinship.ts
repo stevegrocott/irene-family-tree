@@ -25,14 +25,12 @@ function sexWord(sex: Sex, male: string, female: string, neutral: string): strin
   return neutral
 }
 
-/** Builds a "grand"/"great-grand" prefix for a given generation level (0 = none). */
 function grandPrefix(level: number): string {
   if (level <= 0) return ''
   if (level === 1) return 'grand'
-  return `great-`.repeat(level - 1) + 'grand'
+  return 'great-'.repeat(level - 1) + 'grand'
 }
 
-/** Builds a "great-" prefix (no "grand") for a given generation level (0 = none). */
 function greatPrefix(level: number): string {
   if (level <= 0) return ''
   return 'great-'.repeat(level)
@@ -81,19 +79,27 @@ function countGenerations(steps: KinshipStep[]): { up: number; down: number } {
  * Labels a purely blood (parent/child only) relationship given the number
  * of generations up to the common ancestor and down to the target.
  */
+function termWithPrefix(
+  level: number,
+  sex: Sex,
+  male: string,
+  female: string,
+  neutral: string,
+  prefixFn: (n: number) => string
+): string {
+  const term = sexWord(sex, male, female, neutral)
+  return level === 0 ? term : prefixFn(level) + term
+}
+
 function bloodRelationLabel(up: number, down: number, sex: Sex): string {
   if (up === 0 && down === 0) return 'self'
 
   if (down === 0) {
-    const level = up - 1
-    const term = sexWord(sex, 'father', 'mother', 'parent')
-    return level === 0 ? term : grandPrefix(level) + term
+    return termWithPrefix(up - 1, sex, 'father', 'mother', 'parent', grandPrefix)
   }
 
   if (up === 0) {
-    const level = down - 1
-    const term = sexWord(sex, 'son', 'daughter', 'child')
-    return level === 0 ? term : grandPrefix(level) + term
+    return termWithPrefix(down - 1, sex, 'son', 'daughter', 'child', grandPrefix)
   }
 
   if (up === 1 && down === 1) {
@@ -101,15 +107,11 @@ function bloodRelationLabel(up: number, down: number, sex: Sex): string {
   }
 
   if (up === 1 && down >= 2) {
-    const level = down - 2
-    const term = sexWord(sex, 'nephew', 'niece', 'nibling')
-    return level === 0 ? term : grandPrefix(level) + term
+    return termWithPrefix(down - 2, sex, 'nephew', 'niece', 'nibling', grandPrefix)
   }
 
   if (down === 1 && up >= 2) {
-    const level = up - 2
-    const term = sexWord(sex, 'uncle', 'aunt', 'aunt/uncle')
-    return greatPrefix(level) + term
+    return termWithPrefix(up - 2, sex, 'uncle', 'aunt', 'aunt/uncle', greatPrefix)
   }
 
   const degree = Math.min(up, down) - 1

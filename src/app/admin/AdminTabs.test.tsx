@@ -9,8 +9,13 @@ import { createRoot } from 'react-dom/client'
 import { AdminTabs } from '@/app/admin/AdminTabs'
 
 function findTab(container: HTMLElement, name: string): HTMLButtonElement | undefined {
-  return Array.from(container.querySelectorAll('[role="tab"]'))
-    .find(el => el.textContent?.trim() === name) as HTMLButtonElement | undefined
+  const tabs = container.querySelectorAll('[role="tab"]')
+  for (let i = 0; i < tabs.length; i++) {
+    if (tabs[i].textContent?.trim() === name) {
+      return tabs[i] as HTMLButtonElement
+    }
+  }
+  return undefined
 }
 
 function findPanel(container: HTMLElement, id: string): HTMLElement | null {
@@ -49,7 +54,6 @@ describe('AdminTabs — Duplicates tab', () => {
 
     const duplicatesTab = findTab(container, 'Duplicates')
     expect(duplicatesTab).toBeDefined()
-    expect(duplicatesTab?.getAttribute('role')).toBe('tab')
     expect(duplicatesTab?.getAttribute('aria-controls')).toBe('panel-duplicates')
     expect(duplicatesTab?.id).toBe('tab-duplicates')
   })
@@ -71,12 +75,14 @@ describe('AdminTabs — Duplicates tab', () => {
     await act(async () => { duplicatesTab.click() })
 
     expect(duplicatesTab.getAttribute('aria-selected')).toBe('true')
-    const duplicatesPanel = findPanel(container, 'panel-duplicates')
-    expect(duplicatesPanel?.hasAttribute('hidden')).toBe(false)
     expect(container.textContent).toContain('Duplicates Content')
 
-    // Other panels are hidden once Duplicates is active.
-    expect(findPanel(container, 'panel-suggestions')?.hasAttribute('hidden')).toBe(true)
-    expect(findPanel(container, 'panel-history')?.hasAttribute('hidden')).toBe(true)
+    const duplicatesPanel = findPanel(container, 'panel-duplicates')
+    const suggestionsPanel = findPanel(container, 'panel-suggestions')
+    const historyPanel = findPanel(container, 'panel-history')
+
+    expect(duplicatesPanel?.hasAttribute('hidden')).toBe(false)
+    expect(suggestionsPanel?.hasAttribute('hidden')).toBe(true)
+    expect(historyPanel?.hasAttribute('hidden')).toBe(true)
   })
 })

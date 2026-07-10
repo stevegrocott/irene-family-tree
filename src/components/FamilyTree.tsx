@@ -10,6 +10,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import type React from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession, signIn } from 'next-auth/react'
 import ReactFlow, {
   Background,
@@ -32,6 +33,12 @@ import { formatLifespan } from '@/lib/person'
 import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
 import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
+import { parseTreeUrlState, serializeTreeUrlState } from '@/lib/treeUrlState'
+
+/** Builds a minimal `PersonData` stub for a person id not present in the current tree view. */
+function personStub(gedcomId: string): PersonData {
+  return { gedcomId, name: '', sex: 'U', birthYear: null, deathYear: null, birthPlace: null, deathPlace: null, occupation: null, notes: null }
+}
 
 /**
  * Minimal person summary used for the search bar and root selection.
@@ -1266,17 +1273,55 @@ function FlowCanvas({
   const [treeBounds, setTreeBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [hops, setHops] = useState(DEFAULT_HOPS)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [hops, setHops] = useState(() => parseTreeUrlState(searchParams).hops ?? DEFAULT_HOPS)
   const [actualMaxDepth, setActualMaxDepth] = useState<number>(MAX_HOPS)
-  const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(null)
+  const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(() => {
+    const { person } = parseTreeUrlState(searchParams)
+    return person ? personStub(person) : null
+  })
   const { setViewport } = useReactFlow()
   const abortRef = useRef<AbortController | null>(null)
+  /** Tracks whether the user has actively changed depth, so an untouched initial load never rewrites the URL. */
+  const hopsTouchedRef = useRef(false)
+  /** Tracks whether the user has actively selected/cleared a person, for the same reason. */
+  const personTouchedRef = useRef(false)
 
   /** Display name of the current root person, derived from `nodes` and `rootId`. */
   const rootName = useMemo(() => {
     const rootNode = nodes.find(n => n.type === 'person' && (n.data as PersonData).gedcomId === rootId)
     return rootNode ? (rootNode.data as PersonData).name ?? '' : ''
   }, [nodes, rootId])
+
+  /** Updates `selectedPerson`, marking the person state as user-touched so URL sync activates. */
+  const selectPerson = useCallback((person: PersonData | null) => {
+    personTouchedRef.current = true
+    setSelectedPerson(person)
+  }, [])
+
+  /** Updates `hops`, marking the depth as user-touched so URL sync activates. */
+  const handleHopsChange = useCallback((next: number) => {
+    hopsTouchedRef.current = true
+    setHops(next)
+  }, [])
+
+  /**
+   * Keeps the URL in sync with viewer state (root, person, hops) via `router.replace`
+   * so re-rooting, depth changes, and person selection are shareable without adding
+   * history entries or scrolling. Skipped until the user has actually interacted (or
+   * the root has changed via {@link onSelectRoot}) so an untouched initial load —
+   * including one that arrived via a deep link — never rewrites the URL.
+   */
+  useEffect(() => {
+    if (!hopsTouchedRef.current && !personTouchedRef.current && treeVersion === 0) return
+    const query = serializeTreeUrlState({
+      root: rootId || null,
+      person: selectedPerson?.gedcomId ?? null,
+      hops,
+    })
+    router.replace(query ? `/?${query}` : '/', { scroll: false })
+  }, [rootId, hops, selectedPerson, treeVersion, router])
 
   /**
    * Opens the person drawer when a person node is clicked.
@@ -1286,9 +1331,9 @@ function FlowCanvas({
    */
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     if (node.type === 'person') {
-      setSelectedPerson(node.data as PersonData)
+      selectPerson(node.data as PersonData)
     }
-  }, [])
+  }, [selectPerson])
 
   /**
    * Fetches tree data for the current `rootId` and `hops` depth, applies dagre
@@ -1395,7 +1440,7 @@ function FlowCanvas({
         nodes={nodes}
         rootName={rootName}
         hops={hops}
-        onHopsChange={setHops}
+        onHopsChange={handleHopsChange}
         sliderMax={actualMaxDepth}
       />
       {/* Loading/error overlays — ReactFlow stays mounted so its viewport is always initialized */}
@@ -1428,15 +1473,15 @@ function FlowCanvas({
       {selectedPerson && (
         <PersonDrawer
           person={selectedPerson}
-          onClose={() => setSelectedPerson(null)}
-          onReroot={(id) => { onSelectRoot(id); setSelectedPerson(null) }}
+          onClose={() => selectPerson(null)}
+          onReroot={(id) => { onSelectRoot(id); selectPerson(null) }}
           onSelectPerson={(id) => {
             const node = nodes.find(n => n.type === 'person' && (n.data as PersonData).gedcomId === id)
             if (node) {
-              setSelectedPerson(node.data as PersonData)
+              selectPerson(node.data as PersonData)
             } else {
               // Person may not be in the current tree view — create minimal stub so drawer can fetch detail
-              setSelectedPerson({ gedcomId: id, name: '', sex: 'U', birthYear: null, deathYear: null, birthPlace: null, deathPlace: null, occupation: null, notes: null })
+              selectPerson(personStub(id))
             }
           }}
           onSelectRoot={onSelectRoot}
@@ -1462,6 +1507,10 @@ export default function FamilyTree() {
   const [personsError, setPersonsError] = useState<string | null>(null)
   const [treeVersion, setTreeVersion] = useState(0)
   const [personsVersion, setPersonsVersion] = useState(0)
+  const searchParams = useSearchParams()
+  // Captured once on mount so later URL updates (from our own router.replace calls) don't
+  // re-trigger root resolution — only the URL present on initial load takes precedence.
+  const [initialUrlRoot] = useState(() => parseTreeUrlState(searchParams).root)
 
   /**
    * Updates the active root person and persists the selection to localStorage
@@ -1489,9 +1538,11 @@ export default function FamilyTree() {
       })
       .then((data: Person[]) => {
         setPersons(data)
+        // Precedence: URL root param > localStorage > default person > first named > first available.
+        const urlPerson = initialUrlRoot ? data.find(p => p.gedcomId === initialUrlRoot) : null
         const storedId = typeof window !== 'undefined' ? localStorage.getItem(TREE_ROOT_STORAGE_KEY) : null
         const storedPerson = storedId ? data.find(p => p.gedcomId === storedId) : null
-        const defaultPerson = storedPerson ?? data.find(p => p.gedcomId === DEFAULT_ROOT_GEDCOM_ID) ?? data.find(p => p.name?.trim()) ?? data[0]
+        const defaultPerson = urlPerson ?? storedPerson ?? data.find(p => p.gedcomId === DEFAULT_ROOT_GEDCOM_ID) ?? data.find(p => p.name?.trim()) ?? data[0]
         if (defaultPerson) setRootId(defaultPerson.gedcomId)
       })
       .catch((err) => {
@@ -1500,7 +1551,7 @@ export default function FamilyTree() {
         setPersonsError('Could not load family members. Please check your database connection and refresh.')
       })
     return () => ctrl.abort()
-  }, [personsVersion])
+  }, [personsVersion, initialUrlRoot])
 
   if (personsError) {
     return (

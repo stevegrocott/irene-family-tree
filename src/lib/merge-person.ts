@@ -40,12 +40,13 @@ export async function mergePersons(
     return { ok: false, status: 400, error: 'Cannot merge a person into itself' }
   }
 
-  const survivor = await fetchPerson(survivorId)
+  const [survivor, duplicate] = await Promise.all([
+    fetchPerson(survivorId),
+    fetchPerson(duplicateId),
+  ])
   if (!survivor) {
     return { ok: false, status: 404, error: 'Survivor not found' }
   }
-
-  const duplicate = await fetchPerson(duplicateId)
   if (!duplicate) {
     return { ok: false, status: 404, error: 'Duplicate not found' }
   }

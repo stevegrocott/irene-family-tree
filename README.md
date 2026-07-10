@@ -39,6 +39,7 @@ The following environment variables must be set in your Vercel project settings 
 | `GOOGLE_CLIENT_ID` | Yes | OAuth 2.0 Client ID from [Google Cloud Console](https://console.cloud.google.com) |
 | `GOOGLE_CLIENT_SECRET` | Yes | OAuth 2.0 Client Secret from Google Cloud Console |
 | `ADMIN_EMAILS` | Yes | Comma-separated list of email addresses granted admin role (e.g. `alice@example.com,bob@example.com`) |
+| `BLOB_READ_WRITE_TOKEN` | Yes | Read/write token for [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) storage, used via `@vercel/blob`. Automatically set in Vercel projects with Blob storage enabled; for local development, generate one from the Vercel dashboard under Storage > Blob. |
 
 ## Deploy on Vercel
 

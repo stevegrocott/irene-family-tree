@@ -113,8 +113,10 @@ export async function GET() {
         ),
         read<SurnameCount>(
           `MATCH (p:Person)
-           WHERE p.name IS NOT NULL AND trim(p.name) <> '' AND p.name <> '[Unknown]'
-           WITH split(trim(p.name), ' ') AS parts
+           WHERE p.name IS NOT NULL
+           WITH trim(p.name) AS cleanName
+           WHERE cleanName <> '' AND cleanName <> '[Unknown]'
+           WITH split(cleanName, ' ') AS parts
            WHERE size(parts) > 1
            WITH last(parts) AS surname
            WHERE surname <> ''
@@ -141,8 +143,9 @@ export async function GET() {
         read<OldestAncestor>(
           `MATCH (p:Person)
            WHERE p.birthYear IS NOT NULL AND p.birthYear =~ $yearPattern
+           WITH p, toInteger(p.birthYear) AS birthYearInt
            RETURN p.gedcomId AS gedcomId, p.name AS name, p.birthYear AS birthYear
-           ORDER BY toInteger(p.birthYear) ASC
+           ORDER BY birthYearInt ASC
            LIMIT 1`,
           { yearPattern: YEAR_PATTERN }
         ),
@@ -157,10 +160,11 @@ export async function GET() {
       ])
 
     const totals = totalsRows[0] ?? { totalPeople: 0, male: 0, female: 0, unknown: 0 }
+    const { male, female, unknown } = totals
 
     const response: StatsResponse = {
       totalPeople: totals.totalPeople,
-      sexBreakdown: { male: totals.male, female: totals.female, unknown: totals.unknown },
+      sexBreakdown: { male, female, unknown },
       unionCount: unionRows[0]?.unionCount ?? 0,
       birthsByDecade: decadeRows,
       topSurnames: surnameRows,

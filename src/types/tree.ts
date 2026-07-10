@@ -38,6 +38,8 @@ export interface PersonData {
   deathDate?: string | null
   /** BFS generation distance from the tree root (0 = root). */
   generation?: number
+  /** `true` when sensitive fields were redacted because this person is likely still living. */
+  living?: boolean
 }
 
 /**
@@ -97,6 +99,8 @@ export interface PersonSummary {
   birthYear: string | null
   /** Four-digit death year, or `null` if unknown. */
   deathYear: string | null
+  /** `true` when sensitive fields were redacted because this person is likely still living. */
+  living?: boolean
 }
 
 /**
@@ -138,6 +142,8 @@ export interface PersonDetailResponse {
   occupation: string | null
   /** Free-text notes, or `null` if none. */
   notes: string | null
+  /** `true` when sensitive fields were redacted because this person is likely still living. */
+  living?: boolean
   /** Biological or adoptive parents. */
   parents: PersonSummary[]
   /** Siblings sharing at least one common parent union. */

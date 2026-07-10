@@ -15,8 +15,18 @@ jest.mock('@/lib/neo4j', () => ({
   }),
 }))
 
+// The route calls `auth()` to decide whether to redact likely-living persons
+// (issue #142). Signed-in is the default so the response-shaping tests below
+// observe unredacted data; the redaction tests override it per-case.
+jest.mock('@/auth', () => ({
+  auth: jest.fn().mockResolvedValue({ user: { email: 'viewer@example.com', name: 'Viewer' } }),
+}))
+
 import { read } from '@/lib/neo4j'
 const mockRead = read as jest.MockedFunction<typeof read>
+
+import { auth } from '@/auth'
+const mockAuth = auth as unknown as jest.MockedFunction<() => Promise<unknown>>
 
 const makeRequest = () => new Request('http://localhost/api/tree/I001')
 const makeParams = (rootId: string) => ({ params: Promise.resolve({ rootId }) })
@@ -270,6 +280,84 @@ describe('GET /api/tree/[rootId]', () => {
         expect.stringContaining('*1..8'),
         expect.any(Object)
       )
+    })
+  })
+
+  // Issue #142: anonymous visitors must not see birth/death/occupation/notes
+  // for people who are likely still living.
+  describe('privacy redaction for likely-living persons', () => {
+    const livingNode = {
+      _id: 'node:9',
+      _labels: ['Person'],
+      gedcomId: 'I009',
+      name: 'Jane Living',
+      sex: 'F',
+      birthYear: '1990',
+      deathYear: null,
+      birthPlace: 'Sheffield',
+      deathPlace: null,
+      occupation: 'Teacher',
+      notes: 'Private note',
+    }
+
+    it('redacts sensitive fields for anonymous requests', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      mockRead.mockResolvedValue([{ nodes: [livingNode], rels: [] }])
+
+      const response = await GET(makeRequest(), makeParams('I009'))
+      const body = await response.json()
+      const { data } = body.nodes[0]
+
+      expect(data.living).toBe(true)
+      expect(data.gedcomId).toBe('I009')
+      expect(data.name).toBe('Jane Living')
+      expect(data.birthYear).toBeNull()
+      expect(data.deathYear).toBeNull()
+      expect(data.birthPlace).toBeNull()
+      expect(data.deathPlace).toBeNull()
+      expect(data.occupation).toBeNull()
+      expect(data.notes).toBeNull()
+    })
+
+    it('returns full data for the same person when signed in', async () => {
+      mockRead.mockResolvedValue([{ nodes: [livingNode], rels: [] }])
+
+      const response = await GET(makeRequest(), makeParams('I009'))
+      const body = await response.json()
+      const { data } = body.nodes[0]
+
+      expect(data.living).toBeUndefined()
+      expect(data.birthYear).toBe('1990')
+      expect(data.birthPlace).toBe('Sheffield')
+      expect(data.occupation).toBe('Teacher')
+      expect(data.notes).toBe('Private note')
+    })
+
+    it('leaves deceased persons unredacted for anonymous requests', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      mockRead.mockResolvedValue([
+        { nodes: [{ ...livingNode, deathYear: '1975', occupation: 'Baker' }], rels: [] },
+      ])
+
+      const response = await GET(makeRequest(), makeParams('I009'))
+      const body = await response.json()
+      const { data } = body.nodes[0]
+
+      expect(data.living).toBeUndefined()
+      expect(data.birthYear).toBe('1990')
+      expect(data.deathYear).toBe('1975')
+      expect(data.occupation).toBe('Baker')
+    })
+
+    it('does not add a living marker to union nodes for anonymous requests', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      mockRead.mockResolvedValue([{ nodes: [unionNode], rels: [] }])
+
+      const response = await GET(makeRequest(), makeParams('F001'))
+      const body = await response.json()
+
+      expect(body.nodes[0].type).toBe('union')
+      expect(body.nodes[0].data).toEqual({ gedcomId: 'F001' })
     })
   })
 })

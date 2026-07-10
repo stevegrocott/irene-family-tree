@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto'
 import { read, write, neo4jErrorResponse } from '@/lib/neo4j'
 import { recordChange } from '@/lib/changes'
 import { auth } from '@/auth'
+import { isLikelyLiving, redactPerson } from '@/lib/privacy'
 
 /** Forces the route to run in the Node.js runtime (required for Neo4j driver). */
 export const runtime = 'nodejs'
@@ -30,6 +31,8 @@ interface Person {
   deathYear: string | null
   /** Place name of birth, or null if unknown. */
   birthPlace: string | null
+  /** `true` when sensitive fields were redacted because this person is likely still living. */
+  living?: boolean
 }
 
 /**
@@ -37,8 +40,8 @@ interface Person {
  *
  * Returns up to 2 000 persons from the Neo4j graph, sorted alphabetically by name.
  *
- * Intentionally has no auth check: this endpoint powers public genealogy search,
- * so unauthenticated read access is by design.
+ * Public read access is by design (see issue #123), but sensitive fields for
+ * likely-living persons are redacted for anonymous requests (see issue #142).
  *
  * @returns A JSON response containing an array of {@link Person} objects on success,
  *          or `{ error: "Failed to query graph database" }` (500) on a Neo4j error.
@@ -62,6 +65,25 @@ export async function GET(request: Request) {
   } catch (err) {
     return neo4jErrorResponse(err, 'Failed to query graph database')
   }
+
+  const session = await auth()
+  if (!session?.user) {
+    persons = persons.map((p) => {
+      const full = { ...p, deathPlace: null, occupation: null, notes: null }
+      if (!isLikelyLiving(full)) return p
+      const redacted = redactPerson(full)
+      return {
+        gedcomId: redacted.gedcomId,
+        name: redacted.name,
+        sex: redacted.sex,
+        birthYear: redacted.birthYear,
+        deathYear: redacted.deathYear,
+        birthPlace: redacted.birthPlace,
+        living: true,
+      }
+    })
+  }
+
   return NextResponse.json(persons)
 }
 

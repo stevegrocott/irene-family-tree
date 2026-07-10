@@ -31,6 +31,9 @@ const mockWrite = write as jest.MockedFunction<typeof write>
 import { recordChange } from '@/lib/changes'
 const mockRecordChange = recordChange as jest.MockedFunction<typeof recordChange>
 
+import { auth } from '@/auth'
+const mockAuth = auth as unknown as jest.MockedFunction<() => Promise<unknown>>
+
 /**
  * Creates a minimal Request object targeting the person-by-id endpoint.
  *
@@ -283,6 +286,91 @@ describe('GET /api/person/[id]', () => {
 
     expect(body.marriages[0].marriageYear).toBeNull()
     expect(body.marriages[0].marriagePlace).toBeNull()
+  })
+
+  // Issue #142: for anonymous requests the root person and every nested
+  // parent / sibling / spouse / child summary must be redacted when likely living.
+  describe('privacy redaction for likely-living persons', () => {
+    const CURRENT_YEAR = new Date().getFullYear()
+    /** Born recently enough to be within the 105-year living threshold. */
+    const RECENT = String(CURRENT_YEAR - 40)
+    /** Born long enough ago that the person cannot plausibly be living. */
+    const ANCIENT = String(CURRENT_YEAR - 130)
+
+    /** Living root, with a living child and a long-dead parent, sibling and spouse. */
+    const livingDetail = {
+      ...personDetail,
+      birthYear: RECENT,
+      deathYear: null,
+      deathPlace: null,
+      parents: [{ gedcomId: 'I002', name: 'James Doe', sex: 'M', birthYear: ANCIENT, deathYear: '1940' }],
+      siblings: [{ gedcomId: 'I003', name: 'Jane Doe', sex: 'F', birthYear: ANCIENT, deathYear: null }],
+      marriages: [
+        {
+          unionId: 'F001',
+          marriageYear: '1925',
+          marriagePlace: 'Boston, MA',
+          spouse: { gedcomId: 'I004', name: 'Mary Smith', sex: 'F', birthYear: RECENT, deathYear: null },
+          children: [
+            { gedcomId: 'I005', name: 'Robert Doe', sex: 'M', birthYear: RECENT, deathYear: null },
+          ],
+        },
+      ],
+    }
+
+    it('redacts the root person for anonymous requests', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      mockRead.mockResolvedValue([livingDetail])
+
+      const body = await (await GET(makeRequest(), makeParams('I001'))).json()
+
+      expect(body.living).toBe(true)
+      expect(body.name).toBe('John Doe')
+      expect(body.birthYear).toBeNull()
+      expect(body.deathYear).toBeNull()
+      expect(body.birthPlace).toBeNull()
+      expect(body.deathPlace).toBeNull()
+      expect(body.occupation).toBeNull()
+      expect(body.notes).toBeNull()
+    })
+
+    it('redacts living nested spouse and child summaries for anonymous requests', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      mockRead.mockResolvedValue([livingDetail])
+
+      const body = await (await GET(makeRequest(), makeParams('I001'))).json()
+
+      const spouse = body.marriages[0].spouse
+      expect(spouse.living).toBe(true)
+      expect(spouse.name).toBe('Mary Smith')
+      expect(spouse.birthYear).toBeNull()
+
+      const child = body.marriages[0].children[0]
+      expect(child.living).toBe(true)
+      expect(child.name).toBe('Robert Doe')
+      expect(child.birthYear).toBeNull()
+    })
+
+    it('leaves deceased nested parent and sibling summaries untouched for anonymous requests', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      mockRead.mockResolvedValue([livingDetail])
+
+      const body = await (await GET(makeRequest(), makeParams('I001'))).json()
+
+      expect(body.parents[0]).toEqual(livingDetail.parents[0])
+      // Born >105 years ago with no death year: not plausibly living, so not redacted.
+      expect(body.siblings[0]).toEqual(livingDetail.siblings[0])
+    })
+
+    it('returns full data including nested summaries when signed in', async () => {
+      mockRead.mockResolvedValue([livingDetail])
+
+      const body = await (await GET(makeRequest(), makeParams('I001'))).json()
+
+      expect(body).toEqual(livingDetail)
+      expect(body.living).toBeUndefined()
+      expect(body.marriages[0].spouse.living).toBeUndefined()
+    })
   })
 })
 

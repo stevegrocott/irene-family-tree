@@ -6,7 +6,7 @@
  */
 
 import { read, neo4jErrorResponse } from '@/lib/neo4j'
-import { computeKinshipLabel, type KinshipStep } from '@/lib/kinship'
+import { computeKinshipLabel, type KinshipStep, type Sex } from '@/lib/kinship'
 
 /** Force Node.js runtime so the Neo4j driver can open TCP connections. */
 export const runtime = 'nodejs'
@@ -66,7 +66,7 @@ class UnclassifiableStepError extends Error {}
 
 /**
  * Classifies a single Union crossing between two adjacent Person nodes on the path
- * into a {@link KinshipStep}.
+ * into one or more {@link KinshipStep}s.
  *
  * The family graph models a union as `(Person)-[:UNION]->(Union)` (partner in the
  * union) and `(Union)-[:CHILD]->(Person)` (child born of the union). A shortest path
@@ -75,7 +75,9 @@ class UnclassifiableStepError extends Error {}
  * - prev is a partner in the union, next is a child of it  -> next is prev's `child`
  * - prev is a child of the union, next is a partner in it  -> next is prev's `parent`
  * - both prev and next are partners in the same union      -> next is prev's `spouse`
- * - both prev and next are children of the same union      -> next is prev's `sibling`
+ * - both prev and next are children of the same union      -> next is prev's sibling,
+ *   expressed as a `parent` hop up to the shared union followed by a `child` hop down
+ *   to `next`, since the {@link KinshipStep} vocabulary has no dedicated sibling type
  */
 function classifyStep(
   prev: Neo4jPathNode,
@@ -83,31 +85,30 @@ function classifyStep(
   next: Neo4jPathNode,
   prevRel: Neo4jPathRel,
   nextRel: Neo4jPathRel
-): KinshipStep {
+): KinshipStep[] {
   const prevIsPartner = prevRel.type === 'UNION' && prevRel.start === prev._id && prevRel.end === union._id
   const prevIsChild = prevRel.type === 'CHILD' && prevRel.start === union._id && prevRel.end === prev._id
   const nextIsPartner = nextRel.type === 'UNION' && nextRel.start === next._id && nextRel.end === union._id
   const nextIsChild = nextRel.type === 'CHILD' && nextRel.start === union._id && nextRel.end === next._id
 
-  let type: KinshipStep['type']
-  if (prevIsPartner && nextIsChild) {
-    type = 'child'
-  } else if (prevIsChild && nextIsPartner) {
-    type = 'parent'
-  } else if (prevIsPartner && nextIsPartner) {
-    type = 'spouse'
-  } else if (prevIsChild && nextIsChild) {
-    type = 'sibling'
-  } else {
-    throw new UnclassifiableStepError(
-      `Cannot classify step through union ${union.gedcomId}: ${prevRel.type} then ${nextRel.type}`
-    )
-  }
+  const name = next.name ?? ''
+  const sex = (next.sex ?? null) as Sex
 
-  return {
-    type,
-    person: { gedcomId: next.gedcomId, name: next.name ?? '', sex: next.sex ?? null },
+  if (prevIsPartner && nextIsChild) {
+    return [{ type: 'child', name, sex }]
   }
+  if (prevIsChild && nextIsPartner) {
+    return [{ type: 'parent', name, sex }]
+  }
+  if (prevIsPartner && nextIsPartner) {
+    return [{ type: 'spouse', name, sex }]
+  }
+  if (prevIsChild && nextIsChild) {
+    return [{ type: 'parent' }, { type: 'child', name, sex }]
+  }
+  throw new UnclassifiableStepError(
+    `Cannot classify step through union ${union.gedcomId}: ${prevRel.type} then ${nextRel.type}`
+  )
 }
 
 /**
@@ -117,7 +118,7 @@ function classifyStep(
 function classifySteps(nodes: Neo4jPathNode[], rels: Neo4jPathRel[]): KinshipStep[] {
   const steps: KinshipStep[] = []
   for (let i = 0; i + 2 < nodes.length; i += 2) {
-    steps.push(classifyStep(nodes[i], nodes[i + 1], nodes[i + 2], rels[i], rels[i + 1]))
+    steps.push(...classifyStep(nodes[i], nodes[i + 1], nodes[i + 2], rels[i], rels[i + 1]))
   }
   return steps
 }

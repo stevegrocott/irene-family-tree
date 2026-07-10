@@ -19,23 +19,6 @@ import {
   type GedcomExportData,
 } from '../src/lib/gedcom-export'
 
-export {
-  PERSON_QUERY,
-  UNION_QUERY,
-  SPOUSE_EDGES_QUERY,
-  CHILD_EDGES_QUERY,
-  mapPersonRecord,
-  mapUnionRecord,
-  mapRelRecord,
-  groupByUnionId,
-  buildFamRecord,
-  buildGedcomDocument,
-  type UnionNode,
-  type PersonUnionRel,
-  type FamilyBuildContext,
-  type GedcomExportData,
-}
-
 async function main() {
   loadLocalEnv()
   validateRequiredEnv(['NEO4J_URI', 'NEO4J_USER', 'NEO4J_PASSWORD'])

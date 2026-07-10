@@ -77,6 +77,15 @@ export function groupByUnionId(rels: PersonUnionRel[]): Map<string, PersonUnionR
   return map
 }
 
+function groupByPersonId(rels: PersonUnionRel[]): Map<string, string[]> {
+  const map = new Map<string, string[]>()
+  for (const rel of rels) {
+    if (!map.has(rel.personId)) map.set(rel.personId, [])
+    map.get(rel.personId)!.push(rel.unionId)
+  }
+  return map
+}
+
 export interface FamilyBuildContext {
   union: UnionNode
   spouses: PersonUnionRel[]
@@ -145,16 +154,8 @@ export function buildGedcomDocument(data: GedcomExportData): string {
     personSexMap.set(p.gedcomId, p.sex)
   }
 
-  const famsByPerson = new Map<string, string[]>()
-  const famcByPerson = new Map<string, string[]>()
-  for (const rel of spouseRels) {
-    if (!famsByPerson.has(rel.personId)) famsByPerson.set(rel.personId, [])
-    famsByPerson.get(rel.personId)!.push(rel.unionId)
-  }
-  for (const rel of childRels) {
-    if (!famcByPerson.has(rel.personId)) famcByPerson.set(rel.personId, [])
-    famcByPerson.get(rel.personId)!.push(rel.unionId)
-  }
+  const famsByPerson = groupByPersonId(spouseRels)
+  const famcByPerson = groupByPersonId(childRels)
 
   const sections: string[] = []
 

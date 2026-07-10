@@ -39,7 +39,10 @@ const LIVING_AGE_THRESHOLD_YEARS = 105
  *
  * Death fields (deathYear, deathDate, deathPlace) always indicate not living.
  * An unknown birth year with no death fields fails safe as living. The
- * `isLiving` field, when explicitly set, overrides all other checks.
+ * `isLiving` field, when explicitly set, overrides all other checks. Only
+ * `isLiving` is supported as an override; `private` is intentionally not
+ * implemented since redaction is based on likely-living status, not a
+ * separate privacy flag.
  *
  * @param person - Person record to evaluate
  * @returns `true` if the person is likely living, `false` otherwise

@@ -1,23 +1,8 @@
-import { isLikelyLiving, redactPerson } from './privacy'
+import { isLikelyLiving, redactPerson, Person } from './privacy'
 
 const CURRENT_YEAR = new Date().getFullYear()
 
-interface TestPerson {
-  gedcomId: string
-  name: string
-  sex: string | null
-  birthYear: string | null
-  deathYear: string | null
-  birthDate?: string | null
-  deathDate?: string | null
-  birthPlace: string | null
-  deathPlace: string | null
-  occupation: string | null
-  notes: string | null
-  isLiving?: boolean
-}
-
-function makePerson(overrides: Partial<TestPerson> = {}): TestPerson {
+function makePerson(overrides: Partial<Person> = {}): Person {
   return {
     gedcomId: '@I1@',
     name: 'Jane Doe',

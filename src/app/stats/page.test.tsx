@@ -7,9 +7,10 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import StatsPage from '@/app/stats/page'
+import type { StatsResponse } from '@/types/stats'
 
 /** Full StatsResponse fixture matching the shape returned by GET /api/stats. */
-function makeStats(overrides: Partial<Record<string, unknown>> = {}) {
+function makeStats(overrides: Partial<StatsResponse> = {}): StatsResponse {
   return {
     totalPeople: 42,
     sexBreakdown: { male: 20, female: 21, unknown: 1 },

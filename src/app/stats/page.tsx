@@ -9,58 +9,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-
-/** Breakdown of persons by recorded biological sex. */
-interface SexBreakdown {
-  male: number
-  female: number
-  unknown: number
-}
-
-/** Number of births recorded in a given decade (e.g. `1950` covers 1950-1959). */
-interface DecadeCount {
-  decade: number
-  count: number
-}
-
-/** Number of persons sharing a derived surname. */
-interface SurnameCount {
-  surname: string
-  count: number
-}
-
-/** Number of persons sharing a recorded birthplace. */
-interface BirthplaceCount {
-  birthPlace: string
-  count: number
-}
-
-/** The earliest-born person with a known birth year. */
-interface OldestAncestor {
-  gedcomId: string
-  name: string
-  birthYear: string
-}
-
-/** The union (marriage/partnership) with the most recorded children. */
-interface LargestUnion {
-  unionId: string
-  childCount: number
-  parents: string[]
-}
-
-/** Aggregate statistics payload returned by `GET /api/stats`. */
-interface StatsResponse {
-  totalPeople: number
-  sexBreakdown: SexBreakdown
-  unionCount: number
-  birthsByDecade: DecadeCount[]
-  topSurnames: SurnameCount[]
-  topBirthplaces: BirthplaceCount[]
-  averageLifespan: number | null
-  oldestAncestor: OldestAncestor | null
-  largestUnion: LargestUnion | null
-}
+import type { StatsResponse } from '@/types/stats'
 
 /** A single labelled value for a {@link BarChart} row. */
 interface BarItem {
@@ -155,6 +104,24 @@ function BackLink() {
   )
 }
 
+/** Reusable chart section wrapper with title and bar chart. */
+function ChartSection({
+  title,
+  testId,
+  items,
+}: {
+  title: string
+  testId: string
+  items: BarItem[]
+}) {
+  return (
+    <section className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+      <h2 className="text-white text-sm font-semibold mb-4">{title}</h2>
+      <BarChart testId={testId} items={items} />
+    </section>
+  )
+}
+
 /**
  * `/stats` page component.
  *
@@ -217,8 +184,6 @@ export default function StatsPage() {
     )
   }
 
-  const { sexBreakdown } = stats
-
   return (
     <main data-testid="stats-page" className="min-h-screen w-full bg-[#050a18] px-4 py-8 sm:px-8">
       <div className="max-w-4xl mx-auto space-y-8">
@@ -238,8 +203,8 @@ export default function StatsPage() {
           <StatCard
             testId="stats-sex-breakdown"
             label="Sex breakdown"
-            value={`${sexBreakdown.male}M / ${sexBreakdown.female}F`}
-            hint={sexBreakdown.unknown > 0 ? `${sexBreakdown.unknown} unknown` : undefined}
+            value={`${stats.sexBreakdown.male}M / ${stats.sexBreakdown.female}F`}
+            hint={stats.sexBreakdown.unknown > 0 ? `${stats.sexBreakdown.unknown} unknown` : undefined}
           />
           <StatCard
             testId="stats-oldest-ancestor"
@@ -259,29 +224,23 @@ export default function StatsPage() {
           />
         </section>
 
-        <section className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-          <h2 className="text-white text-sm font-semibold mb-4">Births by decade</h2>
-          <BarChart
-            testId="stats-decades-chart"
-            items={stats.birthsByDecade.map(d => ({ label: `${d.decade}s`, value: d.count }))}
-          />
-        </section>
+        <ChartSection
+          title="Births by decade"
+          testId="stats-decades-chart"
+          items={stats.birthsByDecade.map(d => ({ label: `${d.decade}s`, value: d.count }))}
+        />
 
-        <section className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-          <h2 className="text-white text-sm font-semibold mb-4">Top surnames</h2>
-          <BarChart
-            testId="stats-surnames-chart"
-            items={stats.topSurnames.map(s => ({ label: s.surname, value: s.count }))}
-          />
-        </section>
+        <ChartSection
+          title="Top surnames"
+          testId="stats-surnames-chart"
+          items={stats.topSurnames.map(s => ({ label: s.surname, value: s.count }))}
+        />
 
-        <section className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-          <h2 className="text-white text-sm font-semibold mb-4">Top birthplaces</h2>
-          <BarChart
-            testId="stats-birthplaces-chart"
-            items={stats.topBirthplaces.map(b => ({ label: b.birthPlace, value: b.count }))}
-          />
-        </section>
+        <ChartSection
+          title="Top birthplaces"
+          testId="stats-birthplaces-chart"
+          items={stats.topBirthplaces.map(b => ({ label: b.birthPlace, value: b.count }))}
+        />
       </div>
     </main>
   )

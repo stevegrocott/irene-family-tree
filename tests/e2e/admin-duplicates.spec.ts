@@ -65,7 +65,15 @@ async function mockDuplicatesRoute(page: import('@playwright/test').Page, candid
 
 async function navigateToDuplicatesTab(page: import('@playwright/test').Page) {
   await page.goto('/admin', { waitUntil: 'domcontentloaded' })
-  await page.getByRole('tab', { name: /duplicates/i }).click()
+  const tab = page.getByRole('tab', { name: /duplicates/i })
+  await expect(tab).toBeVisible()
+  // Retry the click until React has hydrated and the tab actually becomes
+  // selected — `domcontentloaded` fires before hydration completes, so a
+  // single click can land before any listener is attached.
+  await expect(async () => {
+    await tab.click()
+    await expect(tab).toHaveAttribute('aria-selected', 'true')
+  }).toPass({ timeout: 10_000 })
 }
 
 // ── Mock data ────────────────────────────────────────────────────────────────

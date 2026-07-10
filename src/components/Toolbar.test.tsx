@@ -7,6 +7,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toolbar } from '@/components/FamilyTree'
+import { APP_NAME } from '@/constants/branding'
 import type { Node } from 'reactflow'
 import type { PersonData } from '@/types/tree'
 
@@ -117,5 +118,35 @@ describe('Toolbar', () => {
 
     const slider = container.querySelector('[data-testid="toolbar-depth-slider"]')
     expect(slider).not.toBeNull()
+  })
+
+  it('renders the app name from branding constants as the title', async () => {
+    await act(async () => {
+      root = createRoot(container)
+      root.render(
+        <Toolbar
+          nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+          rootName="Root Person"
+          hops={3}
+          onHopsChange={jest.fn()}
+        />,
+      )
+    })
+
+    const appName = container.querySelector('[data-testid="toolbar-app-name"]')
+    expect(appName).not.toBeNull()
+    expect(appName!.textContent).toBe(APP_NAME)
+  })
+
+  it('renders no toolbar (and no app name) when there are no person nodes', async () => {
+    await act(async () => {
+      root = createRoot(container)
+      root.render(
+        <Toolbar nodes={[]} rootName="" hops={3} onHopsChange={jest.fn()} />,
+      )
+    })
+
+    expect(container.querySelector('[data-testid="toolbar"]')).toBeNull()
+    expect(container.querySelector('[data-testid="toolbar-app-name"]')).toBeNull()
   })
 })

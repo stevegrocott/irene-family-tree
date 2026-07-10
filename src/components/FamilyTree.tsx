@@ -30,6 +30,7 @@ import { applyDagreLayout } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
 import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
 import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID } from '@/constants/tree'
+import { APP_NAME } from '@/constants/branding'
 
 /**
  * Minimal person summary used for the search bar and root selection.
@@ -54,8 +55,9 @@ const defaultEdgeOptions = {
 }
 
 /**
- * Floating toolbar displaying tree statistics and depth control.
- * Shows ancestor/descendant counts and allows users to adjust the viewing depth (hops).
+ * Floating toolbar displaying the app name, tree statistics, and depth control.
+ * Shows a small app title followed by ancestor/descendant counts and allows users
+ * to adjust the viewing depth (hops).
  *
  * @param {Object} props - Component props
  * @param {Node[]} props.nodes - All nodes in the current tree visualization
@@ -88,6 +90,12 @@ export function Toolbar({
       data-testid="toolbar"
       className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
     >
+      <span
+        data-testid="toolbar-app-name"
+        className="text-xs text-white font-semibold select-none pr-4 border-r border-white/20 tracking-wide"
+      >
+        {APP_NAME}
+      </span>
       <span data-testid="toolbar-person-count" className="text-xs text-white/60 select-none">
         <span className="text-white font-medium">{personCount}</span> people
       </span>

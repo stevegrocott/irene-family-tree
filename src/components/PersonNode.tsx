@@ -21,12 +21,14 @@ export default function PersonNode({ data }: NodeProps<PersonData>) {
     ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-transparent shadow-[0_0_28px_rgba(251,191,36,0.6)]'
     : ''
 
-  const dates = [
-    data.birthYear ? `b. ${data.birthYear}` : null,
-    data.deathYear ? `d. ${data.deathYear}` : null,
-  ]
-    .filter(Boolean)
-    .join('  ')
+  const dates = data.living
+    ? 'Living'
+    : [
+        data.birthYear ? `b. ${data.birthYear}` : null,
+        data.deathYear ? `d. ${data.deathYear}` : null,
+      ]
+        .filter(Boolean)
+        .join('  ')
 
   const initials = data.name
     ? data.name

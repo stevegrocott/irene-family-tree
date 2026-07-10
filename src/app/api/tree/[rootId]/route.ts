@@ -7,6 +7,8 @@
 import { read, neo4jErrorResponse } from '@/lib/neo4j'
 import { FlowNode, FlowEdge, TreeResponse, PersonData, UnionData } from '@/types/tree'
 import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, UNION_LABEL } from '@/constants/tree'
+import { auth } from '@/auth'
+import { isLikelyLiving, redactPerson } from '@/lib/privacy'
 
 /** Force Node.js runtime so the Neo4j driver can open TCP connections. */
 export const runtime = 'nodejs'
@@ -139,26 +141,33 @@ export async function GET(
 
   const { nodes, rels } = rows[0]
 
+  const session = await auth()
+  const isAnonymous = !session?.user
+
   const flowNodes: FlowNode[] = nodes.map((n) => {
     const isUnion = n._labels.includes(UNION_LABEL)
-    return isUnion
-      ? { id: n._id, type: 'union' as const, data: { gedcomId: n.gedcomId } as UnionData, position: { x: 0, y: 0 } }
-      : {
-          id: n._id,
-          type: 'person' as const,
-          data: {
-            gedcomId: n.gedcomId,
-            name: n.name ?? '',
-            sex: n.sex ?? '',
-            birthYear: n.birthYear ?? null,
-            deathYear: n.deathYear ?? null,
-            birthPlace: n.birthPlace ?? null,
-            deathPlace: n.deathPlace ?? null,
-            occupation: n.occupation ?? null,
-            notes: n.notes ?? null,
-          } as PersonData,
-          position: { x: 0, y: 0 },
-        }
+    if (isUnion) {
+      return { id: n._id, type: 'union' as const, data: { gedcomId: n.gedcomId } as UnionData, position: { x: 0, y: 0 } }
+    }
+
+    const person = {
+      gedcomId: n.gedcomId,
+      name: n.name ?? '',
+      sex: n.sex ?? null,
+      birthYear: n.birthYear ?? null,
+      deathYear: n.deathYear ?? null,
+      birthPlace: n.birthPlace ?? null,
+      deathPlace: n.deathPlace ?? null,
+      occupation: n.occupation ?? null,
+      notes: n.notes ?? null,
+    }
+
+    const data: PersonData =
+      isAnonymous && isLikelyLiving(person)
+        ? { ...redactPerson(person), sex: person.sex ?? '' }
+        : { ...person, sex: person.sex ?? '' }
+
+    return { id: n._id, type: 'person' as const, data, position: { x: 0, y: 0 } }
   })
 
   const flowEdges: FlowEdge[] = rels.map((r) => ({

@@ -10,6 +10,7 @@ import { read, write, neo4jErrorResponse } from '@/lib/neo4j'
 import { recordChange } from '@/lib/changes'
 import { auth } from '@/auth'
 import { ALLOWED_PATCH_FIELDS } from '@/lib/patches'
+import { isLikelyLiving, redactPerson } from '@/lib/privacy'
 import type { PersonSummary, MarriageDetail } from '@/types/tree'
 
 /** Forces the route to run in the Node.js runtime (required for Neo4j driver). */
@@ -43,6 +44,26 @@ interface PersonDetailRow {
   siblings: PersonSummary[]
   /** All recorded marriages/unions with spouse and children for each. */
   marriages: MarriageDetail[]
+  /** `true` when sensitive fields were redacted because this person is likely still living. */
+  living?: boolean
+}
+
+/**
+ * Redacts a {@link PersonSummary} (parent, sibling, spouse, or child row) when
+ * the person is likely still living, keeping only identity fields.
+ */
+function redactSummaryIfLiving(p: PersonSummary): PersonSummary {
+  const full = { ...p, birthPlace: null, deathPlace: null, occupation: null, notes: null }
+  if (!isLikelyLiving(full)) return p
+  const redacted = redactPerson(full)
+  return {
+    gedcomId: redacted.gedcomId,
+    name: redacted.name,
+    sex: redacted.sex,
+    birthYear: null,
+    deathYear: null,
+    living: true,
+  }
 }
 
 /**
@@ -138,7 +159,36 @@ export async function GET(
     return NextResponse.json({ error: 'Person not found' }, { status: 404 })
   }
 
-  return NextResponse.json(rows[0])
+  const row = rows[0]
+  const session = await auth()
+  if (!session?.user) {
+    const rootFields = isLikelyLiving(row)
+      ? {
+          sex: redactPerson(row).sex,
+          birthYear: null,
+          deathYear: null,
+          birthPlace: null,
+          deathPlace: null,
+          occupation: null,
+          notes: null,
+          living: true as const,
+        }
+      : {}
+
+    return NextResponse.json({
+      ...row,
+      ...rootFields,
+      parents: row.parents.map(redactSummaryIfLiving),
+      siblings: row.siblings.map(redactSummaryIfLiving),
+      marriages: row.marriages.map((m) => ({
+        ...m,
+        spouse: m.spouse ? redactSummaryIfLiving(m.spouse) : null,
+        children: m.children.map(redactSummaryIfLiving),
+      })),
+    } satisfies PersonDetailRow)
+  }
+
+  return NextResponse.json(row)
 }
 
 interface UpdatedPerson {

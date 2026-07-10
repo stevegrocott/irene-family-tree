@@ -68,22 +68,26 @@ export function mapRelRecord(r: QueryRecord): PersonUnionRel {
   }
 }
 
-export function groupByUnionId(rels: PersonUnionRel[]): Map<string, PersonUnionRel[]> {
-  const map = new Map<string, PersonUnionRel[]>()
-  for (const rel of rels) {
-    if (!map.has(rel.unionId)) map.set(rel.unionId, [])
-    map.get(rel.unionId)!.push(rel)
+function groupBy<T, K extends string | number, V>(
+  items: T[],
+  keyFn: (item: T) => K,
+  valueFn: (item: T) => V
+): Map<K, V[]> {
+  const map = new Map<K, V[]>()
+  for (const item of items) {
+    const key = keyFn(item)
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(valueFn(item))
   }
   return map
 }
 
+export function groupByUnionId(rels: PersonUnionRel[]): Map<string, PersonUnionRel[]> {
+  return groupBy(rels, rel => rel.unionId, rel => rel)
+}
+
 function groupByPersonId(rels: PersonUnionRel[]): Map<string, string[]> {
-  const map = new Map<string, string[]>()
-  for (const rel of rels) {
-    if (!map.has(rel.personId)) map.set(rel.personId, [])
-    map.get(rel.personId)!.push(rel.unionId)
-  }
-  return map
+  return groupBy(rels, rel => rel.personId, rel => rel.unionId)
 }
 
 export interface FamilyBuildContext {
@@ -100,7 +104,6 @@ export function buildFamRecord(ctx: FamilyBuildContext): string {
 
   let husb: string | null = null
   let wife: string | null = null
-  const unassigned: string[] = []
 
   for (const s of ctx.spouses) {
     const sex = ctx.personSexMap.get(s.personId) ?? ''
@@ -108,14 +111,11 @@ export function buildFamRecord(ctx: FamilyBuildContext): string {
       husb = s.personId
     } else if (sex === 'F' && wife === null) {
       wife = s.personId
-    } else {
-      unassigned.push(s.personId)
+    } else if (husb === null) {
+      husb = s.personId
+    } else if (wife === null) {
+      wife = s.personId
     }
-  }
-
-  for (const pid of unassigned) {
-    if (husb === null) husb = pid
-    else if (wife === null) wife = pid
   }
 
   if (husb !== null) lines.push(`1 ${GEDCOM_TYPES.HUSB} ${husb}`)
@@ -128,9 +128,7 @@ export function buildFamRecord(ctx: FamilyBuildContext): string {
   if (ctx.union.marriageYear || ctx.union.marriagePlace) {
     lines.push(`1 ${GEDCOM_TYPES.MARRIAGE}`)
     if (ctx.union.marriageYear) lines.push(`2 ${GEDCOM_TYPES.DATE} ${ctx.union.marriageYear}`)
-    if (ctx.union.marriagePlace) {
-      lines.push(`2 ${GEDCOM_TYPES.PLACE} ${escapeGedcomValue(ctx.union.marriagePlace)}`)
-    }
+    if (ctx.union.marriagePlace) lines.push(`2 ${GEDCOM_TYPES.PLACE} ${escapeGedcomValue(ctx.union.marriagePlace)}`)
   }
 
   return lines.join('\n')
@@ -149,10 +147,7 @@ export function buildGedcomDocument(data: GedcomExportData): string {
   const spousesByUnion = groupByUnionId(spouseRels)
   const childrenByUnion = groupByUnionId(childRels)
 
-  const personSexMap = new Map<string, string>()
-  for (const p of persons) {
-    personSexMap.set(p.gedcomId, p.sex)
-  }
+  const personSexMap = new Map(persons.map(p => [p.gedcomId, p.sex]))
 
   const famsByPerson = groupByPersonId(spouseRels)
   const famcByPerson = groupByPersonId(childRels)

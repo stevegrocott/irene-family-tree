@@ -3,6 +3,7 @@ import {
   clampHops,
   parseTreeUrlState,
   serializeTreeUrlState,
+  buildTreeUrlPath,
 } from './treeUrlState'
 import { MIN_HOPS, MAX_HOPS } from '@/constants/tree'
 
@@ -169,5 +170,30 @@ describe('parse/serialize round-trip', () => {
     const reparsed = parseTreeUrlState(new URLSearchParams(serializeTreeUrlState(original)))
 
     expect(reparsed).toEqual(original)
+  })
+})
+
+describe('buildTreeUrlPath', () => {
+  it('returns "/" when no state is provided', () => {
+    expect(buildTreeUrlPath({})).toBe('/')
+  })
+
+  it('returns "/" when all fields are null or undefined', () => {
+    expect(buildTreeUrlPath({ root: null, person: undefined, hops: null })).toBe('/')
+  })
+
+  it('returns a relative path with a query string when state is present', () => {
+    expect(buildTreeUrlPath({ root: '@I85@' })).toBe('/?root=%40I85%40')
+  })
+
+  it('includes all provided fields in the query string', () => {
+    const path = buildTreeUrlPath({ root: '@I85@', person: '@I12@', hops: 6 })
+    const [pathname, query] = path.split('?')
+    const params = new URLSearchParams(query)
+
+    expect(pathname).toBe('/')
+    expect(params.get('root')).toBe('@I85@')
+    expect(params.get('person')).toBe('@I12@')
+    expect(params.get('hops')).toBe('6')
   })
 })

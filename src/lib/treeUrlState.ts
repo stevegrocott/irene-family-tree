@@ -88,3 +88,12 @@ export function serializeTreeUrlState(state: TreeUrlStateInput): string {
   if (state.hops != null) params.set('hops', String(clampHops(state.hops)))
   return params.toString()
 }
+
+/**
+ * Builds a relative URL path from tree viewer state, suitable for router.push/replace.
+ * Returns `/` if no state is provided, or `/?<query>` if state is present.
+ */
+export function buildTreeUrlPath(state: TreeUrlStateInput): string {
+  const query = serializeTreeUrlState(state)
+  return query ? `/?${query}` : '/'
+}

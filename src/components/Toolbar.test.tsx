@@ -149,4 +149,22 @@ describe('Toolbar', () => {
     expect(container.querySelector('[data-testid="toolbar"]')).toBeNull()
     expect(container.querySelector('[data-testid="toolbar-app-name"]')).toBeNull()
   })
+
+  it('renders a Stats link pointing to /stats', async () => {
+    await act(async () => {
+      root = createRoot(container)
+      root.render(
+        <Toolbar
+          nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+          rootName="Root Person"
+          hops={3}
+          onHopsChange={jest.fn()}
+        />,
+      )
+    })
+
+    const statsLink = container.querySelector('[data-testid="toolbar-stats-link"]')
+    expect(statsLink).not.toBeNull()
+    expect(statsLink!.getAttribute('href')).toBe('/stats')
+  })
 })

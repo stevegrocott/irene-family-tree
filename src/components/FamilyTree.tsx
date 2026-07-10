@@ -9,6 +9,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import type React from 'react'
+import Link from 'next/link'
 import { useSession, signIn } from 'next-auth/react'
 import ReactFlow, {
   Background,
@@ -118,6 +119,13 @@ export function Toolbar({
         className="w-24"
         aria-label="Depth"
       />
+      <Link
+        href="/stats"
+        data-testid="toolbar-stats-link"
+        className="text-xs text-white/60 hover:text-white select-none pl-4 border-l border-white/20 transition-colors"
+      >
+        Stats
+      </Link>
     </div>
   )
 }

@@ -33,7 +33,7 @@ import { formatLifespan } from '@/lib/person'
 import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
 import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
-import { parseTreeUrlState, serializeTreeUrlState } from '@/lib/treeUrlState'
+import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
 /** Builds a minimal `PersonData` stub for a person id not present in the current tree view. */
 function personStub(gedcomId: string): PersonData {
@@ -63,6 +63,55 @@ const defaultEdgeOptions = {
 }
 
 /**
+ * Button that copies a shareable tree-viewer URL to the clipboard via
+ * `navigator.clipboard.writeText`, showing a transient "Copied!" or
+ * "Copy failed" label for ~2s before reverting to the resting label.
+ *
+ * @param {Object} props - Component props
+ * @param {Function} props.getUrl - Lazily builds the canonical URL to copy, evaluated on click
+ * @param {string} props.testId - `data-testid` applied to the button
+ * @param {string} [props.className] - Additional classes for styling
+ * @returns {React.ReactElement} Rendered copy-link button
+ */
+function CopyLinkButton({
+  getUrl,
+  testId,
+  className = '',
+}: {
+  getUrl: () => string
+  testId: string
+  className?: string
+}) {
+  const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+
+  const handleClick = async () => {
+    try {
+      await navigator.clipboard.writeText(getUrl())
+      setStatus('copied')
+    } catch {
+      setStatus('failed')
+    }
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => setStatus('idle'), 2000)
+  }
+
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      onClick={handleClick}
+      aria-label="Copy shareable link"
+      className={className}
+    >
+      {status === 'copied' ? 'Copied!' : status === 'failed' ? 'Copy failed' : 'Copy link'}
+    </button>
+  )
+}
+
+/**
  * Floating toolbar displaying the app name, tree statistics, and depth control.
  * Shows a small app title followed by ancestor/descendant counts and allows users
  * to adjust the viewing depth (hops).
@@ -80,12 +129,14 @@ export function Toolbar({
   hops,
   onHopsChange,
   sliderMax = MAX_HOPS,
+  getShareUrl,
 }: {
   nodes: Node[]
   rootName: string
   hops: number
   onHopsChange: (hops: number) => void
   sliderMax?: number
+  getShareUrl?: () => string
 }) {
   const ancestorGens = nodes.filter(n => n.type === 'person').map(n => (n.data as PersonData).generation).filter((g): g is number => typeof g === 'number' && g < 0)
   const ancestors = ancestorGens.length > 0 ? Math.abs(Math.min(...ancestorGens)) : 0
@@ -126,6 +177,13 @@ export function Toolbar({
         className="w-24"
         aria-label="Depth"
       />
+      {getShareUrl && (
+        <CopyLinkButton
+          getUrl={getShareUrl}
+          testId="toolbar-copy-link"
+          className="text-xs text-white/60 hover:text-white select-none pl-4 border-l border-white/20 transition-colors"
+        />
+      )}
       <Link
         href="/stats"
         data-testid="toolbar-stats-link"
@@ -251,6 +309,7 @@ export function PersonDrawer({
   onSelectPerson,
   onSelectRoot,
   rootId,
+  getShareUrl,
 }: {
   person: PersonData
   onClose: () => void
@@ -258,6 +317,7 @@ export function PersonDrawer({
   onSelectPerson: (id: string) => void
   onSelectRoot?: (id: string) => void
   rootId?: string
+  getShareUrl?: () => string
 }) {
   const { data: session, status } = useSession()
   const isSignedIn = status === 'authenticated'
@@ -1036,6 +1096,13 @@ export function PersonDrawer({
             ✎
           </button>
         )}
+        {getShareUrl && (
+          <CopyLinkButton
+            getUrl={getShareUrl}
+            testId="person-drawer-copy-link"
+            className="px-2 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors mr-1 text-[10px] whitespace-nowrap"
+          />
+        )}
         <button
           data-testid="person-drawer-close"
           onClick={onClose}
@@ -1051,7 +1118,7 @@ export function PersonDrawer({
         {dates && (
           <p className="text-slate-400 text-sm">{dates}</p>
         )}
-        <p className="text-slate-500 text-xs font-mono">{person.gedcomId}</p>
+        <p data-testid="person-drawer-gedcom-id" className="text-slate-500 text-xs font-mono">{person.gedcomId}</p>
 
         {detailLoading && (
           <div className="flex items-center justify-center py-6">
@@ -1262,11 +1329,13 @@ function FlowCanvas({
   onSelectRoot,
   persons,
   treeVersion,
+  initialUrlState,
 }: {
   rootId: string
   onSelectRoot: (id: string) => void
   persons: Person[]
   treeVersion: number
+  initialUrlState: ReturnType<typeof parseTreeUrlState>
 }) {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
@@ -1274,19 +1343,15 @@ function FlowCanvas({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const parsed = parseTreeUrlState(searchParams)
-  const [hops, setHops] = useState(() => parsed.hops ?? DEFAULT_HOPS)
+  const [hops, setHops] = useState(() => initialUrlState.hops ?? DEFAULT_HOPS)
   const [actualMaxDepth, setActualMaxDepth] = useState<number>(MAX_HOPS)
   const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(() =>
-    parsed.person ? personStub(parsed.person) : null
+    initialUrlState.person ? personStub(initialUrlState.person) : null
   )
   const { setViewport } = useReactFlow()
   const abortRef = useRef<AbortController | null>(null)
-  /** Tracks whether the user has actively changed depth, so an untouched initial load never rewrites the URL. */
-  const hopsTouchedRef = useRef(false)
-  /** Tracks whether the user has actively selected/cleared a person, for the same reason. */
-  const personTouchedRef = useRef(false)
+  /** Tracks whether the user has actively changed depth or person, so an untouched initial load never rewrites the URL. */
+  const userInteractedRef = useRef(false)
 
   /** Display name of the current root person, derived from `nodes` and `rootId`. */
   const rootName = useMemo(() => {
@@ -1294,17 +1359,29 @@ function FlowCanvas({
     return rootNode ? (rootNode.data as PersonData).name ?? '' : ''
   }, [nodes, rootId])
 
-  /** Updates `selectedPerson`, marking the person state as user-touched so URL sync activates. */
+  /** Updates `selectedPerson`, marking the viewer state as user-touched so URL sync activates. */
   const selectPerson = useCallback((person: PersonData | null) => {
-    personTouchedRef.current = true
+    userInteractedRef.current = true
     setSelectedPerson(person)
   }, [])
 
-  /** Updates `hops`, marking the depth as user-touched so URL sync activates. */
+  /** Updates `hops`, marking the viewer state as user-touched so URL sync activates. */
   const handleHopsChange = useCallback((next: number) => {
-    hopsTouchedRef.current = true
+    userInteractedRef.current = true
     setHops(next)
   }, [])
+
+  /** Builds the canonical relative URL path for the current root/person/hops state. */
+  const buildPath = useCallback(
+    () => buildTreeUrlPath({ root: rootId || null, person: selectedPerson?.gedcomId ?? null, hops }),
+    [rootId, selectedPerson, hops]
+  )
+
+  /** Builds the canonical shareable URL for the current root/person/hops state. */
+  const buildShareUrl = useCallback(() => {
+    const path = buildPath()
+    return typeof window !== 'undefined' ? `${window.location.origin}${path}` : path
+  }, [buildPath])
 
   /**
    * Keeps the URL in sync with viewer state (root, person, hops) via `router.replace`
@@ -1314,14 +1391,9 @@ function FlowCanvas({
    * including one that arrived via a deep link — never rewrites the URL.
    */
   useEffect(() => {
-    if (!hopsTouchedRef.current && !personTouchedRef.current && treeVersion === 0) return
-    const query = serializeTreeUrlState({
-      root: rootId || null,
-      person: selectedPerson?.gedcomId ?? null,
-      hops,
-    })
-    router.replace(query ? `/?${query}` : '/', { scroll: false })
-  }, [rootId, hops, selectedPerson, treeVersion, router])
+    if (!userInteractedRef.current && treeVersion === 0) return
+    router.replace(buildPath(), { scroll: false })
+  }, [buildPath, treeVersion, router])
 
   /**
    * Opens the person drawer when a person node is clicked.
@@ -1442,6 +1514,7 @@ function FlowCanvas({
         hops={hops}
         onHopsChange={handleHopsChange}
         sliderMax={actualMaxDepth}
+        getShareUrl={buildShareUrl}
       />
       {/* Loading/error overlays — ReactFlow stays mounted so its viewport is always initialized */}
       {loading && (
@@ -1486,6 +1559,7 @@ function FlowCanvas({
           }}
           onSelectRoot={onSelectRoot}
           rootId={rootId}
+          getShareUrl={buildShareUrl}
         />
       )}
     </>
@@ -1510,7 +1584,7 @@ export default function FamilyTree() {
   const searchParams = useSearchParams()
   // Captured once on mount so later URL updates (from our own router.replace calls) don't
   // re-trigger root resolution — only the URL present on initial load takes precedence.
-  const [initialUrlRoot] = useState(() => parseTreeUrlState(searchParams).root)
+  const [initialUrlState] = useState(() => parseTreeUrlState(searchParams))
 
   /**
    * Updates the active root person and persists the selection to localStorage
@@ -1539,7 +1613,7 @@ export default function FamilyTree() {
       .then((data: Person[]) => {
         setPersons(data)
         // Precedence: URL root param > localStorage > default person > first named > first available.
-        const urlPerson = initialUrlRoot ? data.find(p => p.gedcomId === initialUrlRoot) : null
+        const urlPerson = initialUrlState.root ? data.find(p => p.gedcomId === initialUrlState.root) : null
         const storedId = typeof window !== 'undefined' ? localStorage.getItem(TREE_ROOT_STORAGE_KEY) : null
         const storedPerson = storedId ? data.find(p => p.gedcomId === storedId) : null
         const defaultPerson = urlPerson ?? storedPerson ?? data.find(p => p.gedcomId === DEFAULT_ROOT_GEDCOM_ID) ?? data.find(p => p.name?.trim()) ?? data[0]
@@ -1551,7 +1625,7 @@ export default function FamilyTree() {
         setPersonsError('Could not load family members. Please check your database connection and refresh.')
       })
     return () => ctrl.abort()
-  }, [personsVersion, initialUrlRoot])
+  }, [personsVersion, initialUrlState])
 
   if (personsError) {
     return (
@@ -1566,7 +1640,7 @@ export default function FamilyTree() {
   return (
     <div className="relative w-screen h-screen bg-[#050a18]">
       <ReactFlowProvider>
-        <FlowCanvas rootId={rootId} onSelectRoot={handleSelectRoot} persons={persons} treeVersion={treeVersion} />
+        <FlowCanvas rootId={rootId} onSelectRoot={handleSelectRoot} persons={persons} treeVersion={treeVersion} initialUrlState={initialUrlState} />
       </ReactFlowProvider>
     </div>
   )

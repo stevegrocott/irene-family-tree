@@ -106,11 +106,10 @@ export async function GET() {
       ])
 
     const totals = totalsRows[0] ?? { totalPeople: 0, male: 0, female: 0, unknown: 0 }
-    const { male, female, unknown } = totals
 
     const response: StatsResponse = {
       totalPeople: totals.totalPeople,
-      sexBreakdown: { male, female, unknown },
+      sexBreakdown: { male: totals.male, female: totals.female, unknown: totals.unknown },
       unionCount: unionRows[0]?.unionCount ?? 0,
       birthsByDecade: decadeRows,
       topSurnames: surnameRows,

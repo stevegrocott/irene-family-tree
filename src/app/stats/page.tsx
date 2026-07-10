@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { formatLifespan } from '@/lib/person'
 import type { StatsResponse } from '@/types/stats'
 
 /** A single labelled value for a {@link BarChart} row. */
@@ -17,16 +18,7 @@ interface BarItem {
   value: number
 }
 
-/**
- * Glassmorphism stat card matching the floating Toolbar's styling.
- *
- * @param {Object} props - Component props
- * @param {string} props.label - Small uppercase label describing the stat
- * @param {React.ReactNode} props.value - Headline value to display
- * @param {string} [props.hint] - Optional secondary detail shown below the value
- * @param {string} [props.testId] - Optional `data-testid` for the card
- * @returns {React.ReactElement} Rendered stat card
- */
+/** Glassmorphism stat card matching the floating Toolbar's styling. */
 function StatCard({
   label,
   value,
@@ -53,12 +45,6 @@ function StatCard({
 /**
  * A pure-CSS horizontal bar chart: each row is a label plus a percentage-width
  * `div` sized relative to the largest value in the set. No chart library needed.
- *
- * @param {Object} props - Component props
- * @param {BarItem[]} props.items - Rows to render, in display order
- * @param {string} props.testId - `data-testid` for the chart container; each bar
- *   row gets `${testId}-bar` so tests/E2E can count rendered bars
- * @returns {React.ReactElement} Rendered bar chart, or a "no data" placeholder when empty
  */
 function BarChart({ items, testId }: { items: BarItem[]; testId: string }) {
   if (items.length === 0) {
@@ -134,8 +120,8 @@ function ChartSection({
  */
 export default function StatsPage() {
   const [stats, setStats] = useState<StatsResponse | null>(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const loading = stats === null && error === null
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -146,13 +132,11 @@ export default function StatsPage() {
       })
       .then((data: StatsResponse) => {
         setStats(data)
-        setLoading(false)
       })
       .catch(err => {
         if (err instanceof Error && err.name === 'AbortError') return
         console.error('Failed to load stats', err)
         setError('Could not load family statistics. Please check your database connection and refresh.')
-        setLoading(false)
       })
     return () => ctrl.abort()
   }, [])
@@ -210,7 +194,7 @@ export default function StatsPage() {
             testId="stats-oldest-ancestor"
             label="Oldest known ancestor"
             value={stats.oldestAncestor ? stats.oldestAncestor.name || 'Unknown' : '—'}
-            hint={stats.oldestAncestor ? `b. ${stats.oldestAncestor.birthYear}` : undefined}
+            hint={stats.oldestAncestor ? formatLifespan(stats.oldestAncestor) : undefined}
           />
           <StatCard
             testId="stats-largest-union"

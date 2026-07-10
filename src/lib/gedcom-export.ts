@@ -104,6 +104,7 @@ export function buildFamRecord(ctx: FamilyBuildContext): string {
 
   let husb: string | null = null
   let wife: string | null = null
+  const unassigned: string[] = []
 
   for (const s of ctx.spouses) {
     const sex = ctx.personSexMap.get(s.personId) ?? ''
@@ -111,10 +112,16 @@ export function buildFamRecord(ctx: FamilyBuildContext): string {
       husb = s.personId
     } else if (sex === 'F' && wife === null) {
       wife = s.personId
-    } else if (husb === null) {
-      husb = s.personId
+    } else {
+      unassigned.push(s.personId)
+    }
+  }
+
+  for (const personId of unassigned) {
+    if (husb === null) {
+      husb = personId
     } else if (wife === null) {
-      wife = s.personId
+      wife = personId
     }
   }
 

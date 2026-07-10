@@ -10,13 +10,9 @@ import {
   mapPersonRecord,
   mapUnionRecord,
   mapRelRecord,
-  groupByUnionId,
   buildFamRecord,
   buildGedcomDocument,
-  type UnionNode,
-  type PersonUnionRel,
   type FamilyBuildContext,
-  type GedcomExportData,
 } from '../src/lib/gedcom-export'
 
 export { CHILD_EDGES_QUERY, buildFamRecord, type FamilyBuildContext }

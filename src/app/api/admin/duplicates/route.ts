@@ -85,6 +85,35 @@ interface DuplicatePairRow {
   notes2: string | null
 }
 
+function extractPersonPair(
+  row: DuplicatePairRow,
+): { person1: DuplicatePersonSide; person2: DuplicatePersonSide } {
+  return {
+    person1: {
+      gedcomId: row.gedcomId1,
+      name: row.name1,
+      sex: row.sex1,
+      birthYear: row.birthYear1,
+      deathYear: row.deathYear1,
+      birthPlace: row.birthPlace1,
+      deathPlace: row.deathPlace1,
+      occupation: row.occupation1,
+      notes: row.notes1,
+    },
+    person2: {
+      gedcomId: row.gedcomId2,
+      name: row.name2,
+      sex: row.sex2,
+      birthYear: row.birthYear2,
+      deathYear: row.deathYear2,
+      birthPlace: row.birthPlace2,
+      deathPlace: row.deathPlace2,
+      occupation: row.occupation2,
+      notes: row.notes2,
+    },
+  }
+}
+
 /**
  * Fetches candidate duplicate person pairs for admin review.
  *
@@ -115,30 +144,7 @@ export async function GET() {
     return neo4jErrorResponse(err, 'Failed to query graph database')
   }
 
-  const duplicates = rows.map(row => ({
-    person1: {
-      gedcomId: row.gedcomId1,
-      name: row.name1,
-      sex: row.sex1,
-      birthYear: row.birthYear1,
-      deathYear: row.deathYear1,
-      birthPlace: row.birthPlace1,
-      deathPlace: row.deathPlace1,
-      occupation: row.occupation1,
-      notes: row.notes1,
-    } satisfies DuplicatePersonSide,
-    person2: {
-      gedcomId: row.gedcomId2,
-      name: row.name2,
-      sex: row.sex2,
-      birthYear: row.birthYear2,
-      deathYear: row.deathYear2,
-      birthPlace: row.birthPlace2,
-      deathPlace: row.deathPlace2,
-      occupation: row.occupation2,
-      notes: row.notes2,
-    } satisfies DuplicatePersonSide,
-  }))
+  const duplicates = rows.map(extractPersonPair)
 
   return NextResponse.json({ duplicates })
 }

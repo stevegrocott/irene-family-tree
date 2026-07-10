@@ -42,6 +42,22 @@ const makeDuplicateRow = (suffix: string) => ({
   notes2: null,
 })
 
+const makeExpectedPerson = (
+  gedcomId: string,
+  birthYear: string,
+  deathYear: string,
+) => ({
+  gedcomId,
+  name: 'John Doe',
+  sex: 'M',
+  birthYear,
+  deathYear,
+  birthPlace: 'Springfield',
+  deathPlace: 'Springfield',
+  occupation: 'Farmer',
+  notes: null,
+})
+
 describe('GET /api/admin/duplicates', () => {
   beforeEach(() => {
     jest.clearAllMocks()
@@ -88,28 +104,8 @@ describe('GET /api/admin/duplicates', () => {
     expect(response.status).toBe(200)
     expect(body.duplicates).toHaveLength(1)
     expect(body.duplicates[0]).toEqual({
-      person1: {
-        gedcomId: 'I001a',
-        name: 'John Doe',
-        sex: 'M',
-        birthYear: '1900',
-        deathYear: '1970',
-        birthPlace: 'Springfield',
-        deathPlace: 'Springfield',
-        occupation: 'Farmer',
-        notes: null,
-      },
-      person2: {
-        gedcomId: 'I001b',
-        name: 'John Doe',
-        sex: 'M',
-        birthYear: '1901',
-        deathYear: '1971',
-        birthPlace: 'Springfield',
-        deathPlace: 'Springfield',
-        occupation: 'Farmer',
-        notes: null,
-      },
+      person1: makeExpectedPerson('I001a', '1900', '1970'),
+      person2: makeExpectedPerson('I001b', '1901', '1971'),
     })
   })
 

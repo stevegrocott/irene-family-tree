@@ -377,4 +377,39 @@ describe('PersonDrawer', () => {
       expect(linkCall).toBeUndefined()
     })
   })
+
+  describe('Copy link button', () => {
+    it('is not rendered when getShareUrl is not provided', async () => {
+      await renderDrawer()
+      expect(container.querySelector('[data-testid="person-drawer-copy-link"]')).toBeNull()
+    })
+
+    it('copies the URL from getShareUrl and shows a transient "Copied!" confirmation', async () => {
+      const writeText = jest.fn().mockResolvedValue(undefined)
+      Object.assign(navigator, { clipboard: { writeText } })
+      const getShareUrl = jest.fn().mockReturnValue('https://example.com/?root=%40I1%40')
+
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <PersonDrawer
+            person={basePerson}
+            onClose={jest.fn()}
+            onReroot={jest.fn()}
+            onSelectPerson={jest.fn()}
+            getShareUrl={getShareUrl}
+          />
+        )
+      })
+
+      const copyBtn = container.querySelector('[data-testid="person-drawer-copy-link"]') as HTMLButtonElement
+      expect(copyBtn).not.toBeNull()
+
+      await act(async () => { copyBtn.click() })
+      await act(async () => { await Promise.resolve() })
+
+      expect(writeText).toHaveBeenCalledWith('https://example.com/?root=%40I1%40')
+      expect(copyBtn.textContent).toBe('Copied!')
+    })
+  })
 })

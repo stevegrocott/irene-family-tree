@@ -19,6 +19,8 @@ import {
   type GedcomExportData,
 } from '../src/lib/gedcom-export'
 
+export { CHILD_EDGES_QUERY, buildFamRecord, type FamilyBuildContext }
+
 async function main() {
   loadLocalEnv()
   validateRequiredEnv(['NEO4J_URI', 'NEO4J_USER', 'NEO4J_PASSWORD'])

@@ -100,6 +100,28 @@ describe('GET /api/relationship', () => {
     })
   })
 
+  describe('same person', () => {
+    it('returns a self label with no steps when from and to are the same existing person', async () => {
+      mockRead.mockResolvedValue([{ exists: true }])
+
+      const response = await GET(makeRequest('?from=I001&to=I001'))
+      const body = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(body).toEqual({ from: 'I001', to: 'I001', steps: [], label: 'self' })
+    })
+
+    it('returns 404 when from and to are the same but the person does not exist', async () => {
+      mockRead.mockResolvedValue([{ exists: false }])
+
+      const response = await GET(makeRequest('?from=MISSING&to=MISSING'))
+      const body = await response.json()
+
+      expect(response.status).toBe(404)
+      expect(body).toEqual({ error: 'Person not found' })
+    })
+  })
+
   describe('no path within bound', () => {
     it('returns 404 when both people exist but no path was found', async () => {
       mockRead.mockResolvedValue([{ fromExists: true, toExists: true, nodes: null, rels: null }])

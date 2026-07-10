@@ -144,6 +144,29 @@ export async function GET(request: Request) {
     return Response.json({ error: 'from and to query parameters are required' }, { status: 400 })
   }
 
+  if (from === to) {
+    let existsRows: { exists: boolean }[]
+    try {
+      existsRows = await read<{ exists: boolean }>(
+        `OPTIONAL MATCH (a:Person {gedcomId: $from}) RETURN a IS NOT NULL AS exists`,
+        { from }
+      )
+    } catch (err) {
+      return neo4jErrorResponse(err, 'Failed to query graph database')
+    }
+
+    if (!existsRows[0]?.exists) {
+      return Response.json({ error: 'Person not found' }, { status: 404 })
+    }
+
+    return Response.json({
+      from,
+      to,
+      steps: [],
+      label: computeKinshipLabel([]),
+    } satisfies RelationshipResponse)
+  }
+
   let rows: RelationshipPathRow[]
   try {
     rows = await read<RelationshipPathRow>(

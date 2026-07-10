@@ -1275,12 +1275,12 @@ function FlowCanvas({
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [hops, setHops] = useState(() => parseTreeUrlState(searchParams).hops ?? DEFAULT_HOPS)
+  const parsed = parseTreeUrlState(searchParams)
+  const [hops, setHops] = useState(() => parsed.hops ?? DEFAULT_HOPS)
   const [actualMaxDepth, setActualMaxDepth] = useState<number>(MAX_HOPS)
-  const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(() => {
-    const { person } = parseTreeUrlState(searchParams)
-    return person ? personStub(person) : null
-  })
+  const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(() =>
+    parsed.person ? personStub(parsed.person) : null
+  )
   const { setViewport } = useReactFlow()
   const abortRef = useRef<AbortController | null>(null)
   /** Tracks whether the user has actively changed depth, so an untouched initial load never rewrites the URL. */

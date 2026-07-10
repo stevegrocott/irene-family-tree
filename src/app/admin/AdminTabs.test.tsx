@@ -10,12 +10,7 @@ import { AdminTabs } from '@/app/admin/AdminTabs'
 
 function findTab(container: HTMLElement, name: string): HTMLButtonElement | undefined {
   const tabs = container.querySelectorAll('[role="tab"]')
-  for (let i = 0; i < tabs.length; i++) {
-    if (tabs[i].textContent?.trim() === name) {
-      return tabs[i] as HTMLButtonElement
-    }
-  }
-  return undefined
+  return Array.from(tabs).find(tab => tab.textContent?.trim() === name) as HTMLButtonElement | undefined
 }
 
 function findPanel(container: HTMLElement, id: string): HTMLElement | null {

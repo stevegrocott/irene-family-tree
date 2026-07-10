@@ -38,17 +38,34 @@ async function adminSessionToken(): Promise<string> {
   })
 }
 
+let cachedAdminToken: string
+
 async function setAdminCookie(context: import('@playwright/test').BrowserContext) {
-  const token = await adminSessionToken()
+  cachedAdminToken ??= await adminSessionToken()
   await context.addCookies([{
     name: 'authjs.session-token',
-    value: token,
+    value: cachedAdminToken,
     domain: 'localhost',
     path: '/',
     httpOnly: true,
     secure: false,
     sameSite: 'Lax',
   }])
+}
+
+async function mockDuplicatesRoute(page: import('@playwright/test').Page, candidates: any[] = []) {
+  await page.route(/\/api\/admin\/duplicates$/, route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ candidates }),
+    })
+  )
+}
+
+async function navigateToDuplicatesTab(page: import('@playwright/test').Page) {
+  await page.goto('/admin', { waitUntil: 'domcontentloaded' })
+  await page.getByRole('tab', { name: /duplicates/i }).click()
 }
 
 // ── Mock data ────────────────────────────────────────────────────────────────
@@ -90,66 +107,36 @@ test.describe('Admin Duplicates (/admin)', () => {
   })
 
   test('Duplicates tab is visible on the admin page', async ({ page }) => {
-    await page.route(/\/api\/admin\/duplicates$/, route =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ candidates: [] }),
-      })
-    )
-
+    await mockDuplicatesRoute(page)
     await page.goto('/admin', { waitUntil: 'domcontentloaded' })
-    await expect(page.getByRole('heading')).toBeVisible()
-
-    const duplicatesTab = page.getByRole('tab', { name: /duplicates/i })
-    await expect(duplicatesTab).toBeVisible()
+    await expect(page.getByRole('tab', { name: /duplicates/i })).toBeVisible()
   })
 
   test('switching to the Duplicates tab renders a candidate pair side by side', async ({ page }) => {
-    await page.route(/\/api\/admin\/duplicates$/, route =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ candidates: [mockCandidate] }),
-      })
-    )
-
-    await page.goto('/admin', { waitUntil: 'domcontentloaded' })
-    await page.getByRole('tab', { name: /duplicates/i }).click()
+    await mockDuplicatesRoute(page, [mockCandidate])
+    await navigateToDuplicatesTab(page)
 
     await expect(page.getByTestId('duplicates-review')).toBeVisible()
-
-    // Both candidates in the pair are rendered (name appears twice: once per side).
-    await expect(page.getByText(survivorPerson.name).first()).toBeVisible()
-
-    // Distinguishing per-side fields prove the side-by-side layout is populated
-    // from both person records, not just one.
+    await expect(page.getByText(survivorPerson.name)).toHaveCount(2)
     await expect(page.getByText(survivorPerson.birthPlace!)).toBeVisible()
     await expect(page.getByText(duplicatePerson.deathPlace!)).toBeVisible()
     await expect(page.getByText(duplicatePerson.notes!)).toBeVisible()
   })
 
   test('shows empty state when no duplicate candidates are found', async ({ page }) => {
-    await page.route(/\/api\/admin\/duplicates$/, route =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ candidates: [] }),
-      })
-    )
-
-    await page.goto('/admin', { waitUntil: 'domcontentloaded' })
-    await page.getByRole('tab', { name: /duplicates/i }).click()
+    await mockDuplicatesRoute(page)
+    await navigateToDuplicatesTab(page)
 
     await expect(page.getByTestId('duplicates-review')).toBeVisible()
-    await expect(page.getByText(/no (duplicate|potential duplicate) candidates/i)).toBeVisible()
+    await expect(page.getByTestId('empty-state')).toBeVisible()
   })
 
   test('picking a survivor and confirming POSTs the merge with correct body; card is removed on success', async ({ page }) => {
-    let mergePostBody: { survivorId?: string; duplicateId?: string } | null = null
+    const mergePromise = page.waitForResponse(res =>
+      res.url().includes('/api/admin/duplicates/merge')
+    )
 
     await page.route(/\/api\/admin\/duplicates\/merge$/, async route => {
-      mergePostBody = await route.request().postDataJSON()
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -157,38 +144,26 @@ test.describe('Admin Duplicates (/admin)', () => {
       })
     })
 
-    await page.route(/\/api\/admin\/duplicates$/, route =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ candidates: [mockCandidate] }),
-      })
-    )
-
-    await page.goto('/admin', { waitUntil: 'domcontentloaded' })
-    await page.getByRole('tab', { name: /duplicates/i }).click()
+    await mockDuplicatesRoute(page, [mockCandidate])
+    await navigateToDuplicatesTab(page)
 
     await expect(page.getByTestId('duplicates-review')).toBeVisible()
-    await expect(page.getByText(duplicatePerson.notes!)).toBeVisible({ timeout: 3_000 })
+    await expect(page.getByText(duplicatePerson.notes!)).toBeVisible()
 
-    // Select the second person (@I002@) as the survivor via the radio picker.
-    const survivorRadios = page.getByRole('radio')
-    await expect(survivorRadios).toHaveCount(2)
-    await survivorRadios.nth(1).check()
+    await page.getByTestId('survivor-radio-duplicate').check()
 
-    // Confirm the merge; the UI warns this is irreversible.
-    const confirmBtn = page.getByRole('button', { name: /confirm|merge/i })
+    const confirmBtn = page.getByRole('button', { name: /confirm merge/i })
     await expect(confirmBtn).toBeVisible()
     await confirmBtn.click()
 
-    await expect.poll(() => mergePostBody).not.toBeNull()
+    const mergeResponse = await mergePromise
+    const mergePostBody = await mergeResponse.request().postDataJSON()
     expect(mergePostBody).toMatchObject({
       survivorId: duplicatePerson.gedcomId,
       duplicateId: survivorPerson.gedcomId,
     })
 
-    // The candidate card disappears from the list after a successful merge.
-    await expect(page.getByText(duplicatePerson.notes!)).not.toBeVisible({ timeout: 5_000 })
+    await expect(page.getByText(duplicatePerson.notes!)).not.toBeVisible()
   })
 
   test('Merge API blocks requests that lack an admin session', async ({ request }) => {

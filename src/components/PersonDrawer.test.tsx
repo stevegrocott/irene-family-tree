@@ -378,6 +378,183 @@ describe('PersonDrawer', () => {
     })
   })
 
+  describe('Photo', () => {
+    it('shows the photo in the drawer header when detail includes photoUrl', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ ...mockDetailResponse, photoUrl: 'https://blob.example.com/photo.jpg' }),
+      })
+      await renderDrawer()
+
+      const photo = container.querySelector('[data-testid="person-drawer-photo"]') as HTMLImageElement
+      expect(photo).not.toBeNull()
+      expect(photo.src).toBe('https://blob.example.com/photo.jpg')
+    })
+
+    it('does not render a photo element when no photoUrl is set', async () => {
+      await renderDrawer()
+      expect(container.querySelector('[data-testid="person-drawer-photo"]')).toBeNull()
+    })
+
+    describe('Edit mode upload — role-based routing', () => {
+      function installPhotoFetchMock() {
+        const calls: Array<{ url: string; init?: RequestInit }> = []
+        const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+        const fetchMock = jest.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+          calls.push({ url, init })
+          if (url === `${personPath}/my-changes`) {
+            return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
+          }
+          if (url === `${personPath}/photo`) {
+            return { ok: true, json: async () => ({ url: 'https://blob.example.com/uploaded.jpg' }) }
+          }
+          if (url === '/api/suggestions') {
+            return { ok: true, status: 201, json: async () => ({ id: 'new-suggestion-id' }) }
+          }
+          if (url === personPath && init?.method === 'PATCH') {
+            return { ok: true, json: async () => ({}) }
+          }
+          if (url.startsWith(personPath)) {
+            return { ok: true, json: async () => mockDetailResponse }
+          }
+          return { ok: true, json: async () => ({}) }
+        })
+        global.fetch = fetchMock as unknown as typeof fetch
+        return { calls }
+      }
+
+      async function openEditAndUploadPhoto() {
+        const editBtn = container.querySelector('[data-testid="person-drawer-edit"]') as HTMLButtonElement
+        await act(async () => { editBtn.click() })
+
+        const fileInput = container.querySelector('[data-testid="person-drawer-photo-input"]') as HTMLInputElement
+        const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' })
+        await act(async () => {
+          Object.defineProperty(fileInput, 'files', { value: [file] })
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        await act(async () => { await Promise.resolve() })
+      }
+
+      it('admin: uploading a photo POSTs multipart data then Save PATCHes the returned photoUrl', async () => {
+        mockSession('admin')
+        const { calls } = installPhotoFetchMock()
+        await renderDrawer()
+        await openEditAndUploadPhoto()
+
+        const uploadCall = calls.find(c => c.url === `/api/person/${encodeURIComponent('@I1@')}/photo`)
+        expect(uploadCall).toBeDefined()
+        expect(uploadCall!.init?.method).toBe('POST')
+        expect(uploadCall!.init?.body).toBeInstanceOf(FormData)
+
+        const saveBtn = Array.from(container.querySelectorAll('button'))
+          .find(b => b.textContent?.trim() === 'Save change') as HTMLButtonElement
+        await act(async () => { saveBtn.click() })
+        await act(async () => { await Promise.resolve() })
+
+        const patchCall = calls.find(c => c.url === `/api/person/${encodeURIComponent('@I1@')}` && c.init?.method === 'PATCH')
+        expect(patchCall).toBeDefined()
+        expect(JSON.parse(patchCall!.init!.body as string)).toMatchObject({
+          photoUrl: 'https://blob.example.com/uploaded.jpg',
+        })
+      })
+
+      it('non-admin: uploading a photo then suggesting includes photoUrl in the suggestion payload', async () => {
+        mockSession('user')
+        const { calls } = installPhotoFetchMock()
+        await renderDrawer()
+        await openEditAndUploadPhoto()
+
+        const suggestBtn = container.querySelector('[data-testid="suggest-change"]') as HTMLButtonElement
+        await act(async () => { suggestBtn.click() })
+        await act(async () => { await Promise.resolve() })
+
+        const suggestionCall = calls.find(c => c.url === '/api/suggestions')
+        expect(suggestionCall).toBeDefined()
+        const body = JSON.parse(suggestionCall!.init!.body as string)
+        expect(body.payload).toMatchObject({ photoUrl: 'https://blob.example.com/uploaded.jpg' })
+      })
+
+      it('rejects a non-image file client-side without uploading', async () => {
+        mockSession('admin')
+        const { calls } = installPhotoFetchMock()
+        await renderDrawer()
+
+        const editBtn = container.querySelector('[data-testid="person-drawer-edit"]') as HTMLButtonElement
+        await act(async () => { editBtn.click() })
+
+        const fileInput = container.querySelector('[data-testid="person-drawer-photo-input"]') as HTMLInputElement
+        const file = new File(['data'], 'notes.txt', { type: 'text/plain' })
+        await act(async () => {
+          Object.defineProperty(fileInput, 'files', { value: [file] })
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        await act(async () => { await Promise.resolve() })
+
+        const uploadCall = calls.find(c => c.url === `/api/person/${encodeURIComponent('@I1@')}/photo`)
+        expect(uploadCall).toBeUndefined()
+        const error = container.querySelector('[data-testid="person-drawer-edit-action-error"]')
+        expect(error?.textContent).toBe('Photo must be a JPEG, PNG, or WebP image.')
+      })
+
+      it('rejects a file over 5MB client-side without uploading', async () => {
+        mockSession('admin')
+        const { calls } = installPhotoFetchMock()
+        await renderDrawer()
+
+        const editBtn = container.querySelector('[data-testid="person-drawer-edit"]') as HTMLButtonElement
+        await act(async () => { editBtn.click() })
+
+        const fileInput = container.querySelector('[data-testid="person-drawer-photo-input"]') as HTMLInputElement
+        const file = new File(['data'], 'big.jpg', { type: 'image/jpeg' })
+        Object.defineProperty(file, 'size', { value: 6 * 1024 * 1024 })
+        await act(async () => {
+          Object.defineProperty(fileInput, 'files', { value: [file] })
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        await act(async () => { await Promise.resolve() })
+
+        const uploadCall = calls.find(c => c.url === `/api/person/${encodeURIComponent('@I1@')}/photo`)
+        expect(uploadCall).toBeUndefined()
+        const error = container.querySelector('[data-testid="person-drawer-edit-action-error"]')
+        expect(error?.textContent).toBe('Photo must be 5 MB or smaller.')
+      })
+
+      it('shows an error message when the upload request fails', async () => {
+        mockSession('admin')
+        const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+        const fetchMock = jest.fn().mockImplementation(async (url: string) => {
+          if (url === `${personPath}/my-changes`) {
+            return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
+          }
+          if (url === `${personPath}/photo`) {
+            return { ok: false, status: 400, json: async () => ({ error: 'Bad request' }) }
+          }
+          if (url.startsWith(personPath)) {
+            return { ok: true, json: async () => mockDetailResponse }
+          }
+          return { ok: true, json: async () => ({}) }
+        })
+        global.fetch = fetchMock as unknown as typeof fetch
+        await renderDrawer()
+
+        const editBtn = container.querySelector('[data-testid="person-drawer-edit"]') as HTMLButtonElement
+        await act(async () => { editBtn.click() })
+
+        const fileInput = container.querySelector('[data-testid="person-drawer-photo-input"]') as HTMLInputElement
+        const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' })
+        await act(async () => {
+          Object.defineProperty(fileInput, 'files', { value: [file] })
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        await act(async () => { await Promise.resolve() })
+
+        const error = container.querySelector('[data-testid="person-drawer-edit-action-error"]')
+        expect(error?.textContent).toBe('Failed to upload photo. Please try again.')
+      })
+    })
+  })
+
   describe('Copy link button', () => {
     it('is not rendered when getShareUrl is not provided', async () => {
       await renderDrawer()

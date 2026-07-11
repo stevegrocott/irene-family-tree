@@ -44,7 +44,6 @@ const makeFile = (name: string, type: string, sizeBytes: number) =>
 describe('POST /api/person/[id]/photo', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockAuth.mockResolvedValue({ user: { email: 'editor@example.com', name: 'Editor User' } })
   })
 
   it('returns 401 when there is no session', async () => {

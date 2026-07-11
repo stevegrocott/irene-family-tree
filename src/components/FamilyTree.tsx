@@ -26,6 +26,7 @@ import 'reactflow/dist/style.css'
 import PersonNode from '@/components/PersonNode'
 import UnionNode from '@/components/UnionNode'
 import SearchBar from '@/components/SearchBar'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { applyDagreLayout } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
 import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
@@ -285,6 +286,7 @@ export function PersonDrawer({
   const [actionError, setActionError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [pendingRemoveParentId, setPendingRemoveParentId] = useState<string | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   const [myChanges, setMyChanges] = useState<{
     createChange: { id: string; changeType: string; targetId: string; newValue: Record<string, unknown>; appliedAt: string } | null
@@ -478,50 +480,43 @@ export function PersonDrawer({
     myChanges.relationshipChanges.length < (detail!.parents.length + detail!.marriages.length)
 
   /**
-   * Deletes the current person. When the person has relationships, calls the
-   * cascade-revert endpoint to atomically remove all connected unions. When
-   * blocked by other-authored connections, shows a "contact an admin" message.
-   * For persons with no relationships, reverts the CREATE_PERSON change directly.
+   * Calls the cascade-revert endpoint to atomically remove the person and all
+   * connected unions. Invoked after the user confirms via the in-app modal.
    */
-  const handleDeletePerson = async () => {
-    if (isSubmitting) return
-    if (!myChanges?.createChange) return
-
-    if (detailHasRelationships) {
-      const connCount = computeCascadeDeleteConnectionCount(
-        myChanges.relationshipChanges,
-        detail!.parents.length + detail!.marriages.length
-      )
-      if (typeof window !== 'undefined' && !window.confirm(`Delete ${person.name || 'this person'} and remove all ${connCount} of their connections? This cannot be undone.`)) return
-      setIsSubmitting(true)
-      try {
-        const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/cascade-revert`, { method: 'POST' })
-        if (res.ok) {
-          setMyChanges(null)
-          const connectedId =
-            detail?.parents[0]?.gedcomId ??
-            detail?.marriages[0]?.spouse?.gedcomId ??
-            null
-          const refreshId = connectedId ?? (rootId && rootId !== person.gedcomId ? rootId : '')
-          onSelectRoot?.(refreshId)
-          onClose()
-        } else if (res.status === 403) {
-          const body = await res.json().catch(() => ({})) as { blockedBy?: Array<{ authorName: string }> }
-          const names = body.blockedBy?.map(b => b.authorName).filter(Boolean).join(', ')
-          setActionError(names
-            ? `Connections added by ${names} cannot be removed. Contact an admin.`
-            : 'Some connections cannot be removed. Contact an admin.')
-        } else {
-          const body = await res.json().catch(() => ({})) as { error?: string }
-          setActionError(body.error ?? 'Failed to delete person. Please try again.')
-        }
-      } finally {
-        setIsSubmitting(false)
+  const performCascadeDelete = async () => {
+    setIsSubmitting(true)
+    try {
+      const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/cascade-revert`, { method: 'POST' })
+      if (res.ok) {
+        setMyChanges(null)
+        const connectedId =
+          detail?.parents[0]?.gedcomId ??
+          detail?.marriages[0]?.spouse?.gedcomId ??
+          null
+        const refreshId = connectedId ?? (rootId && rootId !== person.gedcomId ? rootId : '')
+        onSelectRoot?.(refreshId)
+        onClose()
+      } else if (res.status === 403) {
+        const body = await res.json().catch(() => ({})) as { blockedBy?: Array<{ authorName: string }> }
+        const names = body.blockedBy?.map(b => b.authorName).filter(Boolean).join(', ')
+        setActionError(names
+          ? `Connections added by ${names} cannot be removed. Contact an admin.`
+          : 'Some connections cannot be removed. Contact an admin.')
+      } else {
+        const body = await res.json().catch(() => ({})) as { error?: string }
+        setActionError(body.error ?? 'Failed to delete person. Please try again.')
       }
-      return
+    } finally {
+      setIsSubmitting(false)
     }
+  }
 
-    if (typeof window !== 'undefined' && !window.confirm(`Delete ${person.name || 'this person'}? This cannot be undone.`)) return
+  /**
+   * Reverts the CREATE_PERSON change for a person with no relationships.
+   * Invoked after the user confirms via the in-app modal.
+   */
+  const performSimpleDelete = async () => {
+    if (!myChanges?.createChange) return
     setIsSubmitting(true)
     try {
       const result = await revertChangeRequest(myChanges.createChange.id)
@@ -539,15 +534,41 @@ export function PersonDrawer({
   }
 
   /**
+   * Deletes the current person. When the person has relationships, uses the
+   * cascade-revert endpoint to atomically remove all connected unions;
+   * otherwise reverts the CREATE_PERSON change directly. Either path is
+   * gated behind the in-app confirm modal instead of `window.confirm()`.
+   */
+  const handleDeletePerson = () => {
+    if (isSubmitting) return
+    if (!myChanges?.createChange) return
+
+    if (detailHasRelationships) {
+      const connCount = computeCascadeDeleteConnectionCount(
+        myChanges.relationshipChanges,
+        detail!.parents.length + detail!.marriages.length
+      )
+      setConfirmAction({
+        message: `Delete ${person.name || 'this person'} and remove all ${connCount} of their connections? This cannot be undone.`,
+        onConfirm: () => { setConfirmAction(null); void performCascadeDelete() },
+      })
+      return
+    }
+
+    setConfirmAction({
+      message: `Delete ${person.name || 'this person'}? This cannot be undone.`,
+      onConfirm: () => { setConfirmAction(null); void performSimpleDelete() },
+    })
+  }
+
+  /**
    * Removes a marriage/union by reverting the author's ADD_RELATIONSHIP change for it.
    * On success, bumps `detailVersion` so both the person detail and `my-changes`
    * re-fetch (the marriage disappears from the list). On 409 surfaces the detail
    * inline via `actionError`.
    * @param {string} changeId - id of the `ADD_RELATIONSHIP` Change to revert
    */
-  const handleRemoveMarriage = async (changeId: string) => {
-    if (isSubmitting) return
-    if (typeof window !== 'undefined' && !window.confirm('Remove this marriage? This cannot be undone.')) return
+  const performRemoveMarriage = async (changeId: string) => {
     setIsSubmitting(true)
     try {
       const result = await revertChangeRequest(changeId)
@@ -560,6 +581,14 @@ export function PersonDrawer({
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleRemoveMarriage = (changeId: string) => {
+    if (isSubmitting) return
+    setConfirmAction({
+      message: 'Remove this marriage? This cannot be undone.',
+      onConfirm: () => { setConfirmAction(null); void performRemoveMarriage(changeId) },
+    })
   }
 
   /**
@@ -591,9 +620,7 @@ export function PersonDrawer({
    * inline via `actionError`.
    * @param {string} changeId - id of the `UPDATE_PERSON` Change to revert
    */
-  const handleRevertEdit = async (changeId: string) => {
-    if (isSubmitting) return
-    if (typeof window !== 'undefined' && !window.confirm('Revert this edit? The previous values will be restored.')) return
+  const performRevertEdit = async (changeId: string) => {
     setIsSubmitting(true)
     try {
       const result = await revertChangeRequest(changeId)
@@ -606,6 +633,14 @@ export function PersonDrawer({
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleRevertEdit = (changeId: string) => {
+    if (isSubmitting) return
+    setConfirmAction({
+      message: 'Revert this edit? The previous values will be restored.',
+      onConfirm: () => { setConfirmAction(null); void performRevertEdit(changeId) },
+    })
   }
 
   /** Opens the edit sub-view, initializing all edit fields from current person/detail. */
@@ -705,8 +740,18 @@ export function PersonDrawer({
     }
   }
 
+  const confirmDialog = (
+    <ConfirmDialog
+      open={!!confirmAction}
+      message={confirmAction?.message ?? ''}
+      onConfirm={() => confirmAction?.onConfirm()}
+      onCancel={() => setConfirmAction(null)}
+    />
+  )
+
   if (mode === 'edit') {
     return (
+      <>
       <DrawerSubView title={`Edit ${person.name || 'person'}`} onBack={() => setMode('view')}>
         <div
           data-testid="person-drawer-edit-form"
@@ -904,11 +949,14 @@ export function PersonDrawer({
           </div>
         </div>
       </DrawerSubView>
+      {confirmDialog}
+      </>
     )
   }
 
   if (mode === 'add-relative') {
     return (
+      <>
       <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => setMode('view')}>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           <div>
@@ -1000,10 +1048,13 @@ export function PersonDrawer({
           </div>
         </div>
       </DrawerSubView>
+      {confirmDialog}
+      </>
     )
   }
 
   return (
+    <>
     <div
       data-testid="person-drawer"
       className={DRAWER_CONTAINER_CLASS}
@@ -1235,6 +1286,8 @@ export function PersonDrawer({
         )}
       </div>
     </div>
+    {confirmDialog}
+    </>
   )
 }
 

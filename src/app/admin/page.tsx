@@ -76,6 +76,15 @@ export default async function AdminPage() {
   return (
     <main className="min-h-screen bg-[#050a18] text-white px-4 py-8 sm:px-8">
       <div className="max-w-2xl mx-auto">
+        <div className="flex justify-end mb-4">
+          <a
+            href="/api/admin/export"
+            download
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-indigo-500/80 hover:bg-indigo-500 text-white shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-colors"
+          >
+            Download GEDCOM
+          </a>
+        </div>
         <AdminTabs
           suggestionsSlot={<SuggestionsReview initialSuggestions={suggestions} />}
           historySlot={<ChangeHistory />}

@@ -92,6 +92,14 @@ async function openDrawer(page: Page) {
   return drawer
 }
 
+/** Measures document scroll/client width to detect horizontal overflow. */
+function getHorizontalOverflow(page: Page) {
+  return page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }))
+}
+
 test.describe('mobile responsive tree view', () => {
   test('person drawer renders as a bottom sheet with the tree visible above it', async ({
     page,
@@ -134,10 +142,7 @@ test.describe('mobile responsive tree view', () => {
     await mockPersonsAndTree(page, [mockPerson], mockTreeResponse)
     await openDrawer(page)
 
-    const overflow = await page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth,
-      clientWidth: document.documentElement.clientWidth,
-    }))
+    const overflow = await getHorizontalOverflow(page)
 
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth)
   })
@@ -223,10 +228,7 @@ test.describe('mobile responsive toolbar and search', () => {
     const [toolbarBox, searchBox, overflow] = await Promise.all([
       toolbar.boundingBox(),
       searchInput.boundingBox(),
-      page.evaluate(() => ({
-        scrollWidth: document.documentElement.scrollWidth,
-        clientWidth: document.documentElement.clientWidth,
-      })),
+      getHorizontalOverflow(page),
     ])
     expect(toolbarBox).not.toBeNull()
     expect(searchBox).not.toBeNull()

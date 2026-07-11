@@ -6,6 +6,7 @@
 ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
 
 import { act } from 'react'
+import type React from 'react'
 import { createRoot } from 'react-dom/client'
 import * as NextAuthReact from 'next-auth/react'
 import { PersonDrawer, computeCascadeDeleteConnectionCount } from '@/components/FamilyTree'
@@ -128,7 +129,7 @@ describe('PersonDrawer', () => {
     }
   }
 
-  async function renderDrawer() {
+  async function renderDrawer(overrides: Partial<React.ComponentProps<typeof PersonDrawer>> = {}, flushes = 1) {
     await act(async () => {
       root = createRoot(container)
       root.render(
@@ -137,10 +138,13 @@ describe('PersonDrawer', () => {
           onClose={jest.fn()}
           onReroot={jest.fn()}
           onSelectPerson={jest.fn()}
+          {...overrides}
         />
       )
     })
-    await act(async () => { await Promise.resolve() })
+    for (let i = 0; i < flushes; i++) {
+      await act(async () => { await Promise.resolve() })
+    }
   }
 
   it('renders parents, siblings, and marriages sections with correct names', async () => {
@@ -425,32 +429,12 @@ describe('PersonDrawer', () => {
       return { calls }
     }
 
-    async function renderForDelete(onClose: jest.Mock) {
-      await act(async () => {
-        root = createRoot(container)
-        root.render(
-          <PersonDrawer
-            person={basePerson}
-            onClose={onClose}
-            onReroot={jest.fn()}
-            onSelectPerson={jest.fn()}
-            onSelectRoot={jest.fn()}
-            rootId="@I1@"
-          />
-        )
-      })
-      // Flush the detail + my-changes fetches and their chained state updates
-      await act(async () => { await Promise.resolve() })
-      await act(async () => { await Promise.resolve() })
-      await act(async () => { await Promise.resolve() })
-      await act(async () => { await Promise.resolve() })
-    }
-
     it('clicking delete opens the modal (no window.confirm) with the simple-delete message; confirming reverts and closes', async () => {
       const confirmSpy = jest.spyOn(window, 'confirm')
       const { calls } = installDeleteFetchMock({ detail: noRelDetail, relationshipChanges: [] })
       const onClose = jest.fn()
-      await renderForDelete(onClose)
+      // Flush the detail + my-changes fetches and their chained state updates
+      await renderDrawer({ onClose, onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
 
       const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
       expect(deleteBtn).not.toBeNull()
@@ -483,7 +467,7 @@ describe('PersonDrawer', () => {
     it('cancelling the modal closes it without reverting or closing the drawer', async () => {
       const { calls } = installDeleteFetchMock({ detail: noRelDetail, relationshipChanges: [] })
       const onClose = jest.fn()
-      await renderForDelete(onClose)
+      await renderDrawer({ onClose, onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
 
       const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
       await act(async () => { deleteBtn.click() })
@@ -508,7 +492,7 @@ describe('PersonDrawer', () => {
         ],
       })
       const onClose = jest.fn()
-      await renderForDelete(onClose)
+      await renderDrawer({ onClose, onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
 
       const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
       expect(deleteBtn).not.toBeNull()

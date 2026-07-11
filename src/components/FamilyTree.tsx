@@ -32,7 +32,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { applyDagreLayout } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
 import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE } from '@/constants/tree'
 
 /**
  * Minimal person summary used for the search bar and root selection.
@@ -55,13 +55,6 @@ const defaultEdgeOptions = {
   type: 'smoothstep',
   animated: false,
 }
-
-/** Drawer layout classes - responsive: mobile bottom-sheet, desktop side panel. */
-const DRAWER_CONTAINER_CLASS = 'absolute inset-x-0 bottom-0 z-20 w-full max-h-[60vh] rounded-t-2xl border-t border-white/10 bg-[#0a1628]/90 backdrop-blur-xl shadow-[0_-8px_32px_rgba(0,0,0,0.5)] flex flex-col sm:inset-x-auto sm:top-0 sm:right-0 sm:bottom-auto sm:h-full sm:max-h-none sm:w-80 sm:rounded-none sm:border-t-0 sm:border-l sm:shadow-[-8px_0_32px_rgba(0,0,0,0.5)]'
-
-const DRAWER_DRAG_HANDLE_CLASS = 'flex justify-center pt-2 pb-1 sm:hidden'
-
-const RESPONSIVE_BUTTON_BASE = 'flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors w-11 h-11 sm:w-7 sm:h-7'
 
 /**
  * Floating toolbar displaying tree statistics and depth control.
@@ -555,13 +548,13 @@ export function PersonDrawer({
     }
   }
 
-  const openConfirm = useCallback((message: string, onConfirm: () => void | Promise<void>) => {
+  const openConfirm = (message: string, onConfirm: () => void | Promise<void>) => {
     if (isSubmitting) return
     setConfirmAction({
       message,
       onConfirm: () => { setConfirmAction(null); void onConfirm() },
     })
-  }, [isSubmitting])
+  }
 
   /**
    * Deletes the current person. When the person has relationships, uses the

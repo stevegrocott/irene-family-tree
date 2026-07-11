@@ -180,13 +180,16 @@ function DrawerSubView({ title, onBack, children }: { title: string; onBack: () 
   return (
     <div
       data-testid="drawer-sub-view"
-      className="absolute top-0 right-0 h-full w-80 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
+      className="absolute inset-x-0 bottom-0 z-20 w-full max-h-[60vh] rounded-t-2xl border-t border-white/10 bg-[#0a1628]/90 backdrop-blur-xl shadow-[0_-8px_32px_rgba(0,0,0,0.5)] flex flex-col sm:inset-x-auto sm:top-0 sm:right-0 sm:bottom-auto sm:h-full sm:max-h-none sm:w-80 sm:rounded-none sm:border-t-0 sm:border-l sm:shadow-[-8px_0_32px_rgba(0,0,0,0.5)]"
     >
+      <div data-testid="drawer-drag-handle" className="flex justify-center pt-2 pb-1 sm:hidden" aria-hidden="true">
+        <div className="h-1.5 w-10 rounded-full bg-white/20" />
+      </div>
       <div className="flex items-center gap-2 px-5 py-4 border-b border-white/10">
         <button
           onClick={onBack}
           aria-label="Back"
-          className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+          className="w-11 h-11 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors sm:w-7 sm:h-7"
         >
           ←
         </button>
@@ -996,8 +999,11 @@ export function PersonDrawer({
   return (
     <div
       data-testid="person-drawer"
-      className="absolute top-0 right-0 h-full w-80 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
+      className="absolute inset-x-0 bottom-0 z-20 w-full max-h-[60vh] rounded-t-2xl border-t border-white/10 bg-[#0a1628]/90 backdrop-blur-xl shadow-[0_-8px_32px_rgba(0,0,0,0.5)] flex flex-col sm:inset-x-auto sm:top-0 sm:right-0 sm:bottom-auto sm:h-full sm:max-h-none sm:w-80 sm:rounded-none sm:border-t-0 sm:border-l sm:shadow-[-8px_0_32px_rgba(0,0,0,0.5)]"
     >
+      <div data-testid="drawer-drag-handle" className="flex justify-center pt-2 pb-1 sm:hidden" aria-hidden="true">
+        <div className="h-1.5 w-10 rounded-full bg-white/20" />
+      </div>
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
         <h2 className="text-white font-semibold text-base truncate flex-1 mr-2">
@@ -1008,7 +1014,7 @@ export function PersonDrawer({
             data-testid="person-drawer-edit"
             onClick={openEdit}
             aria-label="Edit person"
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors mr-1"
+            className="w-11 h-11 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors mr-1 sm:w-7 sm:h-7"
           >
             ✎
           </button>
@@ -1017,7 +1023,7 @@ export function PersonDrawer({
           data-testid="person-drawer-close"
           onClick={onClose}
           aria-label="Close panel"
-          className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors text-lg leading-none"
+          className="w-11 h-11 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors text-lg leading-none sm:w-7 sm:h-7"
         >
           ×
         </button>

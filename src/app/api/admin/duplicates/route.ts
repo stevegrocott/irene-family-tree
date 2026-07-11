@@ -11,17 +11,24 @@ const LIMIT = 50
 const YEAR_PATTERN = '[0-9]{3,4}'
 
 /**
- * Cypher query that finds candidate duplicate Person pairs:
+ * Cypher query that finds candidate duplicate Person pairs.
+ *
+ * Person nodes are first bucketed by normalized name (trimmed,
+ * case-folded) so pairwise comparison only happens within same-name
+ * groups instead of a full cartesian product over every Person pair:
  * - Names match after trimming and case-folding.
  * - Birth years are either both absent, or both present, well-formed, and
  *   within 2 years of each other.
  * - `p1.gedcomId < p2.gedcomId` guarantees each unordered pair appears once.
  */
-const QUERY_DUPLICATES = `MATCH (p1:Person), (p2:Person)
+const QUERY_DUPLICATES = `MATCH (p:Person)
+WHERE p.name IS NOT NULL AND trim(toLower(p.name)) <> ''
+WITH trim(toLower(p.name)) AS normalizedName, collect(p) AS people
+WHERE size(people) > 1
+UNWIND range(0, size(people) - 2) AS i
+UNWIND range(i + 1, size(people) - 1) AS j
+WITH people[i] AS p1, people[j] AS p2
 WHERE p1.gedcomId < p2.gedcomId
-  AND p1.name IS NOT NULL AND p2.name IS NOT NULL
-  AND trim(toLower(p1.name)) <> ''
-  AND trim(toLower(p1.name)) = trim(toLower(p2.name))
   AND (
     (p1.birthYear IS NULL AND p2.birthYear IS NULL)
     OR (

@@ -199,7 +199,7 @@ export function DuplicatesReview() {
               </div>
 
               {mergeErrors[key] && (
-                <p className="text-red-400 text-xs mt-3">{mergeErrors[key]}</p>
+                <p role="alert" aria-live="assertive" className="text-red-400 text-xs mt-3">{mergeErrors[key]}</p>
               )}
 
               <button

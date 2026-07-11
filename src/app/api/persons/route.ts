@@ -69,7 +69,7 @@ export async function GET(request: Request) {
   const session = await auth()
   if (!session?.user) {
     persons = persons.map((p) => {
-      const full = { ...p, deathPlace: null, occupation: null, notes: null }
+      const full = { ...p, deathPlace: null, occupation: null, notes: null, photoUrl: null }
       if (!isLikelyLiving(full)) return p
       const redacted = redactPerson(full)
       return {

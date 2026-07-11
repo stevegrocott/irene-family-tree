@@ -15,6 +15,7 @@ function makePerson(overrides: Partial<Person> = {}): Person {
     deathPlace: null,
     occupation: 'Teacher',
     notes: 'Some private note',
+    photoUrl: null,
     ...overrides,
   }
 }

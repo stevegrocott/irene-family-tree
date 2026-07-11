@@ -39,6 +39,7 @@ const personNode = {
   sex: 'M',
   birthYear: '1900',
   deathYear: '1980',
+  photoUrl: 'https://example.com/john.jpg',
 }
 
 const unionNode = {
@@ -108,6 +109,7 @@ describe('GET /api/tree/[rootId]', () => {
         sex: 'M',
         birthYear: '1900',
         deathYear: '1980',
+        photoUrl: 'https://example.com/john.jpg',
       },
     })
   })
@@ -148,6 +150,7 @@ describe('GET /api/tree/[rootId]', () => {
 
     expect(body.nodes[0].data.name).toBe('')
     expect(body.nodes[0].data.sex).toBe('')
+    expect(body.nodes[0].data.photoUrl).toBeNull()
   })
 
   it('preserves null birthYear and deathYear on person nodes', async () => {
@@ -298,6 +301,7 @@ describe('GET /api/tree/[rootId]', () => {
       deathPlace: null,
       occupation: 'Teacher',
       notes: 'Private note',
+      photoUrl: 'https://example.com/jane.jpg',
     }
 
     it('redacts sensitive fields for anonymous requests', async () => {
@@ -317,6 +321,7 @@ describe('GET /api/tree/[rootId]', () => {
       expect(data.deathPlace).toBeNull()
       expect(data.occupation).toBeNull()
       expect(data.notes).toBeNull()
+      expect(data.photoUrl).toBeNull()
     })
 
     it('returns full data for the same person when signed in', async () => {
@@ -331,6 +336,7 @@ describe('GET /api/tree/[rootId]', () => {
       expect(data.birthPlace).toBe('Sheffield')
       expect(data.occupation).toBe('Teacher')
       expect(data.notes).toBe('Private note')
+      expect(data.photoUrl).toBe('https://example.com/jane.jpg')
     })
 
     it('leaves deceased persons unredacted for anonymous requests', async () => {

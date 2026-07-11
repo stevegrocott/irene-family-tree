@@ -55,7 +55,14 @@ interface PersonDetailRow {
  * the person is likely still living, keeping only identity fields.
  */
 function redactSummaryIfLiving(p: PersonSummary): PersonSummary {
-  const full = { ...p, birthPlace: null, deathPlace: null, occupation: null, notes: null }
+  const full = {
+    ...p,
+    birthPlace: null,
+    deathPlace: null,
+    occupation: null,
+    notes: null,
+    photoUrl: p.photoUrl ?? null,
+  }
   if (!isLikelyLiving(full)) return p
   const redacted = redactPerson(full)
   return {

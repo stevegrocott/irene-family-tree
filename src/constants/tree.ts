@@ -5,7 +5,7 @@ export const DEFAULT_ROOT_GEDCOM_ID = '@I85@'
 
 export const MIN_HOPS = 1
 export const MAX_HOPS = 60
-export const DEFAULT_HOPS = MAX_HOPS
+export const DEFAULT_HOPS = 60
 export const UNION_LABEL = 'Union'
 
 export const EDGE_TYPES = {

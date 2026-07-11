@@ -399,6 +399,7 @@ export function PersonDrawer({
   const isAdmin = session?.user?.role === 'admin'
 
   const dates = formatLifespan(person)
+  const rootLabel = rootName || 'root'
   const [detail, setDetail] = useState<PersonDetailResponse | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailVersion, setDetailVersion] = useState(0)
@@ -444,6 +445,7 @@ export function PersonDrawer({
     | { status: 'error'; message: string }
     | { status: 'success'; label: string }
   >({ status: 'idle' })
+  const relationshipAbortRef = useRef<AbortController | null>(null)
 
   const [myChanges, setMyChanges] = useState<{
     createChange: { id: string; changeType: string; targetId: string; newValue: Record<string, unknown>; appliedAt: string } | null
@@ -505,21 +507,23 @@ export function PersonDrawer({
   }, [person.gedcomId])
 
   // Relationship calculation is on-demand (triggered by the button below), so
-  // reset any previous result whenever the selected person or root changes.
+  // reset any previous result whenever the selected person or root changes, and
+  // abort any in-flight request on that change or on unmount.
   useEffect(() => {
     setRelationship({ status: 'idle' })
+    return () => { relationshipAbortRef.current?.abort() }
   }, [person.gedcomId, rootId])
 
-  /**
-   * Fetches the shortest kinship path/label between the current root and the
-   * selected person from `GET /api/relationship` and stores the result.
-   */
   const handleCalculateRelationship = async () => {
     if (!rootId) return
+    relationshipAbortRef.current?.abort()
+    const abortCtrl = new AbortController()
+    relationshipAbortRef.current = abortCtrl
     setRelationship({ status: 'loading' })
     try {
       const res = await fetch(
-        `/api/relationship?from=${encodeURIComponent(rootId)}&to=${encodeURIComponent(person.gedcomId)}`
+        `/api/relationship?from=${encodeURIComponent(rootId)}&to=${encodeURIComponent(person.gedcomId)}`,
+        { signal: abortCtrl.signal }
       )
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -529,6 +533,7 @@ export function PersonDrawer({
       }
       setRelationship({ status: 'success', label: body.label })
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return
       console.error('Failed to calculate relationship', err)
       setRelationship({ status: 'error', message: 'Failed to calculate relationship. Please try again.' })
     }
@@ -1363,7 +1368,7 @@ export function PersonDrawer({
                 disabled={relationship.status === 'loading'}
                 className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors disabled:opacity-50"
               >
-                {relationship.status === 'loading' ? 'Calculating…' : `How related to ${rootName || 'root'}?`}
+                {relationship.status === 'loading' ? 'Calculating…' : `How related to ${rootLabel}?`}
               </button>
             )}
             {relationship.status === 'error' && (
@@ -1373,7 +1378,7 @@ export function PersonDrawer({
             )}
             {relationship.status === 'success' && (
               <p data-testid="person-drawer-relationship-result" className="text-slate-300 text-xs">
-                {person.name || 'This person'} is {rootName || 'root'}&rsquo;s{' '}
+                {person.name || 'This person'} is {rootLabel}&rsquo;s{' '}
                 <span className="font-semibold text-white">{relationship.label}</span>.
               </p>
             )}

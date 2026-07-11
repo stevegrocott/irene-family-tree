@@ -635,17 +635,7 @@ describe('PersonDrawer', () => {
 
     it('shows a loading state while the request is in flight', async () => {
       let resolveFetch: (value: { ok: boolean; json: () => Promise<unknown> }) => void = () => {}
-      const personPath = `/api/person/${encodeURIComponent('@I1@')}`
-      const fetchMock = jest.fn().mockImplementation(async (url: string) => {
-        if (url.startsWith('/api/relationship')) {
-          return new Promise(resolve => { resolveFetch = resolve })
-        }
-        if (url === `${personPath}/my-changes`) {
-          return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
-        }
-        return { ok: true, json: async () => mockDetailResponse }
-      })
-      global.fetch = fetchMock as unknown as typeof fetch
+      installRelationshipFetchMock(() => new Promise(resolve => { resolveFetch = resolve }))
 
       await renderDrawerWithRoot()
 
@@ -678,17 +668,7 @@ describe('PersonDrawer', () => {
     })
 
     it('shows a generic error message when the request throws', async () => {
-      const personPath = `/api/person/${encodeURIComponent('@I1@')}`
-      const fetchMock = jest.fn().mockImplementation(async (url: string) => {
-        if (url.startsWith('/api/relationship')) {
-          throw new Error('Network error')
-        }
-        if (url === `${personPath}/my-changes`) {
-          return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
-        }
-        return { ok: true, json: async () => mockDetailResponse }
-      })
-      global.fetch = fetchMock as unknown as typeof fetch
+      installRelationshipFetchMock(async () => { throw new Error('Network error') })
       jest.spyOn(console, 'error').mockImplementation(() => {})
 
       await renderDrawerWithRoot()

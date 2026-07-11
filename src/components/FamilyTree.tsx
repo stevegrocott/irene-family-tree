@@ -826,6 +826,14 @@ export function PersonDrawer({
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setActionError('Photo must be a JPEG, PNG, or WebP image.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setActionError('Photo must be 5 MB or smaller.')
+      return
+    }
     setPhotoUploading(true)
     setActionError(null)
     try {
@@ -1120,7 +1128,8 @@ export function PersonDrawer({
             {isAdmin ? (
               <button
                 onClick={handleSaveEdit}
-                className="flex-1 py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+                disabled={photoUploading}
+                className="flex-1 py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
               >
                 Save change
               </button>
@@ -1128,7 +1137,8 @@ export function PersonDrawer({
               <button
                 data-testid="suggest-change"
                 onClick={handleSuggestChange}
-                className="flex-1 py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+                disabled={photoUploading}
+                className="flex-1 py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
               >
                 Suggest this change
               </button>

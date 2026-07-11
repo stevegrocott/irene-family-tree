@@ -321,7 +321,7 @@ describe('GET /api/tree/[rootId]', () => {
       expect(data.deathPlace).toBeNull()
       expect(data.occupation).toBeNull()
       expect(data.notes).toBeNull()
-      expect(data.photoUrl).toBeFalsy()
+      expect(data.photoUrl).toBeNull()
     })
 
     it('returns full data for the same person when signed in', async () => {

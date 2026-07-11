@@ -14,6 +14,7 @@ export interface Person {
   deathPlace: string | null
   occupation: string | null
   notes: string | null
+  photoUrl?: string | null
   isLiving?: boolean
 }
 
@@ -29,6 +30,7 @@ export interface RedactedPerson {
   deathPlace: null
   occupation: null
   notes: null
+  photoUrl: null
   living: true
 }
 
@@ -78,6 +80,7 @@ export function redactPerson(person: Person): RedactedPerson {
     deathPlace: null,
     occupation: null,
     notes: null,
+    photoUrl: null,
     living: true,
   }
 }

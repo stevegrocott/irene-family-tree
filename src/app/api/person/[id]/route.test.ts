@@ -354,6 +354,15 @@ describe('GET /api/person/[id]', () => {
       expect(body.notes).toBeNull()
     })
 
+    it('redacts photoUrl for anonymous requests against a likely-living person', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      mockRead.mockResolvedValue([{ ...livingDetail, photoUrl: 'https://example.com/photo.jpg' }])
+
+      const body = await (await GET(makeRequest(), makeParams('I001'))).json()
+
+      expect(body.photoUrl).toBeNull()
+    })
+
     it('redacts living nested spouse and child summaries for anonymous requests', async () => {
       mockAuth.mockResolvedValueOnce(null)
       mockRead.mockResolvedValue([livingDetail])

@@ -174,6 +174,7 @@ export async function GET(
           deathPlace: null,
           occupation: null,
           notes: null,
+          photoUrl: null,
           living: true as const,
         }
       : {}

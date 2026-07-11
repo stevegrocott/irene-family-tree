@@ -757,8 +757,8 @@ export function PersonDrawer({
   const confirmDialog = (
     <ConfirmDialog
       open={!!confirmAction}
-      message={confirmAction!.message}
-      onConfirm={() => confirmAction!.onConfirm()}
+      message={confirmAction?.message ?? ''}
+      onConfirm={() => confirmAction?.onConfirm()}
       onCancel={() => setConfirmAction(null)}
     />
   )

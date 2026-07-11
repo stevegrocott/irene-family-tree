@@ -17,6 +17,7 @@ import ReactFlow, {
   MiniMap,
   ReactFlowProvider,
   useReactFlow,
+  useStore,
   getViewportForBounds,
   type Node,
   type Edge,
@@ -1320,6 +1321,14 @@ function FlowCanvas({
   const [actualMaxDepth, setActualMaxDepth] = useState<number>(MAX_HOPS)
   const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(null)
   const { setViewport } = useReactFlow()
+  /**
+   * Container-measured canvas dimensions from the ReactFlow store. These reflect
+   * the actual `<ReactFlow>` element size (kept current by ReactFlow's internal
+   * ResizeObserver) rather than the full window, so viewport-fit math stays
+   * correct across resize and orientation changes on any device.
+   */
+  const canvasWidth = useStore(s => s.width)
+  const canvasHeight = useStore(s => s.height)
   const abortRef = useRef<AbortController | null>(null)
 
   /** Display name of the current root person, derived from `nodes` and `rootId`. */
@@ -1409,9 +1418,11 @@ function FlowCanvas({
    */
   useEffect(() => {
     if (!treeBounds || nodes.length === 0) return
+    // Wait until ReactFlow has measured its container before fitting.
+    if (canvasWidth === 0 || canvasHeight === 0) return
     const id = setTimeout(() => {
-      const vw = window.innerWidth
-      const vh = window.innerHeight
+      const vw = canvasWidth
+      const vh = canvasHeight
       const PADDING = 0.15
       const MIN_ZOOM = 0.18
 
@@ -1436,7 +1447,7 @@ function FlowCanvas({
       }
     }, 50)
     return () => clearTimeout(id)
-  }, [treeBounds, nodes, rootId, setViewport])
+  }, [treeBounds, nodes, rootId, setViewport, canvasWidth, canvasHeight])
 
   return (
     <>
@@ -1554,7 +1565,7 @@ export default function FamilyTree() {
 
   if (personsError) {
     return (
-      <div className="relative w-screen h-screen bg-[#050a18] flex items-center justify-center">
+      <div className="relative w-full h-dvh bg-[#050a18] flex items-center justify-center">
         <div className="bg-white/10 backdrop-blur-md border border-red-400/30 rounded-2xl p-6 max-w-sm text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
           <p className="text-red-300 text-sm">{personsError}</p>
         </div>
@@ -1563,7 +1574,7 @@ export default function FamilyTree() {
   }
 
   return (
-    <div className="relative w-screen h-screen bg-[#050a18]">
+    <div className="relative w-full h-dvh bg-[#050a18]">
       <ReactFlowProvider>
         <FlowCanvas rootId={rootId} onSelectRoot={handleSelectRoot} persons={persons} treeVersion={treeVersion} />
       </ReactFlowProvider>

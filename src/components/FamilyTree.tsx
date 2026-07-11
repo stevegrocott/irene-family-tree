@@ -787,8 +787,7 @@ export function PersonDrawer({
     }
   }
 
-  /** Opens the edit sub-view, initializing all edit fields from current person/detail. */
-  const openEdit = () => {
+  const resetEditForm = () => {
     setEditGivenName(person.givenName ?? '')
     setEditFamilyName(person.surname ?? '')
     setEditSex(person.sex ?? 'U')
@@ -805,27 +804,17 @@ export function PersonDrawer({
     setShowEditOccupation(!!(person.occupation))
     setShowEditNotes(!!(person.notes))
     setActionError(null)
+  }
+
+  /** Opens the edit sub-view, initializing all edit fields from current person/detail. */
+  const openEdit = () => {
+    resetEditForm()
     setMode('edit')
   }
 
   /** Discards pending edits and returns to view mode. */
   const handleCancelEdit = () => {
-    setEditGivenName(person.givenName ?? '')
-    setEditFamilyName(person.surname ?? '')
-    setEditSex(person.sex ?? 'U')
-    setEditBirthYear(person.birthYear ?? '')
-    setEditBirthPlace(detail?.birthPlace ?? '')
-    setEditDiedYear(person.deathYear ?? '')
-    setEditDeathPlace(person.deathPlace ?? '')
-    setEditOccupation(person.occupation ?? '')
-    setEditNotes(person.notes ?? '')
-    setEditPhotoUrl(detail?.photoUrl ?? person.photoUrl ?? null)
-    setShowEditBirthPlace(!!(detail?.birthPlace))
-    setShowEditDiedYear(!!(person.deathYear))
-    setShowEditDeathPlace(!!(person.deathPlace))
-    setShowEditOccupation(!!(person.occupation))
-    setShowEditNotes(!!(person.notes))
-    setActionError(null)
+    resetEditForm()
     setMode('view')
   }
 

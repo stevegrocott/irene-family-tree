@@ -434,7 +434,6 @@ describe('PersonDrawer', () => {
           fileInput.dispatchEvent(new Event('change', { bubbles: true }))
         })
         await act(async () => { await Promise.resolve() })
-        await act(async () => { await Promise.resolve() })
       }
 
       it('admin: uploading a photo POSTs multipart data then Save PATCHes the returned photoUrl', async () => {

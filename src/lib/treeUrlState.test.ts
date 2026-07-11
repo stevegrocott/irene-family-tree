@@ -196,4 +196,14 @@ describe('buildTreeUrlPath', () => {
     expect(params.get('person')).toBe('@I12@')
     expect(params.get('hops')).toBe('6')
   })
+
+  it('produces a path whose query round-trips through parseTreeUrlState', () => {
+    const original = { root: '@I85@', person: '@ISPOUSE_A@', hops: 4 }
+
+    const path = buildTreeUrlPath(original)
+    const query = path.split('?')[1]
+    const reparsed = parseTreeUrlState(new URLSearchParams(query))
+
+    expect(reparsed).toEqual(original)
+  })
 })

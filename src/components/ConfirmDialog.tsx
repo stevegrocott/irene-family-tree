@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
+
 /**
  * Themed in-app replacement for `window.confirm()`. Renders nothing when
  * `open` is false. Clicking the overlay or the cancel button calls `onCancel`;
@@ -25,6 +27,18 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    cancelButtonRef.current?.focus()
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [open, onCancel])
+
   if (!open) return null
 
   return (
@@ -48,6 +62,7 @@ export default function ConfirmDialog({
         <div className="flex gap-2 justify-end">
           <button
             type="button"
+            ref={cancelButtonRef}
             data-testid="confirm-dialog-cancel"
             onClick={onCancel}
             className="min-h-11 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"

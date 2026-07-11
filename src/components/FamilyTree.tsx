@@ -268,7 +268,6 @@ export function PersonDrawer({
   const [addRelativeType, setAddRelativeType] = useState<'parent' | 'spouse' | 'child'>('child')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Person[]>([])
-  const [suggestionSubmitted, setSuggestionSubmitted] = useState(false)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchAbortRef = useRef<AbortController | null>(null)
 
@@ -389,7 +388,6 @@ export function PersonDrawer({
   const resetAddRelativeForm = () => {
     setSearchQuery('')
     setSearchResults([])
-    setSuggestionSubmitted(false)
     setGivenName('')
     setFamilyName('')
     setNewBirthYear('')
@@ -407,23 +405,8 @@ export function PersonDrawer({
     setMode('add-relative')
   }
 
-  /** Submit a relationship change either directly (admin) or as a suggestion (non-admin, parent only). */
+  /** Submit a relationship change by linking the target person via the relationships endpoint. */
   const submitRelationshipChange = async (targetId: string) => {
-    if (!isAdmin && addRelativeType === 'parent') {
-      const res = await fetch('/api/suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          changeType: 'ADD_RELATIONSHIP',
-          payload: { type: addRelativeType, targetId, childId: person.gedcomId },
-        }),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      resetAddRelativeForm()
-      setMode('view')
-      setSuggestionSubmitted(true)
-      return
-    }
     const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -970,14 +953,6 @@ export function PersonDrawer({
     content = (
       <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => setMode('view')}>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {suggestionSubmitted && (
-            <p
-              data-testid="suggestion-submitted"
-              className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2"
-            >
-              Suggestion submitted. An admin will review it before it appears in the tree.
-            </p>
-          )}
           <div>
             <input
               data-testid="add-relative-search"

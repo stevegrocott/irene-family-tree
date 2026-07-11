@@ -414,6 +414,33 @@ export function PersonDrawer({
     setMode('add-relative')
   }
 
+  /** Submit a relationship change either directly (admin) or as a suggestion (non-admin). */
+  const submitRelationshipChange = async (targetId: string) => {
+    if (isAdmin) {
+      const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetId, type: addRelativeType }),
+      })
+      if (!res.ok && res.status !== 409) throw new Error(`HTTP ${res.status}`)
+      resetAddRelativeForm()
+      setMode('view')
+      setDetailVersion(v => v + 1)
+      onSelectRoot?.(person.gedcomId)
+    } else {
+      const res = await fetch('/api/suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          changeType: 'ADD_RELATIONSHIP',
+          payload: { type: addRelativeType, targetId, childId: person.gedcomId },
+        }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setSuggestionSubmitted(true)
+    }
+  }
+
   /**
    * Links an existing person as a relative and returns to view mode.
    * Refreshes the person detail and parent drawer after successful link.
@@ -422,29 +449,7 @@ export function PersonDrawer({
   const handleSelectRelative = async (relative: Person) => {
     setIsSubmitting(true)
     try {
-      if (isAdmin) {
-        const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ targetId: relative.gedcomId, type: addRelativeType }),
-        })
-        if (!res.ok && res.status !== 409) throw new Error(`HTTP ${res.status}`)
-        resetAddRelativeForm()
-        setMode('view')
-        setDetailVersion(v => v + 1)
-        onSelectRoot?.(person.gedcomId)
-      } else {
-        const res = await fetch('/api/suggestions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            changeType: 'ADD_RELATIONSHIP',
-            payload: { type: addRelativeType, targetId: relative.gedcomId, childId: person.gedcomId },
-          }),
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        setSuggestionSubmitted(true)
-      }
+      await submitRelationshipChange(relative.gedcomId)
     } catch (err) {
       console.error('Failed to add relative', err)
       setActionError('Failed to add relative. Please try again.')
@@ -464,7 +469,6 @@ export function PersonDrawer({
     }
     const fullName = `${givenName.trim()} ${familyName.trim()}`
     setIsSubmitting(true)
-    let createdPerson: Person | null = null
     try {
       const createRes = await fetch('/api/persons', {
         method: 'POST',
@@ -473,30 +477,7 @@ export function PersonDrawer({
       })
       if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`)
       const newPerson = await createRes.json() as Person
-      createdPerson = newPerson
-      if (isAdmin) {
-        const linkRes = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ targetId: newPerson.gedcomId, type: addRelativeType }),
-        })
-        if (!linkRes.ok && linkRes.status !== 409) throw new Error(`HTTP ${linkRes.status}`)
-        resetAddRelativeForm()
-        setMode('view')
-        setDetailVersion(v => v + 1)
-        onSelectRoot?.(person.gedcomId)
-      } else {
-        const suggestRes = await fetch('/api/suggestions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            changeType: 'ADD_RELATIONSHIP',
-            payload: { type: addRelativeType, targetId: newPerson.gedcomId, childId: person.gedcomId },
-          }),
-        })
-        if (!suggestRes.ok) throw new Error(`HTTP ${suggestRes.status}`)
-        setSuggestionSubmitted(true)
-      }
+      await submitRelationshipChange(newPerson.gedcomId)
     } catch (err) {
       console.error('Failed to create and link relative', err)
       setActionError('Failed to create and link person. Please try again.')

@@ -273,6 +273,18 @@ describe('GET /api/person/[id]', () => {
     expect(body.notes).toBeNull()
   })
 
+  it.each([
+    ['returns photoUrl on the person', 'https://example.com/photo.jpg'],
+    ['handles a null photoUrl', null],
+  ])('%s', async (desc, photoUrl) => {
+    mockRead.mockResolvedValue([{ ...personDetail, photoUrl }])
+
+    const response = await GET(makeRequest(), makeParams('I001'))
+    const body = await response.json()
+
+    expect(body.photoUrl).toBe(photoUrl)
+  })
+
   /** Verifies `marriageYear` and `marriagePlace` on a MarriageDetail entry can both be null. */
   it('handles a marriage with nullable year and place', async () => {
     const noDatePlace = {
@@ -332,6 +344,15 @@ describe('GET /api/person/[id]', () => {
       expect(body.deathPlace).toBeNull()
       expect(body.occupation).toBeNull()
       expect(body.notes).toBeNull()
+    })
+
+    it('redacts photoUrl for anonymous requests against a likely-living person', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      mockRead.mockResolvedValue([{ ...livingDetail, photoUrl: 'https://example.com/photo.jpg' }])
+
+      const body = await (await GET(makeRequest(), makeParams('I001'))).json()
+
+      expect(body.photoUrl).toBeNull()
     })
 
     it('redacts living nested spouse and child summaries for anonymous requests', async () => {
@@ -489,6 +510,7 @@ describe('PATCH /api/person/[id]', () => {
       name: 'Alice', sex: 'F', birthYear: '1990', birthDate: '1990-01-01',
       birthPlace: 'Paris', deathYear: '2070', deathDate: '2070-12-31',
       deathPlace: 'Lyon', occupation: 'Engineer', notes: 'No notes',
+      photoUrl: 'https://example.com/alice.jpg',
     }
 
     const response = await PATCH(makePatchRequest('I001', allFields), makeParams('I001'))
@@ -498,6 +520,38 @@ describe('PATCH /api/person/[id]', () => {
       expect.any(String),
       expect.objectContaining({ fields: allFields })
     )
+  })
+
+  it.each([
+    ['accepts a valid https photoUrl', 'https://example.com/photo.jpg'],
+    ['accepts a null photoUrl to clear the photo', null],
+  ])('%s', async (desc, photoUrl) => {
+    mockWrite.mockResolvedValue([{ ...updatedPerson, photoUrl }])
+
+    const response = await PATCH(makePatchRequest('I001', { photoUrl }), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ fields: { photoUrl } })
+    )
+    expect(body.photoUrl).toBe(photoUrl)
+  })
+
+  it.each([
+    ['returns 400 when photoUrl is an http (non-https) URL', 'http://example.com/photo.jpg'],
+    ['returns 400 when photoUrl is not a valid URL', 'not-a-url'],
+  ])('%s', async (desc, photoUrl) => {
+    const response = await PATCH(
+      makePatchRequest('I001', { photoUrl }),
+      makeParams('I001')
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body).toEqual({ error: 'photoUrl must be an https:// URL or null' })
+    expect(mockWrite).not.toHaveBeenCalled()
   })
 
   it('calls recordChange with previous person, updated person, and session author after successful update', async () => {

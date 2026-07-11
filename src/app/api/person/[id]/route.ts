@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server'
 import { read, write, neo4jErrorResponse } from '@/lib/neo4j'
 import { recordChange } from '@/lib/changes'
 import { auth } from '@/auth'
-import { ALLOWED_PATCH_FIELDS } from '@/lib/patches'
+import { ALLOWED_PATCH_FIELDS, isValidPhotoUrl } from '@/lib/patches'
 import { isLikelyLiving, redactPerson } from '@/lib/privacy'
 import type { PersonSummary, MarriageDetail } from '@/types/tree'
 
@@ -38,6 +38,8 @@ interface PersonDetailRow {
   occupation: string | null
   /** Free-text notes from the GEDCOM record, or null if none. */
   notes: string | null
+  /** URL of the person's profile photo, or null if none is set. */
+  photoUrl: string | null
   /** Biological or adoptive parents identified in the graph. */
   parents: PersonSummary[]
   /** Siblings sharing at least one common parent union. */
@@ -146,6 +148,7 @@ export async function GET(
        p.deathPlace  AS deathPlace,
        p.occupation  AS occupation,
        p.notes       AS notes,
+       p.photoUrl    AS photoUrl,
        [x IN parents  WHERE x IS NOT NULL] AS parents,
        [x IN siblings WHERE x IS NOT NULL] AS siblings,
        [x IN marriages WHERE x IS NOT NULL] AS marriages`,
@@ -171,6 +174,7 @@ export async function GET(
           deathPlace: null,
           occupation: null,
           notes: null,
+          photoUrl: null,
           living: true as const,
         }
       : {}
@@ -203,6 +207,7 @@ interface UpdatedPerson {
   deathPlace: string | null
   occupation: string | null
   notes: string | null
+  photoUrl: string | null
 }
 
 export async function PATCH(
@@ -232,6 +237,13 @@ export async function PATCH(
     return NextResponse.json({ error: 'No valid fields provided' }, { status: 400 })
   }
 
+  if ('photoUrl' in fields && !isValidPhotoUrl(fields.photoUrl)) {
+    return NextResponse.json(
+      { error: 'photoUrl must be an https:// URL or null' },
+      { status: 400 }
+    )
+  }
+
   let previousPerson: UpdatedPerson | null = null
   try {
     const previousRows = await read<UpdatedPerson>(
@@ -240,7 +252,8 @@ export async function PATCH(
               p.birthYear AS birthYear, p.birthDate AS birthDate,
               p.birthPlace AS birthPlace, p.deathYear AS deathYear,
               p.deathDate AS deathDate, p.deathPlace AS deathPlace,
-              p.occupation AS occupation, p.notes AS notes`,
+              p.occupation AS occupation, p.notes AS notes,
+              p.photoUrl AS photoUrl`,
       { id }
     )
     previousPerson = previousRows?.[0] ?? null
@@ -257,7 +270,8 @@ export async function PATCH(
               p.birthYear AS birthYear, p.birthDate AS birthDate,
               p.birthPlace AS birthPlace, p.deathYear AS deathYear,
               p.deathDate AS deathDate, p.deathPlace AS deathPlace,
-              p.occupation AS occupation, p.notes AS notes`,
+              p.occupation AS occupation, p.notes AS notes,
+              p.photoUrl AS photoUrl`,
       { id, fields }
     )
   } catch (err) {

@@ -407,20 +407,9 @@ export function PersonDrawer({
     setMode('add-relative')
   }
 
-  /** Submit a relationship change either directly (admin) or as a suggestion (non-admin). */
+  /** Submit a relationship change either directly (admin) or as a suggestion (non-admin, parent only). */
   const submitRelationshipChange = async (targetId: string) => {
-    if (isAdmin) {
-      const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetId, type: addRelativeType }),
-      })
-      if (!res.ok && res.status !== 409) throw new Error(`HTTP ${res.status}`)
-      resetAddRelativeForm()
-      setMode('view')
-      setDetailVersion(v => v + 1)
-      onSelectRoot?.(person.gedcomId)
-    } else {
+    if (!isAdmin && addRelativeType === 'parent') {
       const res = await fetch('/api/suggestions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -430,8 +419,21 @@ export function PersonDrawer({
         }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      resetAddRelativeForm()
+      setMode('view')
       setSuggestionSubmitted(true)
+      return
     }
+    const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetId, type: addRelativeType }),
+    })
+    if (!res.ok && res.status !== 409) throw new Error(`HTTP ${res.status}`)
+    resetAddRelativeForm()
+    setMode('view')
+    setDetailVersion(v => v + 1)
+    onSelectRoot?.(person.gedcomId)
   }
 
   /**

@@ -273,24 +273,16 @@ describe('GET /api/person/[id]', () => {
     expect(body.notes).toBeNull()
   })
 
-  /** Confirms `photoUrl` is returned as part of the PersonDetail response. */
-  it('returns photoUrl on the person', async () => {
-    mockRead.mockResolvedValue([{ ...personDetail, photoUrl: 'https://example.com/photo.jpg' }])
+  it.each([
+    ['returns photoUrl on the person', 'https://example.com/photo.jpg'],
+    ['handles a null photoUrl', null],
+  ])('%s', async (desc, photoUrl) => {
+    mockRead.mockResolvedValue([{ ...personDetail, photoUrl }])
 
     const response = await GET(makeRequest(), makeParams('I001'))
     const body = await response.json()
 
-    expect(body.photoUrl).toBe('https://example.com/photo.jpg')
-  })
-
-  /** Verifies `photoUrl` is allowed to be null. */
-  it('handles a null photoUrl', async () => {
-    mockRead.mockResolvedValue([{ ...personDetail, photoUrl: null }])
-
-    const response = await GET(makeRequest(), makeParams('I001'))
-    const body = await response.json()
-
-    expect(body.photoUrl).toBeNull()
+    photoUrl === null ? expect(body.photoUrl).toBeNull() : expect(body.photoUrl).toBe(photoUrl)
   })
 
   /** Verifies `marriageYear` and `marriagePlace` on a MarriageDetail entry can both be null. */
@@ -530,54 +522,39 @@ describe('PATCH /api/person/[id]', () => {
     )
   })
 
-  it('accepts a valid https photoUrl', async () => {
-    mockWrite.mockResolvedValue([{ ...updatedPerson, photoUrl: 'https://example.com/photo.jpg' }])
+  it.each([
+    ['accepts a valid https photoUrl', 'https://example.com/photo.jpg'],
+    ['accepts a null photoUrl to clear the photo', null],
+  ])('%s', async (desc, photoUrl) => {
+    mockWrite.mockResolvedValue([{ ...updatedPerson, photoUrl }])
 
-    const response = await PATCH(
-      makePatchRequest('I001', { photoUrl: 'https://example.com/photo.jpg' }),
-      makeParams('I001')
-    )
+    const response = await PATCH(makePatchRequest('I001', { photoUrl }), makeParams('I001'))
     const body = await response.json()
-
-    expect(response.status).toBe(200)
-    expect(body.photoUrl).toBe('https://example.com/photo.jpg')
-    expect(mockWrite).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ fields: { photoUrl: 'https://example.com/photo.jpg' } })
-    )
-  })
-
-  it('accepts a null photoUrl to clear the photo', async () => {
-    mockWrite.mockResolvedValue([{ ...updatedPerson, photoUrl: null }])
-
-    const response = await PATCH(makePatchRequest('I001', { photoUrl: null }), makeParams('I001'))
 
     expect(response.status).toBe(200)
     expect(mockWrite).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ fields: { photoUrl: null } })
+      expect.objectContaining({ fields: { photoUrl } })
     )
+    if (photoUrl !== null) {
+      expect(body.photoUrl).toBe(photoUrl)
+    }
   })
 
-  it('returns 400 when photoUrl is an http (non-https) URL', async () => {
+  it.each([
+    ['returns 400 when photoUrl is an http (non-https) URL', 'http://example.com/photo.jpg'],
+    ['returns 400 when photoUrl is not a valid URL', 'not-a-url'],
+  ])('%s', async (desc, photoUrl) => {
     const response = await PATCH(
-      makePatchRequest('I001', { photoUrl: 'http://example.com/photo.jpg' }),
-      makeParams('I001')
-    )
-    const body = await response.json()
-
-    expect(response.status).toBe(400)
-    expect(body).toEqual({ error: 'photoUrl must be an https:// URL or null' })
-    expect(mockWrite).not.toHaveBeenCalled()
-  })
-
-  it('returns 400 when photoUrl is not a valid URL', async () => {
-    const response = await PATCH(
-      makePatchRequest('I001', { photoUrl: 'not-a-url' }),
+      makePatchRequest('I001', { photoUrl }),
       makeParams('I001')
     )
 
     expect(response.status).toBe(400)
+    if (photoUrl === 'http://example.com/photo.jpg') {
+      const body = await response.json()
+      expect(body).toEqual({ error: 'photoUrl must be an https:// URL or null' })
+    }
     expect(mockWrite).not.toHaveBeenCalled()
   })
 

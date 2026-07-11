@@ -327,6 +327,34 @@ describe('revertChange — UPDATE_PERSON', () => {
   })
 })
 
+describe('revertChange — MERGE_PERSON', () => {
+  it('returns 409 as irreversible without reading/writing anything else', async () => {
+    mockRead.mockResolvedValueOnce([
+      {
+        id: 'c20',
+        changeType: 'MERGE_PERSON',
+        targetId: 'I001',
+        previousValue: JSON.stringify({ survivor: { gedcomId: 'I001' }, duplicate: { gedcomId: 'I002' } }),
+        newValue: JSON.stringify({ gedcomId: 'I001' }),
+        status: 'live',
+        authorEmail: 'a@b',
+        authorName: 'A',
+        appliedAt: '2026-01-01',
+      },
+    ])
+
+    const result = await revertChange('c20', REVERTER)
+
+    expect(result).toEqual({
+      ok: false,
+      status: 409,
+      error: 'Cannot revert: merge is irreversible',
+    })
+    expect(mockWrite).not.toHaveBeenCalled()
+    expect(mockRecord).not.toHaveBeenCalled()
+  })
+})
+
 describe('revertChange — edge cases', () => {
   it('returns 404 when the change id does not match', async () => {
     // 1st read: fetch change row (empty = not found)

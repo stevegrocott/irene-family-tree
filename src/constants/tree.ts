@@ -34,3 +34,10 @@ export const SEX_AVATAR_TEXT: Record<string, string> = {
   F: 'text-pink-500',
   default: 'text-slate-500',
 }
+
+/** Drawer layout classes — responsive: mobile bottom-sheet, desktop side panel. */
+export const DRAWER_CONTAINER_CLASS = 'absolute inset-x-0 bottom-0 z-20 w-full max-h-[60vh] rounded-t-2xl border-t border-white/10 bg-[#0a1628]/90 backdrop-blur-xl shadow-[0_-8px_32px_rgba(0,0,0,0.5)] flex flex-col sm:inset-x-auto sm:top-0 sm:right-0 sm:bottom-auto sm:h-full sm:max-h-none sm:w-80 sm:rounded-none sm:border-t-0 sm:border-l sm:shadow-[-8px_0_32px_rgba(0,0,0,0.5)]'
+
+export const DRAWER_DRAG_HANDLE_CLASS = 'flex justify-center pt-2 pb-1 sm:hidden'
+
+export const RESPONSIVE_BUTTON_BASE = 'flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors w-11 h-11 sm:w-7 sm:h-7'

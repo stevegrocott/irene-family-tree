@@ -29,6 +29,7 @@ import UnionNode from '@/components/UnionNode'
 import SearchBar from '@/components/SearchBar'
 import { applyDagreLayout } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
+import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
 import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
@@ -179,6 +180,77 @@ function RelativeRow({
         </svg>
       </button>
     </div>
+  )
+}
+
+const TIMELINE_ICONS: Record<TimelineEvent['type'], string> = {
+  birth: '🎂',
+  marriage: '💍',
+  child: '👶',
+  death: '⚰️',
+}
+
+/**
+ * Renders a single chronological entry in the Timeline section: an icon,
+ * a label describing the event (with a clickable person link for marriages
+ * and child births), the place, and — for deaths — age at death.
+ */
+function TimelineEntry({ event, onSelect }: { event: TimelineEvent; onSelect: (id: string) => void }) {
+  let label: React.ReactNode
+  switch (event.type) {
+    case 'birth':
+      label = 'Born'
+      break
+    case 'marriage':
+      label = (
+        <>
+          Married{' '}
+          {event.person ? (
+            <button
+              type="button"
+              onClick={() => onSelect(event.person!.gedcomId)}
+              className="text-indigo-400 hover:text-indigo-300 underline transition-colors"
+            >
+              {event.person.name || 'Unknown'}
+            </button>
+          ) : (
+            'Unknown'
+          )}
+        </>
+      )
+      break
+    case 'child':
+      label = (
+        <>
+          Child born:{' '}
+          {event.person ? (
+            <button
+              type="button"
+              onClick={() => onSelect(event.person!.gedcomId)}
+              className="text-indigo-400 hover:text-indigo-300 underline transition-colors"
+            >
+              {event.person.name || 'Unknown'}
+            </button>
+          ) : (
+            'Unknown'
+          )}
+        </>
+      )
+      break
+    case 'death':
+      label = `Died${event.age !== null ? `, aged ${event.age}` : ''}`
+      break
+  }
+
+  return (
+    <li className="flex items-start gap-2 text-sm text-white/80">
+      <span aria-hidden="true">{TIMELINE_ICONS[event.type]}</span>
+      <span>
+        <span className="text-slate-500 text-xs mr-2">{event.dateUnknown ? '—' : event.year}</span>
+        {label}
+        {event.place && <span className="text-slate-500 text-xs"> · {event.place}</span>}
+      </span>
+    </li>
   )
 }
 
@@ -1196,6 +1268,22 @@ export function PersonDrawer({
                   </button>
                 </div>
               )}
+            </section>
+
+            <section data-testid="person-drawer-timeline">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Timeline</h3>
+              {(() => {
+                const events = buildTimeline(detail)
+                return events.length === 0 ? (
+                  <p className="text-slate-600 text-xs italic">No events recorded</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {events.map((event, i) => (
+                      <TimelineEntry key={i} event={event} onSelect={onSelectPerson} />
+                    ))}
+                  </ul>
+                )
+              })()}
             </section>
           </>
         )}

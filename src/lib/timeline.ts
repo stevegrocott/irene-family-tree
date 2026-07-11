@@ -4,6 +4,7 @@
  * rendering in the person drawer's Timeline section.
  */
 
+import { extractYear } from '@/lib/gedcom'
 import type { MarriageDetail, PersonDetailResponse, PersonSummary } from '@/types/tree'
 
 export type TimelineEventType = 'birth' | 'marriage' | 'child' | 'death'
@@ -35,7 +36,9 @@ const TYPE_ORDER: Record<TimelineEventType, number> = {
 
 function parseYear(year: string | null): number | null {
   if (year == null) return null
-  const parsed = parseInt(year, 10)
+  const extracted = extractYear(year)
+  if (extracted === null) return null
+  const parsed = parseInt(extracted, 10)
   return Number.isNaN(parsed) ? null : parsed
 }
 

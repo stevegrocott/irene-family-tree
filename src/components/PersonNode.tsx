@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Handle, Position, type NodeProps } from 'reactflow'
 import type { PersonData } from '@/types/tree'
 import { SEX_GLOW } from '@/constants/tree'
@@ -18,6 +18,7 @@ import { SEX_GLOW } from '@/constants/tree'
  */
 export default function PersonNode({ data }: NodeProps<PersonData>) {
   const [photoFailed, setPhotoFailed] = useState(false)
+  const handlePhotoError = useCallback(() => setPhotoFailed(true), [])
   const glow = SEX_GLOW[data.sex] ?? 'shadow-[0_0_20px_rgba(148,163,184,0.3)]'
   const rootRing = data.isRoot
     ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-transparent shadow-[0_0_28px_rgba(251,191,36,0.6)]'
@@ -61,7 +62,7 @@ export default function PersonNode({ data }: NodeProps<PersonData>) {
             alt=""
             aria-hidden="true"
             data-testid="person-node-photo"
-            onError={() => setPhotoFailed(true)}
+            onError={handlePhotoError}
             className="w-8 h-8 rounded-full object-cover shrink-0"
           />
         ) : (

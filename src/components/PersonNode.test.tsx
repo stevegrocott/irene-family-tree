@@ -15,6 +15,9 @@ jest.mock('reactflow', () => ({
   Position: { Top: 'top', Bottom: 'bottom' },
 }))
 
+let container: HTMLDivElement
+let root: ReturnType<typeof createRoot>
+
 const baseData: PersonData = {
   gedcomId: '@I85@',
   name: 'Irene Tunnicliffe',
@@ -25,79 +28,74 @@ const baseData: PersonData = {
   deathPlace: null,
   occupation: null,
   notes: null,
+  photoUrl: null,
 }
 
 function render(overrides: Partial<PersonData> = {}) {
-  const container = document.createElement('div')
+  container = document.createElement('div')
   document.body.appendChild(container)
-  const root = createRoot(container)
+  root = createRoot(container)
   act(() => {
     root.render(
       <PersonNode data={{ ...baseData, ...overrides }} {...({} as never)} />
     )
   })
-  return {
-    container,
-    cleanup: () => {
-      act(() => { root.unmount() })
-      document.body.removeChild(container)
-    },
-  }
+  return container
 }
+
+afterEach(() => {
+  act(() => { root.unmount() })
+  if (container.parentNode) {
+    container.parentNode.removeChild(container)
+  }
+})
 
 describe('PersonNode avatar', () => {
   it('renders initials "IT" for "Irene Tunnicliffe"', () => {
-    const { container, cleanup } = render({ name: 'Irene Tunnicliffe' })
-    expect(container.textContent).toContain('IT')
-    cleanup()
+    const el = render({ name: 'Irene Tunnicliffe' })
+    expect(el.textContent).toContain('IT')
   })
 
   it('applies bg-indigo-900/40 when generation is -1', () => {
-    const { container, cleanup } = render({ generation: -1 })
-    expect(container.innerHTML).toContain('bg-indigo-900/40')
-    cleanup()
+    const el = render({ generation: -1 })
+    expect(el.innerHTML).toContain('bg-indigo-900/40')
   })
 
   it('applies bg-emerald-900/40 when generation is 1', () => {
-    const { container, cleanup } = render({ generation: 1 })
-    expect(container.innerHTML).toContain('bg-emerald-900/40')
-    cleanup()
+    const el = render({ generation: 1 })
+    expect(el.innerHTML).toContain('bg-emerald-900/40')
   })
 
   it('applies neither bg-indigo-900/40 nor bg-emerald-900/40 when generation is 0', () => {
-    const { container, cleanup } = render({ generation: 0 })
-    expect(container.innerHTML).not.toContain('bg-indigo-900/40')
-    expect(container.innerHTML).not.toContain('bg-emerald-900/40')
-    cleanup()
+    const el = render({ generation: 0 })
+    expect(el.innerHTML).not.toContain('bg-indigo-900/40')
+    expect(el.innerHTML).not.toContain('bg-emerald-900/40')
   })
 
   it('renders no photo img and shows initials when photoUrl is absent', () => {
-    const { container, cleanup } = render({ photoUrl: null })
-    expect(container.querySelector('[data-testid="person-node-photo"]')).toBeNull()
-    expect(container.textContent).toContain('IT')
-    cleanup()
+    const el = render({ photoUrl: null })
+    expect(el.querySelector('[data-testid="person-node-photo"]')).toBeNull()
+    expect(el.textContent).toContain('IT')
   })
 
   it('renders the photo img when photoUrl is present', () => {
-    const { container, cleanup } = render({
+    const el = render({
       photoUrl: 'https://example.com/photo.jpg',
     })
-    const img = container.querySelector('[data-testid="person-node-photo"]') as HTMLImageElement | null
+    const img = el.querySelector('[data-testid="person-node-photo"]') as HTMLImageElement | null
     expect(img).not.toBeNull()
     expect(img?.getAttribute('src')).toBe('https://example.com/photo.jpg')
-    cleanup()
   })
 
   it('falls back to initials when the photo img fails to load', () => {
-    const { container, cleanup } = render({
+    const el = render({
       photoUrl: 'https://example.com/broken.jpg',
     })
-    const img = container.querySelector('[data-testid="person-node-photo"]') as HTMLImageElement
+    const img = el.querySelector('[data-testid="person-node-photo"]') as HTMLImageElement
     act(() => {
       img.dispatchEvent(new Event('error', { bubbles: true }))
     })
-    expect(container.querySelector('[data-testid="person-node-photo"]')).toBeNull()
-    expect(container.textContent).toContain('IT')
-    cleanup()
+    expect(el.querySelector('[data-testid="person-node-photo"]')).toBeNull()
+    expect(el.textContent).toContain('IT')
   })
 })

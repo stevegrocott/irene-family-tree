@@ -4,7 +4,6 @@ import { read } from '@/lib/neo4j'
 import { safeParseJson } from '@/lib/utils'
 import { SuggestionsReview } from './SuggestionsReview'
 import { ChangeHistory } from './ChangeHistory'
-import { DuplicatesReview } from './DuplicatesReview'
 import { AdminTabs } from './AdminTabs'
 import type { Change } from './types'
 
@@ -80,7 +79,6 @@ export default async function AdminPage() {
         <AdminTabs
           suggestionsSlot={<SuggestionsReview initialSuggestions={suggestions} />}
           historySlot={<ChangeHistory />}
-          duplicatesSlot={<DuplicatesReview />}
         />
       </div>
     </main>

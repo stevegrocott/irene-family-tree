@@ -422,6 +422,8 @@ export function PersonDrawer({
   const [editDeathPlace, setEditDeathPlace] = useState('')
   const [editOccupation, setEditOccupation] = useState('')
   const [editNotes, setEditNotes] = useState('')
+  const [editPhotoUrl, setEditPhotoUrl] = useState<string | null>(null)
+  const [photoUploading, setPhotoUploading] = useState(false)
   const [showEditBirthPlace, setShowEditBirthPlace] = useState(false)
   const [showEditDiedYear, setShowEditDiedYear] = useState(false)
   const [showEditDeathPlace, setShowEditDeathPlace] = useState(false)
@@ -796,6 +798,7 @@ export function PersonDrawer({
     setEditDeathPlace(person.deathPlace ?? '')
     setEditOccupation(person.occupation ?? '')
     setEditNotes(person.notes ?? '')
+    setEditPhotoUrl(detail?.photoUrl ?? person.photoUrl ?? null)
     setShowEditBirthPlace(!!(detail?.birthPlace))
     setShowEditDiedYear(!!(person.deathYear))
     setShowEditDeathPlace(!!(person.deathPlace))
@@ -816,6 +819,7 @@ export function PersonDrawer({
     setEditDeathPlace(person.deathPlace ?? '')
     setEditOccupation(person.occupation ?? '')
     setEditNotes(person.notes ?? '')
+    setEditPhotoUrl(detail?.photoUrl ?? person.photoUrl ?? null)
     setShowEditBirthPlace(!!(detail?.birthPlace))
     setShowEditDiedYear(!!(person.deathYear))
     setShowEditDeathPlace(!!(person.deathPlace))
@@ -823,6 +827,34 @@ export function PersonDrawer({
     setShowEditNotes(!!(person.notes))
     setActionError(null)
     setMode('view')
+  }
+
+  /**
+   * Uploads the selected file to the person's photo route and stores the
+   * returned URL in `editPhotoUrl`, to be submitted via save/suggest.
+   */
+  const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setPhotoUploading(true)
+    setActionError(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/photo`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json() as { url: string }
+      setEditPhotoUrl(data.url)
+    } catch (err) {
+      console.error('Failed to upload photo', err)
+      setActionError('Failed to upload photo. Please try again.')
+    } finally {
+      setPhotoUploading(false)
+    }
   }
 
   /**
@@ -843,6 +875,7 @@ export function PersonDrawer({
           deathPlace: showEditDeathPlace ? (editDeathPlace.trim() || null) : null,
           occupation: showEditOccupation ? (editOccupation.trim() || null) : null,
           notes: showEditNotes ? (editNotes.trim() || null) : null,
+          photoUrl: editPhotoUrl,
         }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -871,6 +904,7 @@ export function PersonDrawer({
             deathPlace: showEditDeathPlace ? (editDeathPlace.trim() || null) : null,
             occupation: showEditOccupation ? (editOccupation.trim() || null) : null,
             notes: showEditNotes ? (editNotes.trim() || null) : null,
+            photoUrl: editPhotoUrl,
           },
         }),
       })
@@ -908,6 +942,38 @@ export function PersonDrawer({
               onChange={e => setEditFamilyName(e.target.value)}
               className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
             />
+          </div>
+          <div>
+            <label htmlFor="edit-photo" className="text-xs text-slate-400 block mb-1">Photo</label>
+            <div className="flex items-center gap-3">
+              {editPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={editPhotoUrl}
+                  alt=""
+                  aria-hidden="true"
+                  data-testid="person-drawer-edit-photo-preview"
+                  className="w-12 h-12 rounded-full object-cover border border-white/20 flex-shrink-0"
+                />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-[10px] text-white/40 flex-shrink-0"
+                >
+                  No photo
+                </span>
+              )}
+              <input
+                id="edit-photo"
+                data-testid="person-drawer-photo-input"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handlePhotoFileChange}
+                disabled={photoUploading}
+                className="text-xs text-white/70 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:bg-white/10 file:text-white/80 file:text-xs hover:file:bg-white/20 disabled:opacity-50"
+              />
+            </div>
+            {photoUploading && <p className="text-xs text-slate-400 mt-1">Uploading…</p>}
           </div>
           <div>
             <p className="text-xs text-slate-400 mb-1">Sex</p>
@@ -1187,9 +1253,21 @@ export function PersonDrawer({
     >
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-        <h2 className="text-white font-semibold text-base truncate flex-1 mr-2">
-          {person.name || <span className="text-slate-500 italic">Unknown</span>}
-        </h2>
+        <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+          {(detail?.photoUrl ?? person.photoUrl) && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={(detail?.photoUrl ?? person.photoUrl) as string}
+              alt=""
+              aria-hidden="true"
+              data-testid="person-drawer-photo"
+              className="w-9 h-9 rounded-full object-cover border border-white/20 flex-shrink-0"
+            />
+          )}
+          <h2 className="text-white font-semibold text-base truncate">
+            {person.name || <span className="text-slate-500 italic">Unknown</span>}
+          </h2>
+        </div>
         {isSignedIn && (
           <button
             data-testid="person-drawer-edit"

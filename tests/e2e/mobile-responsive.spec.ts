@@ -192,13 +192,14 @@ test.describe('mobile responsive tree view', () => {
     await deleteBtn.tap()
 
     // An in-app themed modal appears...
-    const confirmModal = page.getByRole('dialog')
+    const confirmModal = page.getByTestId('confirm-dialog')
     await expect(confirmModal).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByTestId('confirm-dialog-message')).toContainText(/delete/i)
     // ...and the native browser dialog never fired.
     expect(nativeDialogShown).toBe(false)
 
     // Confirming inside the modal proceeds with the delete and closes the drawer.
-    await confirmModal.getByRole('button', { name: /delete/i }).click()
+    await page.getByTestId('confirm-dialog-confirm').click()
     await expect(drawer).not.toBeVisible({ timeout: 5_000 })
   })
 })

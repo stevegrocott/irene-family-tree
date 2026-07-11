@@ -373,6 +373,7 @@ export function computeCascadeDeleteConnectionCount(
  * @param {Function} onReroot - Called with person's gedcomId to re-root the tree
  * @param {Function} onSelectPerson - Called with gedcomId to open another person's drawer
  * @param {Function} [onSelectRoot] - Called to refresh the tree after adding a relative
+ * @param {string} [rootName] - Display name of the current tree root, used to label the relationship calculator
  */
 export function PersonDrawer({
   person,
@@ -381,6 +382,7 @@ export function PersonDrawer({
   onSelectPerson,
   onSelectRoot,
   rootId,
+  rootName,
   getShareUrl,
 }: {
   person: PersonData
@@ -389,6 +391,7 @@ export function PersonDrawer({
   onSelectPerson: (id: string) => void
   onSelectRoot?: (id: string) => void
   rootId?: string
+  rootName?: string
   getShareUrl?: () => string
 }) {
   const { data: session, status } = useSession()
@@ -434,6 +437,13 @@ export function PersonDrawer({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [pendingRemoveParentId, setPendingRemoveParentId] = useState<string | null>(null)
   const [suggestionSubmitted, setSuggestionSubmitted] = useState(false)
+
+  const [relationship, setRelationship] = useState<
+    | { status: 'idle' }
+    | { status: 'loading' }
+    | { status: 'error'; message: string }
+    | { status: 'success'; label: string }
+  >({ status: 'idle' })
 
   const [myChanges, setMyChanges] = useState<{
     createChange: { id: string; changeType: string; targetId: string; newValue: Record<string, unknown>; appliedAt: string } | null
@@ -493,6 +503,36 @@ export function PersonDrawer({
   useEffect(() => {
     return () => { photoUploadAbortRef.current?.abort() }
   }, [person.gedcomId])
+
+  // Relationship calculation is on-demand (triggered by the button below), so
+  // reset any previous result whenever the selected person or root changes.
+  useEffect(() => {
+    setRelationship({ status: 'idle' })
+  }, [person.gedcomId, rootId])
+
+  /**
+   * Fetches the shortest kinship path/label between the current root and the
+   * selected person from `GET /api/relationship` and stores the result.
+   */
+  const handleCalculateRelationship = async () => {
+    if (!rootId) return
+    setRelationship({ status: 'loading' })
+    try {
+      const res = await fetch(
+        `/api/relationship?from=${encodeURIComponent(rootId)}&to=${encodeURIComponent(person.gedcomId)}`
+      )
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const message = typeof body?.error === 'string' ? body.error : 'Failed to calculate relationship. Please try again.'
+        setRelationship({ status: 'error', message })
+        return
+      }
+      setRelationship({ status: 'success', label: body.label })
+    } catch (err) {
+      console.error('Failed to calculate relationship', err)
+      setRelationship({ status: 'error', message: 'Failed to calculate relationship. Please try again.' })
+    }
+  }
 
   /**
    * Revert a change via POST /api/changes/[id]/revert.
@@ -1313,6 +1353,33 @@ export function PersonDrawer({
         )}
         <p data-testid="person-drawer-gedcom-id" className="text-slate-500 text-xs font-mono">{person.gedcomId}</p>
 
+        {rootId && person.gedcomId !== rootId && (
+          <div data-testid="person-drawer-relationship">
+            {relationship.status !== 'success' && (
+              <button
+                type="button"
+                data-testid="person-drawer-relationship-button"
+                onClick={handleCalculateRelationship}
+                disabled={relationship.status === 'loading'}
+                className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors disabled:opacity-50"
+              >
+                {relationship.status === 'loading' ? 'Calculating…' : `How related to ${rootName || 'root'}?`}
+              </button>
+            )}
+            {relationship.status === 'error' && (
+              <p data-testid="person-drawer-relationship-error" className="text-red-400 text-xs mt-1">
+                {relationship.message}
+              </p>
+            )}
+            {relationship.status === 'success' && (
+              <p data-testid="person-drawer-relationship-result" className="text-slate-300 text-xs">
+                {person.name || 'This person'} is {rootName || 'root'}&rsquo;s{' '}
+                <span className="font-semibold text-white">{relationship.label}</span>.
+              </p>
+            )}
+          </div>
+        )}
+
         {suggestionSubmitted && (
           <p data-testid="suggestion-submitted" className="text-emerald-400 text-xs">Suggestion submitted for admin review.</p>
         )}
@@ -1772,6 +1839,7 @@ function FlowCanvas({
           }}
           onSelectRoot={onSelectRoot}
           rootId={rootId}
+          rootName={rootName}
           getShareUrl={buildShareUrl}
         />
       )}

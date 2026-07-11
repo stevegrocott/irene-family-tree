@@ -555,6 +555,153 @@ describe('PersonDrawer', () => {
     })
   })
 
+  describe('Relationship calculator', () => {
+    const rootId = '@I50@'
+    const rootName = 'Root Person'
+
+    function installRelationshipFetchMock(
+      relationshipResponse?: () => Promise<{ ok: boolean; status?: number; json: () => Promise<unknown> }>
+    ) {
+      const calls: Array<{ url: string }> = []
+      const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+      const fetchMock = jest.fn().mockImplementation(async (url: string) => {
+        calls.push({ url })
+        if (url.startsWith('/api/relationship')) {
+          if (relationshipResponse) return relationshipResponse()
+          return { ok: true, json: async () => ({ from: rootId, to: '@I1@', steps: [{ type: 'parent', name: 'John Smith', sex: 'M' }], label: 'father' }) }
+        }
+        if (url === `${personPath}/my-changes`) {
+          return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
+        }
+        if (url.startsWith(personPath)) {
+          return { ok: true, json: async () => mockDetailResponse }
+        }
+        return { ok: true, json: async () => ({}) }
+      })
+      global.fetch = fetchMock as unknown as typeof fetch
+      return { calls }
+    }
+
+    async function renderDrawerWithRoot(id = rootId, name = rootName) {
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <PersonDrawer
+            person={basePerson}
+            onClose={jest.fn()}
+            onReroot={jest.fn()}
+            onSelectPerson={jest.fn()}
+            rootId={id}
+            rootName={name}
+          />
+        )
+      })
+      await act(async () => { await Promise.resolve() })
+    }
+
+    it('does not render the control when rootId is not provided', async () => {
+      await renderDrawer()
+      expect(container.querySelector('[data-testid="person-drawer-relationship"]')).toBeNull()
+    })
+
+    it('does not render the control when the selected person is the root', async () => {
+      installRelationshipFetchMock()
+      await renderDrawerWithRoot('@I1@', 'John Smith')
+      expect(container.querySelector('[data-testid="person-drawer-relationship"]')).toBeNull()
+    })
+
+    it('shows a "How related to <root>?" button for a non-root person', async () => {
+      installRelationshipFetchMock()
+      await renderDrawerWithRoot()
+      const button = container.querySelector('[data-testid="person-drawer-relationship-button"]')
+      expect(button?.textContent).toBe(`How related to ${rootName}?`)
+    })
+
+    it('fetches from the root to the selected person and displays the kinship label on click', async () => {
+      const { calls } = installRelationshipFetchMock()
+      await renderDrawerWithRoot()
+
+      const button = container.querySelector('[data-testid="person-drawer-relationship-button"]') as HTMLButtonElement
+      await act(async () => { button.click() })
+      await act(async () => { await Promise.resolve() })
+
+      const relCall = calls.find(c => c.url.startsWith('/api/relationship'))
+      expect(relCall?.url).toBe(`/api/relationship?from=${encodeURIComponent(rootId)}&to=${encodeURIComponent('@I1@')}`)
+
+      const result = container.querySelector('[data-testid="person-drawer-relationship-result"]')
+      expect(result?.textContent).toContain('father')
+      expect(container.querySelector('[data-testid="person-drawer-relationship-button"]')).toBeNull()
+    })
+
+    it('shows a loading state while the request is in flight', async () => {
+      let resolveFetch: (value: { ok: boolean; json: () => Promise<unknown> }) => void = () => {}
+      const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+      const fetchMock = jest.fn().mockImplementation(async (url: string) => {
+        if (url.startsWith('/api/relationship')) {
+          return new Promise(resolve => { resolveFetch = resolve })
+        }
+        if (url === `${personPath}/my-changes`) {
+          return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
+        }
+        return { ok: true, json: async () => mockDetailResponse }
+      })
+      global.fetch = fetchMock as unknown as typeof fetch
+
+      await renderDrawerWithRoot()
+
+      const button = container.querySelector('[data-testid="person-drawer-relationship-button"]') as HTMLButtonElement
+      await act(async () => { button.click() })
+
+      expect(button.textContent).toBe('Calculating…')
+      expect(button.disabled).toBe(true)
+
+      await act(async () => {
+        resolveFetch({ ok: true, json: async () => ({ label: 'father' }) })
+        await Promise.resolve()
+      })
+    })
+
+    it('shows an error message returned by the API when the request fails', async () => {
+      installRelationshipFetchMock(async () => ({
+        ok: false,
+        status: 404,
+        json: async () => ({ error: 'No relationship path found within 20 hops' }),
+      }))
+      await renderDrawerWithRoot()
+
+      const button = container.querySelector('[data-testid="person-drawer-relationship-button"]') as HTMLButtonElement
+      await act(async () => { button.click() })
+      await act(async () => { await Promise.resolve() })
+
+      const error = container.querySelector('[data-testid="person-drawer-relationship-error"]')
+      expect(error?.textContent).toBe('No relationship path found within 20 hops')
+    })
+
+    it('shows a generic error message when the request throws', async () => {
+      const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+      const fetchMock = jest.fn().mockImplementation(async (url: string) => {
+        if (url.startsWith('/api/relationship')) {
+          throw new Error('Network error')
+        }
+        if (url === `${personPath}/my-changes`) {
+          return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
+        }
+        return { ok: true, json: async () => mockDetailResponse }
+      })
+      global.fetch = fetchMock as unknown as typeof fetch
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+
+      await renderDrawerWithRoot()
+
+      const button = container.querySelector('[data-testid="person-drawer-relationship-button"]') as HTMLButtonElement
+      await act(async () => { button.click() })
+      await act(async () => { await Promise.resolve() })
+
+      const error = container.querySelector('[data-testid="person-drawer-relationship-error"]')
+      expect(error?.textContent).toBe('Failed to calculate relationship. Please try again.')
+    })
+  })
+
   describe('Copy link button', () => {
     it('is not rendered when getShareUrl is not provided', async () => {
       await renderDrawer()

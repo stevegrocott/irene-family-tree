@@ -200,3 +200,65 @@ test.describe('mobile responsive tree view', () => {
     await expect(drawer).not.toBeVisible({ timeout: 5_000 })
   })
 })
+
+test.describe('mobile responsive toolbar and search', () => {
+  test('toolbar and search bar stay within the viewport with no horizontal overflow', async ({
+    page,
+  }) => {
+    await mockPersonsAndTree(page, [mockPerson], mockTreeResponse)
+    await page.goto('/')
+
+    const toolbar = page.getByTestId('toolbar')
+    await expect(toolbar).toBeVisible({ timeout: 15_000 })
+    const searchInput = page.getByTestId('search-input')
+    await expect(searchInput).toBeVisible()
+
+    const viewport = page.viewportSize()
+    expect(viewport).not.toBeNull()
+    const viewportWidth = viewport!.width
+
+    const [toolbarBox, searchBox, overflow] = await Promise.all([
+      toolbar.boundingBox(),
+      searchInput.boundingBox(),
+      page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      })),
+    ])
+    expect(toolbarBox).not.toBeNull()
+    expect(searchBox).not.toBeNull()
+
+    // Both floating panels stay fully inside the viewport width.
+    expect(toolbarBox!.x).toBeGreaterThanOrEqual(0)
+    expect(toolbarBox!.x + toolbarBox!.width).toBeLessThanOrEqual(viewportWidth + LAYOUT_TOLERANCE_PX)
+    expect(searchBox!.x).toBeGreaterThanOrEqual(0)
+    expect(searchBox!.x + searchBox!.width).toBeLessThanOrEqual(viewportWidth + LAYOUT_TOLERANCE_PX)
+
+    // The search bar spans most of the available width rather than a fixed
+    // desktop-sized panel (w-64 = 256px would be much narrower than this).
+    expect(searchBox!.width).toBeGreaterThan(300)
+
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth)
+  })
+
+  test('toolbar slider and search result rows meet the 44px touch target minimum', async ({
+    page,
+  }) => {
+    await mockPersonsAndTree(page, [mockPerson], mockTreeResponse)
+    await page.goto('/')
+
+    const slider = page.getByTestId('toolbar-depth-slider')
+    await expect(slider).toBeVisible({ timeout: 15_000 })
+    const sliderBox = await slider.boundingBox()
+    expect(sliderBox).not.toBeNull()
+    expect(sliderBox!.height).toBeGreaterThanOrEqual(44)
+
+    const searchInput = page.getByTestId('search-input')
+    await searchInput.fill('Mobile')
+    const resultItem = page.getByTestId('search-result-item').first()
+    await expect(resultItem).toBeVisible()
+    const resultBox = await resultItem.boundingBox()
+    expect(resultBox).not.toBeNull()
+    expect(resultBox!.height).toBeGreaterThanOrEqual(44)
+  })
+})

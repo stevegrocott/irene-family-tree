@@ -175,6 +175,15 @@ function RelativeRow({
   )
 }
 
+/** Mobile drag handle affordance for bottom-sheet drawers. */
+function DrawerDragHandle() {
+  return (
+    <div data-testid="drawer-drag-handle" className={DRAWER_DRAG_HANDLE_CLASS} aria-hidden="true">
+      <div className="h-1.5 w-10 rounded-full bg-white/20" />
+    </div>
+  )
+}
+
 /**
  * A shared header/container for sub-views within the PersonDrawer.
  * Provides a back button and title for nested views like edit and add-relative modes.
@@ -191,9 +200,7 @@ function DrawerSubView({ title, onBack, children }: { title: string; onBack: () 
       data-testid="drawer-sub-view"
       className={DRAWER_CONTAINER_CLASS}
     >
-      <div data-testid="drawer-drag-handle" className={DRAWER_DRAG_HANDLE_CLASS} aria-hidden="true">
-        <div className="h-1.5 w-10 rounded-full bg-white/20" />
-      </div>
+      <DrawerDragHandle />
       <div className="flex items-center gap-2 px-5 py-4 border-b border-white/10">
         <button
           onClick={onBack}
@@ -220,6 +227,10 @@ export function computeCascadeDeleteConnectionCount(
 ): number {
   return relationshipChanges?.length ?? totalConnections
 }
+
+/** ReactFlow store selectors (constant to avoid recreation on every render). */
+const selectCanvasWidth = (s: any) => s.width
+const selectCanvasHeight = (s: any) => s.height
 
 /**
  * Side drawer panel showing details for a selected person.
@@ -534,6 +545,14 @@ export function PersonDrawer({
     }
   }
 
+  const openConfirm = useCallback((message: string, onConfirm: () => void | Promise<void>) => {
+    if (isSubmitting) return
+    setConfirmAction({
+      message,
+      onConfirm: () => { setConfirmAction(null); void onConfirm() },
+    })
+  }, [isSubmitting])
+
   /**
    * Deletes the current person. When the person has relationships, uses the
    * cascade-revert endpoint to atomically remove all connected unions;
@@ -541,7 +560,6 @@ export function PersonDrawer({
    * gated behind the in-app confirm modal instead of `window.confirm()`.
    */
   const handleDeletePerson = () => {
-    if (isSubmitting) return
     if (!myChanges?.createChange) return
 
     if (detailHasRelationships) {
@@ -549,17 +567,17 @@ export function PersonDrawer({
         myChanges.relationshipChanges,
         detail!.parents.length + detail!.marriages.length
       )
-      setConfirmAction({
-        message: `Delete ${person.name || 'this person'} and remove all ${connCount} of their connections? This cannot be undone.`,
-        onConfirm: () => { setConfirmAction(null); void performCascadeDelete() },
-      })
+      openConfirm(
+        `Delete ${person.name || 'this person'} and remove all ${connCount} of their connections? This cannot be undone.`,
+        performCascadeDelete
+      )
       return
     }
 
-    setConfirmAction({
-      message: `Delete ${person.name || 'this person'}? This cannot be undone.`,
-      onConfirm: () => { setConfirmAction(null); void performSimpleDelete() },
-    })
+    openConfirm(
+      `Delete ${person.name || 'this person'}? This cannot be undone.`,
+      performSimpleDelete
+    )
   }
 
   /**
@@ -585,11 +603,7 @@ export function PersonDrawer({
   }
 
   const handleRemoveMarriage = (changeId: string) => {
-    if (isSubmitting) return
-    setConfirmAction({
-      message: 'Remove this marriage? This cannot be undone.',
-      onConfirm: () => { setConfirmAction(null); void performRemoveMarriage(changeId) },
-    })
+    openConfirm('Remove this marriage? This cannot be undone.', () => performRemoveMarriage(changeId))
   }
 
   /**
@@ -637,11 +651,7 @@ export function PersonDrawer({
   }
 
   const handleRevertEdit = (changeId: string) => {
-    if (isSubmitting) return
-    setConfirmAction({
-      message: 'Revert this edit? The previous values will be restored.',
-      onConfirm: () => { setConfirmAction(null); void performRevertEdit(changeId) },
-    })
+    openConfirm('Revert this edit? The previous values will be restored.', () => performRevertEdit(changeId))
   }
 
   /** Opens the edit sub-view, initializing all edit fields from current person/detail. */
@@ -750,9 +760,9 @@ export function PersonDrawer({
     />
   )
 
+  let content: React.ReactNode
   if (mode === 'edit') {
-    return (
-      <>
+    content = (
       <DrawerSubView title={`Edit ${person.name || 'person'}`} onBack={() => setMode('view')}>
         <div
           data-testid="person-drawer-edit-form"
@@ -950,14 +960,9 @@ export function PersonDrawer({
           </div>
         </div>
       </DrawerSubView>
-      {confirmDialog}
-      </>
     )
-  }
-
-  if (mode === 'add-relative') {
-    return (
-      <>
+  } else if (mode === 'add-relative') {
+    content = (
       <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => setMode('view')}>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           <div>
@@ -1049,20 +1054,14 @@ export function PersonDrawer({
           </div>
         </div>
       </DrawerSubView>
-      {confirmDialog}
-      </>
     )
-  }
-
-  return (
-    <>
+  } else {
+    content = (
     <div
       data-testid="person-drawer"
       className={DRAWER_CONTAINER_CLASS}
     >
-      <div data-testid="drawer-drag-handle" className={DRAWER_DRAG_HANDLE_CLASS} aria-hidden="true">
-        <div className="h-1.5 w-10 rounded-full bg-white/20" />
-      </div>
+      <DrawerDragHandle />
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
         <h2 className="text-white font-semibold text-base truncate flex-1 mr-2">
@@ -1287,7 +1286,13 @@ export function PersonDrawer({
         )}
       </div>
     </div>
-    {confirmDialog}
+    )
+  }
+
+  return (
+    <>
+      {content}
+      {confirmDialog}
     </>
   )
 }
@@ -1327,8 +1332,8 @@ function FlowCanvas({
    * ResizeObserver) rather than the full window, so viewport-fit math stays
    * correct across resize and orientation changes on any device.
    */
-  const canvasWidth = useStore(s => s.width)
-  const canvasHeight = useStore(s => s.height)
+  const canvasWidth = useStore(selectCanvasWidth)
+  const canvasHeight = useStore(selectCanvasHeight)
   const abortRef = useRef<AbortController | null>(null)
 
   /** Display name of the current root person, derived from `nodes` and `rootId`. */

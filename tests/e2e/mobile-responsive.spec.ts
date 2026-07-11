@@ -154,8 +154,10 @@ test.describe('mobile responsive tree view', () => {
       void dialog.dismiss()
     })
 
-    await mockSignedInSession(page)
-    await mockPersonsAndTree(page, [mockPerson], mockTreeResponse)
+    await Promise.all([
+      mockSignedInSession(page),
+      mockPersonsAndTree(page, [mockPerson], mockTreeResponse),
+    ])
 
     await Promise.all([
       page.route(/\/api\/person\//, async (route) => {

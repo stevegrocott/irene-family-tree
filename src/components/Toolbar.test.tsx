@@ -167,4 +167,49 @@ describe('Toolbar', () => {
     expect(statsLink).not.toBeNull()
     expect(statsLink!.getAttribute('href')).toBe('/stats')
   })
+
+  describe('copy link button', () => {
+    it('is not rendered when getShareUrl is not provided', async () => {
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={3}
+            onHopsChange={jest.fn()}
+          />,
+        )
+      })
+
+      expect(container.querySelector('[data-testid="toolbar-copy-link"]')).toBeNull()
+    })
+
+    it('copies the URL from getShareUrl and shows a transient "Copied!" confirmation', async () => {
+      const writeText = jest.fn().mockResolvedValue(undefined)
+      Object.assign(navigator, { clipboard: { writeText } })
+      const getShareUrl = jest.fn().mockReturnValue('https://example.com/?root=%40I0%40')
+
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={3}
+            onHopsChange={jest.fn()}
+            getShareUrl={getShareUrl}
+          />,
+        )
+      })
+
+      const copyBtn = container.querySelector('[data-testid="toolbar-copy-link"]') as HTMLButtonElement
+      expect(copyBtn).not.toBeNull()
+
+      await act(async () => { copyBtn.click() })
+
+      expect(writeText).toHaveBeenCalledWith('https://example.com/?root=%40I0%40')
+      expect(copyBtn.textContent).toBe('Copied!')
+    })
+  })
 })

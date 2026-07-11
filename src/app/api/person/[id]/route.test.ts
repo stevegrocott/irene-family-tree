@@ -282,7 +282,7 @@ describe('GET /api/person/[id]', () => {
     const response = await GET(makeRequest(), makeParams('I001'))
     const body = await response.json()
 
-    photoUrl === null ? expect(body.photoUrl).toBeNull() : expect(body.photoUrl).toBe(photoUrl)
+    expect(body.photoUrl).toBe(photoUrl)
   })
 
   /** Verifies `marriageYear` and `marriagePlace` on a MarriageDetail entry can both be null. */
@@ -536,9 +536,7 @@ describe('PATCH /api/person/[id]', () => {
       expect.any(String),
       expect.objectContaining({ fields: { photoUrl } })
     )
-    if (photoUrl !== null) {
-      expect(body.photoUrl).toBe(photoUrl)
-    }
+    expect(body.photoUrl).toBe(photoUrl)
   })
 
   it.each([
@@ -549,12 +547,10 @@ describe('PATCH /api/person/[id]', () => {
       makePatchRequest('I001', { photoUrl }),
       makeParams('I001')
     )
+    const body = await response.json()
 
     expect(response.status).toBe(400)
-    if (photoUrl === 'http://example.com/photo.jpg') {
-      const body = await response.json()
-      expect(body).toEqual({ error: 'photoUrl must be an https:// URL or null' })
-    }
+    expect(body).toEqual({ error: 'photoUrl must be an https:// URL or null' })
     expect(mockWrite).not.toHaveBeenCalled()
   })
 

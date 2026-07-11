@@ -21,6 +21,7 @@ import ReactFlow, {
   getViewportForBounds,
   type Node,
   type Edge,
+  type ReactFlowState,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 
@@ -229,8 +230,8 @@ export function computeCascadeDeleteConnectionCount(
 }
 
 /** ReactFlow store selectors (constant to avoid recreation on every render). */
-const selectCanvasWidth = (s: any) => s.width
-const selectCanvasHeight = (s: any) => s.height
+const selectCanvasWidth = (s: ReactFlowState) => s.width
+const selectCanvasHeight = (s: ReactFlowState) => s.height
 
 /**
  * Side drawer panel showing details for a selected person.
@@ -274,6 +275,7 @@ export function PersonDrawer({
   const [addRelativeType, setAddRelativeType] = useState<'parent' | 'spouse' | 'child'>('child')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Person[]>([])
+  const [suggestionSubmitted, setSuggestionSubmitted] = useState(false)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchAbortRef = useRef<AbortController | null>(null)
 
@@ -394,6 +396,7 @@ export function PersonDrawer({
   const resetAddRelativeForm = () => {
     setSearchQuery('')
     setSearchResults([])
+    setSuggestionSubmitted(false)
     setGivenName('')
     setFamilyName('')
     setNewBirthYear('')
@@ -419,16 +422,29 @@ export function PersonDrawer({
   const handleSelectRelative = async (relative: Person) => {
     setIsSubmitting(true)
     try {
-      const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetId: relative.gedcomId, type: addRelativeType }),
-      })
-      if (!res.ok && res.status !== 409) throw new Error(`HTTP ${res.status}`)
-      resetAddRelativeForm()
-      setMode('view')
-      setDetailVersion(v => v + 1)
-      onSelectRoot?.(person.gedcomId)
+      if (isAdmin) {
+        const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetId: relative.gedcomId, type: addRelativeType }),
+        })
+        if (!res.ok && res.status !== 409) throw new Error(`HTTP ${res.status}`)
+        resetAddRelativeForm()
+        setMode('view')
+        setDetailVersion(v => v + 1)
+        onSelectRoot?.(person.gedcomId)
+      } else {
+        const res = await fetch('/api/suggestions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            changeType: 'ADD_RELATIONSHIP',
+            payload: { type: addRelativeType, targetId: relative.gedcomId, childId: person.gedcomId },
+          }),
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        setSuggestionSubmitted(true)
+      }
     } catch (err) {
       console.error('Failed to add relative', err)
       setActionError('Failed to add relative. Please try again.')
@@ -458,16 +474,29 @@ export function PersonDrawer({
       if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`)
       const newPerson = await createRes.json() as Person
       createdPerson = newPerson
-      const linkRes = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetId: newPerson.gedcomId, type: addRelativeType }),
-      })
-      if (!linkRes.ok && linkRes.status !== 409) throw new Error(`HTTP ${linkRes.status}`)
-      resetAddRelativeForm()
-      setMode('view')
-      setDetailVersion(v => v + 1)
-      onSelectRoot?.(person.gedcomId)
+      if (isAdmin) {
+        const linkRes = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetId: newPerson.gedcomId, type: addRelativeType }),
+        })
+        if (!linkRes.ok && linkRes.status !== 409) throw new Error(`HTTP ${linkRes.status}`)
+        resetAddRelativeForm()
+        setMode('view')
+        setDetailVersion(v => v + 1)
+        onSelectRoot?.(person.gedcomId)
+      } else {
+        const suggestRes = await fetch('/api/suggestions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            changeType: 'ADD_RELATIONSHIP',
+            payload: { type: addRelativeType, targetId: newPerson.gedcomId, childId: person.gedcomId },
+          }),
+        })
+        if (!suggestRes.ok) throw new Error(`HTTP ${suggestRes.status}`)
+        setSuggestionSubmitted(true)
+      }
     } catch (err) {
       console.error('Failed to create and link relative', err)
       setActionError('Failed to create and link person. Please try again.')
@@ -965,6 +994,14 @@ export function PersonDrawer({
     content = (
       <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => setMode('view')}>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {suggestionSubmitted && (
+            <p
+              data-testid="suggestion-submitted"
+              className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2"
+            >
+              Suggestion submitted. An admin will review it before it appears in the tree.
+            </p>
+          )}
           <div>
             <input
               data-testid="add-relative-search"

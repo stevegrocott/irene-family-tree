@@ -19,50 +19,26 @@ const TEST_PHOTO_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
 const TEST_PHOTO_DATA_URL = `data:image/png;base64,${TEST_PHOTO_BASE64}`
 
-const signedInUser = {
-  name: 'E2E Test User',
-  email: 'e2e@example.com',
-  image: null,
-  role: 'admin' as const,
-}
-
-/** Known person whose drawer we open, edit, and upload a photo for. */
-const mockPersonDetailBase = {
-  gedcomId: '@ITEST@',
-  name: 'Alice Test',
-  sex: 'F',
-  birthYear: '1900',
-  deathYear: null,
-  birthPlace: 'London, England',
-  deathPlace: null,
-  occupation: null,
-  notes: null,
-  parents: [],
-  siblings: [],
-  marriages: [],
-}
-
 /** Single-node tree response for Alice Test, reflecting the current photoUrl. */
 function buildTreeResponse(photoUrl: string | null) {
+  const personData = {
+    gedcomId: '@ITEST@',
+    name: 'Alice Test',
+    sex: 'F',
+    birthYear: '1900',
+    deathYear: null,
+    birthPlace: 'London, England',
+    deathPlace: null,
+    occupation: null,
+    notes: null,
+  }
+
   return {
     nodes: [
       {
         id: 'node-@ITEST@',
         type: 'person',
-        data: {
-          gedcomId: '@ITEST@',
-          name: 'Alice Test',
-          sex: 'F',
-          birthYear: '1900',
-          deathYear: null,
-          birthPlace: 'London, England',
-          deathPlace: null,
-          occupation: null,
-          notes: null,
-          isRoot: true,
-          generation: 0,
-          photoUrl,
-        },
+        data: { ...personData, isRoot: true, generation: 0, photoUrl },
         position: { x: 0, y: 0 },
       },
     ],
@@ -73,7 +49,6 @@ function buildTreeResponse(photoUrl: string | null) {
 /**
  * Intercepts the NextAuth session endpoint and returns a synthetic authenticated
  * admin session so the drawer's direct-save (rather than suggest-change) flow is used.
- * @param page - Playwright page to install the route mock on
  */
 async function mockSignedInSession(page: import('@playwright/test').Page) {
   await page.route(/\/api\/auth\/session\b/, (route) =>
@@ -81,7 +56,12 @@ async function mockSignedInSession(page: import('@playwright/test').Page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        user: signedInUser,
+        user: {
+          name: 'E2E Test User',
+          email: 'e2e@example.com',
+          image: null,
+          role: 'admin' as const,
+        },
         expires: '2099-01-01T00:00:00.000Z',
       }),
     })
@@ -98,6 +78,21 @@ test.describe('Photo upload flow', () => {
     // upload → PATCH → detail re-fetch → tree re-fetch sequence.
     let currentPhotoUrl: string | null = null
 
+    const personBase = {
+      gedcomId: '@ITEST@',
+      name: 'Alice Test',
+      sex: 'F',
+      birthYear: '1900',
+      deathYear: null,
+      birthPlace: 'London, England',
+      deathPlace: null,
+      occupation: null,
+      notes: null,
+      parents: [],
+      siblings: [],
+      marriages: [],
+    }
+
     await mockSignedInSession(page)
 
     await page.route(/\/api\/persons/, (route) =>
@@ -106,12 +101,12 @@ test.describe('Photo upload flow', () => {
         contentType: 'application/json',
         body: JSON.stringify([
           {
-            gedcomId: '@ITEST@',
-            name: 'Alice Test',
-            sex: 'F',
-            birthYear: '1900',
-            deathYear: null,
-            birthPlace: 'London, England',
+            gedcomId: personBase.gedcomId,
+            name: personBase.name,
+            sex: personBase.sex,
+            birthYear: personBase.birthYear,
+            deathYear: personBase.deathYear,
+            birthPlace: personBase.birthPlace,
           },
         ]),
       })
@@ -158,7 +153,7 @@ test.describe('Photo upload flow', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ ...mockPersonDetailBase, photoUrl: currentPhotoUrl }),
+        body: JSON.stringify({ ...personBase, photoUrl: currentPhotoUrl }),
       })
     })
 

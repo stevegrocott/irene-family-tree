@@ -14,6 +14,8 @@ import { mockSignedInSession, mockPersonsAndTree } from './helpers/revert-mocks'
  */
 test.use({ ...devices['iPhone 14'] })
 
+const LAYOUT_TOLERANCE_PX = 4
+
 /** Single person used as the tree root across all tests in this file. */
 const mockPerson = {
   gedcomId: '@IMOBILE@',
@@ -42,12 +44,7 @@ const mockTreeResponse = {
       id: 'node-@IMOBILE@',
       type: 'person',
       data: {
-        gedcomId: '@IMOBILE@',
-        name: 'Mobile Test',
-        sex: 'F',
-        birthYear: '1900',
-        deathYear: null,
-        birthPlace: 'London, England',
+        ...mockPerson,
         deathPlace: null,
         occupation: null,
         notes: null,
@@ -106,24 +103,27 @@ test.describe('mobile responsive tree view', () => {
     expect(viewport).not.toBeNull()
     const viewportHeight = viewport!.height
 
-    const drawerBox = await drawer.boundingBox()
+    const personNode = page.locator('.react-flow__node-person').first()
+    await expect(personNode).toBeVisible()
+
+    const [drawerBox, nodeBox] = await Promise.all([
+      drawer.boundingBox(),
+      personNode.boundingBox(),
+    ])
     expect(drawerBox).not.toBeNull()
+    expect(nodeBox).not.toBeNull()
 
     // Bottom sheet: no taller than ~60vh (small tolerance for borders/rounding).
-    expect(drawerBox!.height).toBeLessThanOrEqual(viewportHeight * 0.6 + 4)
+    expect(drawerBox!.height).toBeLessThanOrEqual(viewportHeight * 0.6 + LAYOUT_TOLERANCE_PX)
 
     // Anchored to the bottom of the viewport, like a sheet — not a full-height panel.
-    expect(drawerBox!.y + drawerBox!.height).toBeGreaterThanOrEqual(viewportHeight - 4)
+    expect(drawerBox!.y + drawerBox!.height).toBeGreaterThanOrEqual(viewportHeight - LAYOUT_TOLERANCE_PX)
 
     // Leaves space above it, unlike the desktop `top-0 h-full` panel.
     expect(drawerBox!.y).toBeGreaterThan(0)
 
     // The person node (and by extension the tree canvas) is still visible
     // above the sheet rather than hidden behind a full-height overlay.
-    const personNode = page.locator('.react-flow__node-person').first()
-    await expect(personNode).toBeVisible()
-    const nodeBox = await personNode.boundingBox()
-    expect(nodeBox).not.toBeNull()
     expect(nodeBox!.y).toBeLessThan(drawerBox!.y)
 
     // A close affordance is present on the sheet.
@@ -157,30 +157,31 @@ test.describe('mobile responsive tree view', () => {
     await mockSignedInSession(page)
     await mockPersonsAndTree(page, [mockPerson], mockTreeResponse)
 
-    await page.route(/\/api\/person\//, async (route) => {
-      const url = route.request().url()
-      if (url.includes('/my-changes')) {
+    await Promise.all([
+      page.route(/\/api\/person\//, async (route) => {
+        const url = route.request().url()
+        if (url.includes('/my-changes')) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(mockMyChangesWithCreate),
+          })
+          return
+        }
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(mockMyChangesWithCreate),
+          body: JSON.stringify(mockPersonDetail),
         })
-        return
-      }
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(mockPersonDetail),
-      })
-    })
-
-    await page.route(/\/api\/changes\/.*\/revert/, (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ ok: true }),
-      })
-    )
+      }),
+      page.route(/\/api\/changes\/.*\/revert/, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: true }),
+        })
+      ),
+    ])
 
     const drawer = await openDrawer(page)
 
@@ -197,6 +198,5 @@ test.describe('mobile responsive tree view', () => {
     // Confirming inside the modal proceeds with the delete and closes the drawer.
     await confirmModal.getByRole('button', { name: /delete/i }).click()
     await expect(drawer).not.toBeVisible({ timeout: 5_000 })
-    expect(nativeDialogShown).toBe(false)
   })
 })

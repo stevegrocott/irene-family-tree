@@ -14,7 +14,7 @@ export interface Person {
   deathPlace: string | null
   occupation: string | null
   notes: string | null
-  photoUrl?: string | null
+  photoUrl: string | null
   isLiving?: boolean
 }
 

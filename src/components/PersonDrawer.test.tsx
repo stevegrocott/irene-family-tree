@@ -474,6 +474,84 @@ describe('PersonDrawer', () => {
         const body = JSON.parse(suggestionCall!.init!.body as string)
         expect(body.payload).toMatchObject({ photoUrl: 'https://blob.example.com/uploaded.jpg' })
       })
+
+      it('rejects a non-image file client-side without uploading', async () => {
+        mockSession('admin')
+        const { calls } = installPhotoFetchMock()
+        await renderDrawer()
+
+        const editBtn = container.querySelector('[data-testid="person-drawer-edit"]') as HTMLButtonElement
+        await act(async () => { editBtn.click() })
+
+        const fileInput = container.querySelector('[data-testid="person-drawer-photo-input"]') as HTMLInputElement
+        const file = new File(['data'], 'notes.txt', { type: 'text/plain' })
+        await act(async () => {
+          Object.defineProperty(fileInput, 'files', { value: [file] })
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        await act(async () => { await Promise.resolve() })
+
+        const uploadCall = calls.find(c => c.url === `/api/person/${encodeURIComponent('@I1@')}/photo`)
+        expect(uploadCall).toBeUndefined()
+        const error = container.querySelector('[data-testid="person-drawer-edit-action-error"]')
+        expect(error?.textContent).toBe('Photo must be a JPEG, PNG, or WebP image.')
+      })
+
+      it('rejects a file over 5MB client-side without uploading', async () => {
+        mockSession('admin')
+        const { calls } = installPhotoFetchMock()
+        await renderDrawer()
+
+        const editBtn = container.querySelector('[data-testid="person-drawer-edit"]') as HTMLButtonElement
+        await act(async () => { editBtn.click() })
+
+        const fileInput = container.querySelector('[data-testid="person-drawer-photo-input"]') as HTMLInputElement
+        const file = new File(['data'], 'big.jpg', { type: 'image/jpeg' })
+        Object.defineProperty(file, 'size', { value: 6 * 1024 * 1024 })
+        await act(async () => {
+          Object.defineProperty(fileInput, 'files', { value: [file] })
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        await act(async () => { await Promise.resolve() })
+
+        const uploadCall = calls.find(c => c.url === `/api/person/${encodeURIComponent('@I1@')}/photo`)
+        expect(uploadCall).toBeUndefined()
+        const error = container.querySelector('[data-testid="person-drawer-edit-action-error"]')
+        expect(error?.textContent).toBe('Photo must be 5 MB or smaller.')
+      })
+
+      it('shows an error message when the upload request fails', async () => {
+        mockSession('admin')
+        const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+        const fetchMock = jest.fn().mockImplementation(async (url: string) => {
+          if (url === `${personPath}/my-changes`) {
+            return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
+          }
+          if (url === `${personPath}/photo`) {
+            return { ok: false, status: 400, json: async () => ({ error: 'Bad request' }) }
+          }
+          if (url.startsWith(personPath)) {
+            return { ok: true, json: async () => mockDetailResponse }
+          }
+          return { ok: true, json: async () => ({}) }
+        })
+        global.fetch = fetchMock as unknown as typeof fetch
+        await renderDrawer()
+
+        const editBtn = container.querySelector('[data-testid="person-drawer-edit"]') as HTMLButtonElement
+        await act(async () => { editBtn.click() })
+
+        const fileInput = container.querySelector('[data-testid="person-drawer-photo-input"]') as HTMLInputElement
+        const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' })
+        await act(async () => {
+          Object.defineProperty(fileInput, 'files', { value: [file] })
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        await act(async () => { await Promise.resolve() })
+
+        const error = container.querySelector('[data-testid="person-drawer-edit-action-error"]')
+        expect(error?.textContent).toBe('Failed to upload photo. Please try again.')
+      })
     })
   })
 

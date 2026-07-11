@@ -424,6 +424,7 @@ export function PersonDrawer({
   const [editNotes, setEditNotes] = useState('')
   const [editPhotoUrl, setEditPhotoUrl] = useState<string | null>(null)
   const [photoUploading, setPhotoUploading] = useState(false)
+  const photoUploadAbortRef = useRef<AbortController | null>(null)
   const [showEditBirthPlace, setShowEditBirthPlace] = useState(false)
   const [showEditDiedYear, setShowEditDiedYear] = useState(false)
   const [showEditDeathPlace, setShowEditDeathPlace] = useState(false)
@@ -486,6 +487,12 @@ export function PersonDrawer({
       })
     return () => { cancelled = true; ctrl.abort() }
   }, [person.gedcomId, detailVersion])
+
+  // Aborts any in-flight photo upload when the drawer switches to a different
+  // person, so a stale response can't overwrite the new person's edit form.
+  useEffect(() => {
+    return () => { photoUploadAbortRef.current?.abort() }
+  }, [person.gedcomId])
 
   /**
    * Revert a change via POST /api/changes/[id]/revert.
@@ -834,6 +841,9 @@ export function PersonDrawer({
       setActionError('Photo must be 5 MB or smaller.')
       return
     }
+    photoUploadAbortRef.current?.abort()
+    const ctrl = new AbortController()
+    photoUploadAbortRef.current = ctrl
     setPhotoUploading(true)
     setActionError(null)
     try {
@@ -842,15 +852,17 @@ export function PersonDrawer({
       const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/photo`, {
         method: 'POST',
         body: formData,
+        signal: ctrl.signal,
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json() as { url: string }
       setEditPhotoUrl(data.url)
     } catch (err) {
+      if (ctrl.signal.aborted) return
       console.error('Failed to upload photo', err)
       setActionError('Failed to upload photo. Please try again.')
     } finally {
-      setPhotoUploading(false)
+      if (!ctrl.signal.aborted) setPhotoUploading(false)
     }
   }
 

@@ -1,4 +1,5 @@
 import {
+  buildFamRecord,
   buildGedcomDocument,
   mapPersonRecord,
   mapUnionRecord,
@@ -10,6 +11,45 @@ import {
 function toQueryRecord(row: Record<string, unknown>): QueryRecord {
   return { get: key => row[key] }
 }
+
+describe('buildFamRecord', () => {
+  const union = { gedcomId: '@U1@', marriageYear: null, marriagePlace: null }
+
+  it('assigns HUSB/WIFE by sex first, so an unknown-sex spouse listed first does not displace M/F spouses', () => {
+    const spouses = [
+      { personId: '@I9@', unionId: '@U1@' },
+      { personId: '@I1@', unionId: '@U1@' },
+      { personId: '@I2@', unionId: '@U1@' },
+    ]
+    const personSexMap = new Map([
+      ['@I9@', ''],
+      ['@I1@', 'M'],
+      ['@I2@', 'F'],
+    ])
+
+    const lines = buildFamRecord({ union, spouses, children: [], personSexMap }).split('\n')
+
+    expect(lines).toContain('1 HUSB @I1@')
+    expect(lines).toContain('1 WIFE @I2@')
+    expect(lines.some(l => l.includes('@I9@'))).toBe(false)
+  })
+
+  it('assigns HUSB/WIFE by sex regardless of spouse order when the F spouse is listed first', () => {
+    const spouses = [
+      { personId: '@I2@', unionId: '@U1@' },
+      { personId: '@I1@', unionId: '@U1@' },
+    ]
+    const personSexMap = new Map([
+      ['@I1@', 'M'],
+      ['@I2@', 'F'],
+    ])
+
+    const lines = buildFamRecord({ union, spouses, children: [], personSexMap }).split('\n')
+
+    expect(lines).toContain('1 HUSB @I1@')
+    expect(lines).toContain('1 WIFE @I2@')
+  })
+})
 
 describe('buildGedcomDocument', () => {
   const persons = [

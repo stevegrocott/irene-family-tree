@@ -358,6 +358,7 @@ export function PersonDrawer({
   const [actionError, setActionError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [pendingRemoveParentId, setPendingRemoveParentId] = useState<string | null>(null)
+  const [suggestionSubmitted, setSuggestionSubmitted] = useState(false)
 
   const [myChanges, setMyChanges] = useState<{
     createChange: { id: string; changeType: string; targetId: string; newValue: Record<string, unknown>; appliedAt: string } | null
@@ -467,6 +468,7 @@ export function PersonDrawer({
     setAddRelativeType(type)
     resetAddRelativeForm()
     setActionError(null)
+    setSuggestionSubmitted(false)
     setMode('add-relative')
   }
 
@@ -478,6 +480,21 @@ export function PersonDrawer({
   const handleSelectRelative = async (relative: Person) => {
     setIsSubmitting(true)
     try {
+      if (!isAdmin && addRelativeType === 'parent') {
+        const res = await fetch('/api/suggestions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            changeType: 'ADD_RELATIONSHIP',
+            payload: { type: addRelativeType, targetId: relative.gedcomId, childId: person.gedcomId },
+          }),
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        resetAddRelativeForm()
+        setMode('view')
+        setSuggestionSubmitted(true)
+        return
+      }
       const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -517,6 +534,21 @@ export function PersonDrawer({
       if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`)
       const newPerson = await createRes.json() as Person
       createdPerson = newPerson
+      if (!isAdmin && addRelativeType === 'parent') {
+        const suggestRes = await fetch('/api/suggestions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            changeType: 'ADD_RELATIONSHIP',
+            payload: { type: addRelativeType, targetId: newPerson.gedcomId, childId: person.gedcomId },
+          }),
+        })
+        if (!suggestRes.ok) throw new Error(`HTTP ${suggestRes.status}`)
+        resetAddRelativeForm()
+        setMode('view')
+        setSuggestionSubmitted(true)
+        return
+      }
       const linkRes = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1119,6 +1151,10 @@ export function PersonDrawer({
           <p className="text-slate-400 text-sm">{dates}</p>
         )}
         <p data-testid="person-drawer-gedcom-id" className="text-slate-500 text-xs font-mono">{person.gedcomId}</p>
+
+        {suggestionSubmitted && (
+          <p data-testid="suggestion-submitted" className="text-emerald-400 text-xs">Suggestion submitted for admin review.</p>
+        )}
 
         {detailLoading && (
           <div className="flex items-center justify-center py-6">

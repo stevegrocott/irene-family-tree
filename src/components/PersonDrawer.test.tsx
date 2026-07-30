@@ -6,6 +6,7 @@
 ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
 
 import { act } from 'react'
+import type React from 'react'
 import { createRoot } from 'react-dom/client'
 import * as NextAuthReact from 'next-auth/react'
 import { PersonDrawer, computeCascadeDeleteConnectionCount } from '@/components/FamilyTree'
@@ -128,7 +129,7 @@ describe('PersonDrawer', () => {
     }
   }
 
-  async function renderDrawer() {
+  async function renderDrawer(overrides: Partial<React.ComponentProps<typeof PersonDrawer>> = {}, flushes = 1) {
     await act(async () => {
       root = createRoot(container)
       root.render(
@@ -137,10 +138,13 @@ describe('PersonDrawer', () => {
           onClose={jest.fn()}
           onReroot={jest.fn()}
           onSelectPerson={jest.fn()}
+          {...overrides}
         />
       )
     })
-    await act(async () => { await Promise.resolve() })
+    for (let i = 0; i < flushes; i++) {
+      await act(async () => { await Promise.resolve() })
+    }
   }
 
   it('renders parents, siblings, and marriages sections with correct names', async () => {
@@ -196,7 +200,7 @@ describe('PersonDrawer', () => {
     expect(onSelectPerson).toHaveBeenCalledWith('@I2@')
   })
 
-  describe('Add parent — role-based routing', () => {
+  describe('Add parent', () => {
     const searchResult = [
       { gedcomId: '@I9@', name: 'Candidate Parent', sex: 'M', birthYear: null, deathYear: null },
     ]
@@ -211,9 +215,6 @@ describe('PersonDrawer', () => {
         }
         if (url === `${personPath}/relationships`) {
           return { ok: true, status: 201, json: async () => ({ unionId: '@F_new@' }) }
-        }
-        if (url === '/api/suggestions') {
-          return { ok: true, status: 201, json: async () => ({ id: 'new-suggestion-id' }) }
         }
         if (url.startsWith('/api/persons?q=')) {
           return { ok: true, json: async () => searchResult }
@@ -375,6 +376,142 @@ describe('PersonDrawer', () => {
 
       const linkCall = calls.find(c => c.url.includes('/relationships') && c.init?.method === 'POST')
       expect(linkCall).toBeUndefined()
+    })
+  })
+
+  describe('Delete confirmation — in-app modal replaces window.confirm', () => {
+    const noRelDetail = {
+      ...mockDetailResponse,
+      parents: [],
+      siblings: [],
+      marriages: [],
+    }
+
+    function installDeleteFetchMock(opts: {
+      detail: typeof mockDetailResponse
+      relationshipChanges: Array<{ id: string; newValue: Record<string, unknown>; appliedAt: string }>
+    }) {
+      const calls: Array<{ url: string; init?: RequestInit }> = []
+      const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+      const fetchMock = jest.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url === `${personPath}/my-changes`) {
+          return {
+            ok: true,
+            json: async () => ({
+              createChange: {
+                id: 'chg-create',
+                changeType: 'CREATE_PERSON',
+                targetId: '@I1@',
+                newValue: {},
+                appliedAt: '2024-01-01T00:00:00.000Z',
+              },
+              relationshipChanges: opts.relationshipChanges,
+              updateChanges: [],
+            }),
+          }
+        }
+        if (url.startsWith('/api/changes/') && url.endsWith('/revert')) {
+          return { ok: true, json: async () => ({}) }
+        }
+        if (url === `${personPath}/cascade-revert`) {
+          return { ok: true, json: async () => ({}) }
+        }
+        if (url.startsWith(personPath)) {
+          return { ok: true, json: async () => opts.detail }
+        }
+        return { ok: true, json: async () => ({}) }
+      })
+      global.fetch = fetchMock as unknown as typeof fetch
+      return { calls }
+    }
+
+    it('clicking delete opens the modal (no window.confirm) with the simple-delete message; confirming reverts and closes', async () => {
+      const confirmSpy = jest.spyOn(window, 'confirm')
+      const { calls } = installDeleteFetchMock({ detail: noRelDetail, relationshipChanges: [] })
+      const onClose = jest.fn()
+      // Flush the detail + my-changes fetches and their chained state updates
+      await renderDrawer({ onClose, onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
+
+      const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
+      expect(deleteBtn).not.toBeNull()
+
+      // Modal is not shown until the delete button is clicked
+      expect(container.querySelector('[data-testid="confirm-dialog"]')).toBeNull()
+
+      await act(async () => { deleteBtn.click() })
+
+      // The in-app modal is used, never the native window.confirm
+      expect(confirmSpy).not.toHaveBeenCalled()
+      expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull()
+      const message = container.querySelector('[data-testid="confirm-dialog-message"]')
+      expect(message!.textContent).toBe('Delete John Smith? This cannot be undone.')
+
+      // Nothing is reverted until the user confirms inside the modal
+      expect(calls.some(c => c.url.includes('/revert'))).toBe(false)
+
+      const confirmBtn = container.querySelector('[data-testid="confirm-dialog-confirm"]') as HTMLButtonElement
+      await act(async () => { confirmBtn.click() })
+      await act(async () => { await Promise.resolve() })
+      await act(async () => { await Promise.resolve() })
+
+      const revertCall = calls.find(c => c.url === '/api/changes/chg-create/revert')
+      expect(revertCall).toBeDefined()
+      expect(revertCall!.init?.method).toBe('POST')
+      expect(onClose).toHaveBeenCalled()
+    })
+
+    it('cancelling the modal closes it without reverting or closing the drawer', async () => {
+      const { calls } = installDeleteFetchMock({ detail: noRelDetail, relationshipChanges: [] })
+      const onClose = jest.fn()
+      await renderDrawer({ onClose, onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
+
+      const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
+      await act(async () => { deleteBtn.click() })
+      expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull()
+
+      const cancelBtn = container.querySelector('[data-testid="confirm-dialog-cancel"]') as HTMLButtonElement
+      await act(async () => { cancelBtn.click() })
+
+      expect(container.querySelector('[data-testid="confirm-dialog"]')).toBeNull()
+      expect(calls.some(c => c.url.includes('/revert'))).toBe(false)
+      expect(onClose).not.toHaveBeenCalled()
+    })
+
+    it('for a person with relationships, the modal shows the connection count and confirming calls cascade-revert', async () => {
+      // mockDetailResponse has 2 parents + 1 marriage = 3 connections
+      const { calls } = installDeleteFetchMock({
+        detail: mockDetailResponse,
+        relationshipChanges: [
+          { id: 'rc1', newValue: { type: 'parent', targetId: '@I2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc2', newValue: { type: 'parent', targetId: '@I3@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc3', newValue: { type: 'spouse', targetId: '@I5@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+        ],
+      })
+      const onClose = jest.fn()
+      await renderDrawer({ onClose, onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
+
+      const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
+      expect(deleteBtn).not.toBeNull()
+      // All connections authored by the user → not blocked, button enabled
+      expect(deleteBtn.disabled).toBe(false)
+
+      await act(async () => { deleteBtn.click() })
+
+      const message = container.querySelector('[data-testid="confirm-dialog-message"]')
+      expect(message!.textContent).toBe(
+        'Delete John Smith and remove all 3 of their connections? This cannot be undone.'
+      )
+
+      const confirmBtn = container.querySelector('[data-testid="confirm-dialog-confirm"]') as HTMLButtonElement
+      await act(async () => { confirmBtn.click() })
+      await act(async () => { await Promise.resolve() })
+      await act(async () => { await Promise.resolve() })
+
+      const cascadeCall = calls.find(c => c.url === '/api/person/%40I1%40/cascade-revert')
+      expect(cascadeCall).toBeDefined()
+      expect(cascadeCall!.init?.method).toBe('POST')
+      expect(onClose).toHaveBeenCalled()
     })
   })
 

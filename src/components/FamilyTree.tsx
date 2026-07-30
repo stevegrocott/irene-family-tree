@@ -19,20 +19,23 @@ import ReactFlow, {
   MiniMap,
   ReactFlowProvider,
   useReactFlow,
+  useStore,
   getViewportForBounds,
   type Node,
   type Edge,
+  type ReactFlowState,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 
 import PersonNode from '@/components/PersonNode'
 import UnionNode from '@/components/UnionNode'
 import SearchBar from '@/components/SearchBar'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { applyDagreLayout } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -148,7 +151,7 @@ export function Toolbar({
   return (
     <div
       data-testid="toolbar"
-      className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+      className="absolute bottom-4 inset-x-4 z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-auto sm:flex-nowrap sm:gap-4 sm:py-2"
     >
       <span
         data-testid="toolbar-app-name"
@@ -175,7 +178,7 @@ export function Toolbar({
         max={sliderMax}
         value={hops}
         onChange={e => onHopsChange(Number(e.target.value))}
-        className="w-24"
+        className="w-full h-11 sm:w-24 sm:h-auto"
         aria-label="Depth"
       />
       {getShareUrl && (
@@ -244,6 +247,15 @@ function RelativeRow({
           <line x1="18" y1="12" x2="22" y2="12" />
         </svg>
       </button>
+    </div>
+  )
+}
+
+/** Mobile drag handle affordance for bottom-sheet drawers. */
+function DrawerDragHandle() {
+  return (
+    <div data-testid="drawer-drag-handle" className={DRAWER_DRAG_HANDLE_CLASS} aria-hidden="true">
+      <div className="h-1.5 w-10 rounded-full bg-white/20" />
     </div>
   )
 }
@@ -333,13 +345,14 @@ function DrawerSubView({ title, onBack, children }: { title: string; onBack: () 
   return (
     <div
       data-testid="drawer-sub-view"
-      className="absolute top-0 right-0 h-full w-80 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
+      className={DRAWER_CONTAINER_CLASS}
     >
+      <DrawerDragHandle />
       <div className="flex items-center gap-2 px-5 py-4 border-b border-white/10">
         <button
           onClick={onBack}
           aria-label="Back"
-          className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+          className={RESPONSIVE_BUTTON_BASE}
         >
           ←
         </button>
@@ -361,6 +374,10 @@ export function computeCascadeDeleteConnectionCount(
 ): number {
   return relationshipChanges?.length ?? totalConnections
 }
+
+/** ReactFlow store selectors (constant to avoid recreation on every render). */
+const selectCanvasWidth = (s: ReactFlowState) => s.width
+const selectCanvasHeight = (s: ReactFlowState) => s.height
 
 /**
  * Side drawer panel showing details for a selected person.
@@ -437,6 +454,7 @@ export function PersonDrawer({
   const [actionError, setActionError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [pendingRemoveParentId, setPendingRemoveParentId] = useState<string | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [suggestionSubmitted, setSuggestionSubmitted] = useState(false)
 
   const [relationship, setRelationship] = useState<
@@ -599,6 +617,41 @@ export function PersonDrawer({
   }
 
   /**
+   * Submit a relationship change for the target person.
+   *
+   * Non-admin users adding a *parent* route through `/api/suggestions` for
+   * moderation; every other case (and every admin case) links directly via the
+   * relationships endpoint and goes live immediately.
+   */
+  const submitRelationshipChange = async (targetId: string) => {
+    if (!isAdmin && addRelativeType === 'parent') {
+      const suggestRes = await fetch('/api/suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          changeType: 'ADD_RELATIONSHIP',
+          payload: { type: addRelativeType, targetId, childId: person.gedcomId },
+        }),
+      })
+      if (!suggestRes.ok) throw new Error(`HTTP ${suggestRes.status}`)
+      resetAddRelativeForm()
+      setMode('view')
+      setSuggestionSubmitted(true)
+      return
+    }
+    const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetId, type: addRelativeType }),
+    })
+    if (!res.ok && res.status !== 409) throw new Error(`HTTP ${res.status}`)
+    resetAddRelativeForm()
+    setMode('view')
+    setDetailVersion(v => v + 1)
+    onSelectRoot?.(person.gedcomId)
+  }
+
+  /**
    * Links an existing person as a relative and returns to view mode.
    * Refreshes the person detail and parent drawer after successful link.
    * @param {Person} relative - The person to link as a relative
@@ -606,31 +659,7 @@ export function PersonDrawer({
   const handleSelectRelative = async (relative: Person) => {
     setIsSubmitting(true)
     try {
-      if (!isAdmin && addRelativeType === 'parent') {
-        const res = await fetch('/api/suggestions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            changeType: 'ADD_RELATIONSHIP',
-            payload: { type: addRelativeType, targetId: relative.gedcomId, childId: person.gedcomId },
-          }),
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        resetAddRelativeForm()
-        setMode('view')
-        setSuggestionSubmitted(true)
-        return
-      }
-      const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetId: relative.gedcomId, type: addRelativeType }),
-      })
-      if (!res.ok && res.status !== 409) throw new Error(`HTTP ${res.status}`)
-      resetAddRelativeForm()
-      setMode('view')
-      setDetailVersion(v => v + 1)
-      onSelectRoot?.(person.gedcomId)
+      await submitRelationshipChange(relative.gedcomId)
     } catch (err) {
       console.error('Failed to add relative', err)
       setActionError('Failed to add relative. Please try again.')
@@ -650,7 +679,6 @@ export function PersonDrawer({
     }
     const fullName = `${givenName.trim()} ${familyName.trim()}`
     setIsSubmitting(true)
-    let createdPerson: Person | null = null
     try {
       const createRes = await fetch('/api/persons', {
         method: 'POST',
@@ -659,32 +687,7 @@ export function PersonDrawer({
       })
       if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`)
       const newPerson = await createRes.json() as Person
-      createdPerson = newPerson
-      if (!isAdmin && addRelativeType === 'parent') {
-        const suggestRes = await fetch('/api/suggestions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            changeType: 'ADD_RELATIONSHIP',
-            payload: { type: addRelativeType, targetId: newPerson.gedcomId, childId: person.gedcomId },
-          }),
-        })
-        if (!suggestRes.ok) throw new Error(`HTTP ${suggestRes.status}`)
-        resetAddRelativeForm()
-        setMode('view')
-        setSuggestionSubmitted(true)
-        return
-      }
-      const linkRes = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetId: newPerson.gedcomId, type: addRelativeType }),
-      })
-      if (!linkRes.ok && linkRes.status !== 409) throw new Error(`HTTP ${linkRes.status}`)
-      resetAddRelativeForm()
-      setMode('view')
-      setDetailVersion(v => v + 1)
-      onSelectRoot?.(person.gedcomId)
+      await submitRelationshipChange(newPerson.gedcomId)
     } catch (err) {
       console.error('Failed to create and link relative', err)
       setActionError('Failed to create and link person. Please try again.')
@@ -709,50 +712,43 @@ export function PersonDrawer({
     myChanges.relationshipChanges.length < (detail!.parents.length + detail!.marriages.length)
 
   /**
-   * Deletes the current person. When the person has relationships, calls the
-   * cascade-revert endpoint to atomically remove all connected unions. When
-   * blocked by other-authored connections, shows a "contact an admin" message.
-   * For persons with no relationships, reverts the CREATE_PERSON change directly.
+   * Calls the cascade-revert endpoint to atomically remove the person and all
+   * connected unions. Invoked after the user confirms via the in-app modal.
    */
-  const handleDeletePerson = async () => {
-    if (isSubmitting) return
-    if (!myChanges?.createChange) return
-
-    if (detailHasRelationships) {
-      const connCount = computeCascadeDeleteConnectionCount(
-        myChanges.relationshipChanges,
-        detail!.parents.length + detail!.marriages.length
-      )
-      if (typeof window !== 'undefined' && !window.confirm(`Delete ${person.name || 'this person'} and remove all ${connCount} of their connections? This cannot be undone.`)) return
-      setIsSubmitting(true)
-      try {
-        const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/cascade-revert`, { method: 'POST' })
-        if (res.ok) {
-          setMyChanges(null)
-          const connectedId =
-            detail?.parents[0]?.gedcomId ??
-            detail?.marriages[0]?.spouse?.gedcomId ??
-            null
-          const refreshId = connectedId ?? (rootId && rootId !== person.gedcomId ? rootId : '')
-          onSelectRoot?.(refreshId)
-          onClose()
-        } else if (res.status === 403) {
-          const body = await res.json().catch(() => ({})) as { blockedBy?: Array<{ authorName: string }> }
-          const names = body.blockedBy?.map(b => b.authorName).filter(Boolean).join(', ')
-          setActionError(names
-            ? `Connections added by ${names} cannot be removed. Contact an admin.`
-            : 'Some connections cannot be removed. Contact an admin.')
-        } else {
-          const body = await res.json().catch(() => ({})) as { error?: string }
-          setActionError(body.error ?? 'Failed to delete person. Please try again.')
-        }
-      } finally {
-        setIsSubmitting(false)
+  const performCascadeDelete = async () => {
+    setIsSubmitting(true)
+    try {
+      const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/cascade-revert`, { method: 'POST' })
+      if (res.ok) {
+        setMyChanges(null)
+        const connectedId =
+          detail?.parents[0]?.gedcomId ??
+          detail?.marriages[0]?.spouse?.gedcomId ??
+          null
+        const refreshId = connectedId ?? (rootId && rootId !== person.gedcomId ? rootId : '')
+        onSelectRoot?.(refreshId)
+        onClose()
+      } else if (res.status === 403) {
+        const body = await res.json().catch(() => ({})) as { blockedBy?: Array<{ authorName: string }> }
+        const names = body.blockedBy?.map(b => b.authorName).filter(Boolean).join(', ')
+        setActionError(names
+          ? `Connections added by ${names} cannot be removed. Contact an admin.`
+          : 'Some connections cannot be removed. Contact an admin.')
+      } else {
+        const body = await res.json().catch(() => ({})) as { error?: string }
+        setActionError(body.error ?? 'Failed to delete person. Please try again.')
       }
-      return
+    } finally {
+      setIsSubmitting(false)
     }
+  }
 
-    if (typeof window !== 'undefined' && !window.confirm(`Delete ${person.name || 'this person'}? This cannot be undone.`)) return
+  /**
+   * Reverts the CREATE_PERSON change for a person with no relationships.
+   * Invoked after the user confirms via the in-app modal.
+   */
+  const performSimpleDelete = async () => {
+    if (!myChanges?.createChange) return
     setIsSubmitting(true)
     try {
       const result = await revertChangeRequest(myChanges.createChange.id)
@@ -769,6 +765,41 @@ export function PersonDrawer({
     }
   }
 
+  const openConfirm = (message: string, onConfirm: () => void | Promise<void>) => {
+    if (isSubmitting) return
+    setConfirmAction({
+      message,
+      onConfirm: () => { setConfirmAction(null); void onConfirm() },
+    })
+  }
+
+  /**
+   * Deletes the current person. When the person has relationships, uses the
+   * cascade-revert endpoint to atomically remove all connected unions;
+   * otherwise reverts the CREATE_PERSON change directly. Either path is
+   * gated behind the in-app confirm modal instead of `window.confirm()`.
+   */
+  const handleDeletePerson = () => {
+    if (!myChanges?.createChange) return
+
+    if (detailHasRelationships) {
+      const connCount = computeCascadeDeleteConnectionCount(
+        myChanges.relationshipChanges,
+        detail!.parents.length + detail!.marriages.length
+      )
+      openConfirm(
+        `Delete ${person.name || 'this person'} and remove all ${connCount} of their connections? This cannot be undone.`,
+        performCascadeDelete
+      )
+      return
+    }
+
+    openConfirm(
+      `Delete ${person.name || 'this person'}? This cannot be undone.`,
+      performSimpleDelete
+    )
+  }
+
   /**
    * Removes a marriage/union by reverting the author's ADD_RELATIONSHIP change for it.
    * On success, bumps `detailVersion` so both the person detail and `my-changes`
@@ -776,9 +807,7 @@ export function PersonDrawer({
    * inline via `actionError`.
    * @param {string} changeId - id of the `ADD_RELATIONSHIP` Change to revert
    */
-  const handleRemoveMarriage = async (changeId: string) => {
-    if (isSubmitting) return
-    if (typeof window !== 'undefined' && !window.confirm('Remove this marriage? This cannot be undone.')) return
+  const performRemoveMarriage = async (changeId: string) => {
     setIsSubmitting(true)
     try {
       const result = await revertChangeRequest(changeId)
@@ -791,6 +820,10 @@ export function PersonDrawer({
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleRemoveMarriage = (changeId: string) => {
+    openConfirm('Remove this marriage? This cannot be undone.', () => performRemoveMarriage(changeId))
   }
 
   /**
@@ -822,9 +855,7 @@ export function PersonDrawer({
    * inline via `actionError`.
    * @param {string} changeId - id of the `UPDATE_PERSON` Change to revert
    */
-  const handleRevertEdit = async (changeId: string) => {
-    if (isSubmitting) return
-    if (typeof window !== 'undefined' && !window.confirm('Revert this edit? The previous values will be restored.')) return
+  const performRevertEdit = async (changeId: string) => {
     setIsSubmitting(true)
     try {
       const result = await revertChangeRequest(changeId)
@@ -839,6 +870,11 @@ export function PersonDrawer({
     }
   }
 
+  const handleRevertEdit = (changeId: string) => {
+    openConfirm('Revert this edit? The previous values will be restored.', () => performRevertEdit(changeId))
+  }
+
+  /** Resets all edit fields from the current person/detail. */
   const resetEditForm = () => {
     setEditGivenName(person.givenName ?? '')
     setEditFamilyName(person.surname ?? '')
@@ -970,8 +1006,18 @@ export function PersonDrawer({
     }
   }
 
+  const confirmDialog = (
+    <ConfirmDialog
+      open={!!confirmAction}
+      message={confirmAction?.message ?? ''}
+      onConfirm={() => confirmAction?.onConfirm()}
+      onCancel={() => setConfirmAction(null)}
+    />
+  )
+
+  let content: React.ReactNode
   if (mode === 'edit') {
-    return (
+    content = (
       <DrawerSubView title={`Edit ${person.name || 'person'}`} onBack={() => setMode('view')}>
         <div
           data-testid="person-drawer-edit-form"
@@ -1204,10 +1250,8 @@ export function PersonDrawer({
         </div>
       </DrawerSubView>
     )
-  }
-
-  if (mode === 'add-relative') {
-    return (
+  } else if (mode === 'add-relative') {
+    content = (
       <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => setMode('view')}>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           <div>
@@ -1300,13 +1344,13 @@ export function PersonDrawer({
         </div>
       </DrawerSubView>
     )
-  }
-
-  return (
+  } else {
+    content = (
     <div
       data-testid="person-drawer"
-      className="absolute top-0 right-0 h-full w-80 z-20 bg-[#0a1628]/90 backdrop-blur-xl border-l border-white/10 shadow-[-8px_0_32px_rgba(0,0,0,0.5)] flex flex-col"
+      className={DRAWER_CONTAINER_CLASS}
     >
+      <DrawerDragHandle />
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
         <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
@@ -1329,7 +1373,7 @@ export function PersonDrawer({
             data-testid="person-drawer-edit"
             onClick={openEdit}
             aria-label="Edit person"
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors mr-1"
+            className={`${RESPONSIVE_BUTTON_BASE} mr-1`}
           >
             ✎
           </button>
@@ -1345,7 +1389,7 @@ export function PersonDrawer({
           data-testid="person-drawer-close"
           onClick={onClose}
           aria-label="Close panel"
-          className="w-7 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors text-lg leading-none"
+          className={`${RESPONSIVE_BUTTON_BASE} text-lg leading-none`}
         >
           ×
         </button>
@@ -1597,6 +1641,14 @@ export function PersonDrawer({
         )}
       </div>
     </div>
+    )
+  }
+
+  return (
+    <>
+      {content}
+      {confirmDialog}
+    </>
   )
 }
 
@@ -1634,6 +1686,14 @@ function FlowCanvas({
     initialUrlState.person ? personStub(initialUrlState.person) : null
   )
   const { setViewport } = useReactFlow()
+  /**
+   * Container-measured canvas dimensions from the ReactFlow store. These reflect
+   * the actual `<ReactFlow>` element size (kept current by ReactFlow's internal
+   * ResizeObserver) rather than the full window, so viewport-fit math stays
+   * correct across resize and orientation changes on any device.
+   */
+  const canvasWidth = useStore(selectCanvasWidth)
+  const canvasHeight = useStore(selectCanvasHeight)
   const abortRef = useRef<AbortController | null>(null)
   /** Tracks whether the user has actively changed depth or person, so an untouched initial load never rewrites the URL. */
   const userInteractedRef = useRef(false)
@@ -1761,9 +1821,11 @@ function FlowCanvas({
    */
   useEffect(() => {
     if (!treeBounds || nodes.length === 0) return
+    // Wait until ReactFlow has measured its container before fitting.
+    if (canvasWidth === 0 || canvasHeight === 0) return
     const id = setTimeout(() => {
-      const vw = window.innerWidth
-      const vh = window.innerHeight
+      const vw = canvasWidth
+      const vh = canvasHeight
       const PADDING = 0.15
       const MIN_ZOOM = 0.18
 
@@ -1788,7 +1850,7 @@ function FlowCanvas({
       }
     }, 50)
     return () => clearTimeout(id)
-  }, [treeBounds, nodes, rootId, setViewport])
+  }, [treeBounds, nodes, rootId, setViewport, canvasWidth, canvasHeight])
 
   return (
     <>
@@ -1915,7 +1977,7 @@ export default function FamilyTree() {
 
   if (personsError) {
     return (
-      <div className="relative w-screen h-screen bg-[#050a18] flex items-center justify-center">
+      <div className="relative w-full h-dvh bg-[#050a18] flex items-center justify-center">
         <div className="bg-white/10 backdrop-blur-md border border-red-400/30 rounded-2xl p-6 max-w-sm text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
           <p className="text-red-300 text-sm">{personsError}</p>
         </div>
@@ -1924,7 +1986,7 @@ export default function FamilyTree() {
   }
 
   return (
-    <div className="relative w-screen h-screen bg-[#050a18]">
+    <div className="relative w-full h-dvh bg-[#050a18]">
       <ReactFlowProvider>
         <FlowCanvas rootId={rootId} onSelectRoot={handleSelectRoot} persons={persons} treeVersion={treeVersion} initialUrlState={initialUrlState} />
       </ReactFlowProvider>

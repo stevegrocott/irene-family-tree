@@ -270,6 +270,113 @@ describe('PersonDrawer', () => {
       expect(suggestionCall).toBeUndefined()
     })
 
+    it('non-admin: selecting a parent POSTs to /api/suggestions with ADD_RELATIONSHIP payload', async () => {
+      mockSession('user')
+      const { calls } = installFetchMock()
+      await renderDrawer()
+      await openAddParentAndSelect()
+
+      const suggestionCall = calls.find(c => c.url === '/api/suggestions')
+      expect(suggestionCall).toBeDefined()
+      expect(suggestionCall!.init?.method).toBe('POST')
+      expect(JSON.parse(suggestionCall!.init!.body as string)).toEqual({
+        changeType: 'ADD_RELATIONSHIP',
+        payload: { type: 'parent', targetId: '@I9@', childId: '@I1@' },
+      })
+      const linkCall = calls.find(c => c.url.includes('/relationships') && c.init?.method === 'POST')
+      expect(linkCall).toBeUndefined()
+    })
+
+    it('non-admin: shows "Suggestion submitted" confirmation after POST', async () => {
+      mockSession('user')
+      installFetchMock()
+      await renderDrawer()
+      await openAddParentAndSelect()
+
+      const confirmation = container.querySelector('[data-testid="suggestion-submitted"]')
+      expect(confirmation).not.toBeNull()
+      expect(confirmation!.textContent).toContain('Suggestion submitted')
+    })
+  })
+
+  describe('Add parent via create-and-link — role-based routing', () => {
+    function installCreateFetchMock() {
+      const calls: Array<{ url: string; init?: RequestInit }> = []
+      const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+      const setNativeValue = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype, 'value'
+      )!.set!
+      const fetchMock = jest.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url === `${personPath}/my-changes`) {
+          return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
+        }
+        if (url === '/api/persons' && (init as RequestInit)?.method === 'POST') {
+          return { ok: true, json: async () => ({ gedcomId: '@I99@', name: 'New Parent', sex: 'M', birthYear: null, birthPlace: null }) }
+        }
+        if (url === '/api/suggestions') {
+          return { ok: true, status: 201, json: async () => ({ id: 'new-suggestion-id' }) }
+        }
+        if (url === `${personPath}/relationships`) {
+          return { ok: true, status: 201, json: async () => ({ unionId: '@F_new@' }) }
+        }
+        if (url.startsWith(personPath)) {
+          return { ok: true, json: async () => mockDetailResponse }
+        }
+        return { ok: true, json: async () => ({}) }
+      })
+      global.fetch = fetchMock as unknown as typeof fetch
+      return { calls, setNativeValue }
+    }
+
+    async function openAddParentAndFillCreateForm() {
+      const parentsSection = container.querySelector('[data-testid="person-drawer-parents"]')!
+      const addParentBtn = Array.from(parentsSection.querySelectorAll('button'))
+        .find(b => b.textContent?.includes('Add parent')) as HTMLButtonElement
+      await act(async () => { addParentBtn.click() })
+
+      const setNativeValue = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype, 'value'
+      )!.set!
+
+      const givenNameInput = container.querySelector('#create-given-name') as HTMLInputElement
+      await act(async () => {
+        setNativeValue.call(givenNameInput, 'New')
+        givenNameInput.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+
+      const familyNameInput = container.querySelector('#create-family-name') as HTMLInputElement
+      await act(async () => {
+        setNativeValue.call(familyNameInput, 'Parent')
+        familyNameInput.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+
+      const saveBtn = Array.from(container.querySelectorAll('button'))
+        .find(b => b.textContent?.trim() === 'Save change') as HTMLButtonElement
+      await act(async () => { saveBtn.click() })
+      await act(async () => { await Promise.resolve() })
+    }
+
+    it('non-admin: handleCreateAndLink POSTs to /api/suggestions with ADD_RELATIONSHIP payload', async () => {
+      mockSession('user')
+      const { calls } = installCreateFetchMock()
+      await renderDrawer()
+      await openAddParentAndFillCreateForm()
+
+      const createPersonCall = calls.find(c => c.url === '/api/persons' && c.init?.method === 'POST')
+      expect(createPersonCall).toBeDefined()
+
+      const suggestionCall = calls.find(c => c.url === '/api/suggestions')
+      expect(suggestionCall).toBeDefined()
+      expect(suggestionCall!.init?.method).toBe('POST')
+      expect(JSON.parse(suggestionCall!.init!.body as string)).toEqual({
+        changeType: 'ADD_RELATIONSHIP',
+        payload: { type: 'parent', targetId: '@I99@', childId: '@I1@' },
+      })
+
+      const linkCall = calls.find(c => c.url.includes('/relationships') && c.init?.method === 'POST')
+      expect(linkCall).toBeUndefined()
+    })
   })
 
   describe('Delete confirmation — in-app modal replaces window.confirm', () => {
@@ -405,6 +512,345 @@ describe('PersonDrawer', () => {
       expect(cascadeCall).toBeDefined()
       expect(cascadeCall!.init?.method).toBe('POST')
       expect(onClose).toHaveBeenCalled()
+    })
+  })
+
+  describe('Photo', () => {
+    it('shows the photo in the drawer header when detail includes photoUrl', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ ...mockDetailResponse, photoUrl: 'https://blob.example.com/photo.jpg' }),
+      })
+      await renderDrawer()
+
+      const photo = container.querySelector('[data-testid="person-drawer-photo"]') as HTMLImageElement
+      expect(photo).not.toBeNull()
+      expect(photo.src).toBe('https://blob.example.com/photo.jpg')
+    })
+
+    it('does not render a photo element when no photoUrl is set', async () => {
+      await renderDrawer()
+      expect(container.querySelector('[data-testid="person-drawer-photo"]')).toBeNull()
+    })
+
+    describe('Edit mode upload — role-based routing', () => {
+      function installPhotoFetchMock() {
+        const calls: Array<{ url: string; init?: RequestInit }> = []
+        const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+        const fetchMock = jest.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+          calls.push({ url, init })
+          if (url === `${personPath}/my-changes`) {
+            return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
+          }
+          if (url === `${personPath}/photo`) {
+            return { ok: true, json: async () => ({ url: 'https://blob.example.com/uploaded.jpg' }) }
+          }
+          if (url === '/api/suggestions') {
+            return { ok: true, status: 201, json: async () => ({ id: 'new-suggestion-id' }) }
+          }
+          if (url === personPath && init?.method === 'PATCH') {
+            return { ok: true, json: async () => ({}) }
+          }
+          if (url.startsWith(personPath)) {
+            return { ok: true, json: async () => mockDetailResponse }
+          }
+          return { ok: true, json: async () => ({}) }
+        })
+        global.fetch = fetchMock as unknown as typeof fetch
+        return { calls }
+      }
+
+      async function openEditAndUploadPhoto() {
+        const editBtn = container.querySelector('[data-testid="person-drawer-edit"]') as HTMLButtonElement
+        await act(async () => { editBtn.click() })
+
+        const fileInput = container.querySelector('[data-testid="person-drawer-photo-input"]') as HTMLInputElement
+        const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' })
+        await act(async () => {
+          Object.defineProperty(fileInput, 'files', { value: [file] })
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        await act(async () => { await Promise.resolve() })
+      }
+
+      it('admin: uploading a photo POSTs multipart data then Save PATCHes the returned photoUrl', async () => {
+        mockSession('admin')
+        const { calls } = installPhotoFetchMock()
+        await renderDrawer()
+        await openEditAndUploadPhoto()
+
+        const uploadCall = calls.find(c => c.url === `/api/person/${encodeURIComponent('@I1@')}/photo`)
+        expect(uploadCall).toBeDefined()
+        expect(uploadCall!.init?.method).toBe('POST')
+        expect(uploadCall!.init?.body).toBeInstanceOf(FormData)
+
+        const saveBtn = Array.from(container.querySelectorAll('button'))
+          .find(b => b.textContent?.trim() === 'Save change') as HTMLButtonElement
+        await act(async () => { saveBtn.click() })
+        await act(async () => { await Promise.resolve() })
+
+        const patchCall = calls.find(c => c.url === `/api/person/${encodeURIComponent('@I1@')}` && c.init?.method === 'PATCH')
+        expect(patchCall).toBeDefined()
+        expect(JSON.parse(patchCall!.init!.body as string)).toMatchObject({
+          photoUrl: 'https://blob.example.com/uploaded.jpg',
+        })
+      })
+
+      it('non-admin: uploading a photo then suggesting includes photoUrl in the suggestion payload', async () => {
+        mockSession('user')
+        const { calls } = installPhotoFetchMock()
+        await renderDrawer()
+        await openEditAndUploadPhoto()
+
+        const suggestBtn = container.querySelector('[data-testid="suggest-change"]') as HTMLButtonElement
+        await act(async () => { suggestBtn.click() })
+        await act(async () => { await Promise.resolve() })
+
+        const suggestionCall = calls.find(c => c.url === '/api/suggestions')
+        expect(suggestionCall).toBeDefined()
+        const body = JSON.parse(suggestionCall!.init!.body as string)
+        expect(body.payload).toMatchObject({ photoUrl: 'https://blob.example.com/uploaded.jpg' })
+      })
+
+      it('rejects a non-image file client-side without uploading', async () => {
+        mockSession('admin')
+        const { calls } = installPhotoFetchMock()
+        await renderDrawer()
+
+        const editBtn = container.querySelector('[data-testid="person-drawer-edit"]') as HTMLButtonElement
+        await act(async () => { editBtn.click() })
+
+        const fileInput = container.querySelector('[data-testid="person-drawer-photo-input"]') as HTMLInputElement
+        const file = new File(['data'], 'notes.txt', { type: 'text/plain' })
+        await act(async () => {
+          Object.defineProperty(fileInput, 'files', { value: [file] })
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        await act(async () => { await Promise.resolve() })
+
+        const uploadCall = calls.find(c => c.url === `/api/person/${encodeURIComponent('@I1@')}/photo`)
+        expect(uploadCall).toBeUndefined()
+        const error = container.querySelector('[data-testid="person-drawer-edit-action-error"]')
+        expect(error?.textContent).toBe('Photo must be a JPEG, PNG, or WebP image.')
+      })
+
+      it('rejects a file over 5MB client-side without uploading', async () => {
+        mockSession('admin')
+        const { calls } = installPhotoFetchMock()
+        await renderDrawer()
+
+        const editBtn = container.querySelector('[data-testid="person-drawer-edit"]') as HTMLButtonElement
+        await act(async () => { editBtn.click() })
+
+        const fileInput = container.querySelector('[data-testid="person-drawer-photo-input"]') as HTMLInputElement
+        const file = new File(['data'], 'big.jpg', { type: 'image/jpeg' })
+        Object.defineProperty(file, 'size', { value: 6 * 1024 * 1024 })
+        await act(async () => {
+          Object.defineProperty(fileInput, 'files', { value: [file] })
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        await act(async () => { await Promise.resolve() })
+
+        const uploadCall = calls.find(c => c.url === `/api/person/${encodeURIComponent('@I1@')}/photo`)
+        expect(uploadCall).toBeUndefined()
+        const error = container.querySelector('[data-testid="person-drawer-edit-action-error"]')
+        expect(error?.textContent).toBe('Photo must be 5 MB or smaller.')
+      })
+
+      it('shows an error message when the upload request fails', async () => {
+        mockSession('admin')
+        const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+        const fetchMock = jest.fn().mockImplementation(async (url: string) => {
+          if (url === `${personPath}/my-changes`) {
+            return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
+          }
+          if (url === `${personPath}/photo`) {
+            return { ok: false, status: 400, json: async () => ({ error: 'Bad request' }) }
+          }
+          if (url.startsWith(personPath)) {
+            return { ok: true, json: async () => mockDetailResponse }
+          }
+          return { ok: true, json: async () => ({}) }
+        })
+        global.fetch = fetchMock as unknown as typeof fetch
+        await renderDrawer()
+
+        const editBtn = container.querySelector('[data-testid="person-drawer-edit"]') as HTMLButtonElement
+        await act(async () => { editBtn.click() })
+
+        const fileInput = container.querySelector('[data-testid="person-drawer-photo-input"]') as HTMLInputElement
+        const file = new File(['data'], 'photo.jpg', { type: 'image/jpeg' })
+        await act(async () => {
+          Object.defineProperty(fileInput, 'files', { value: [file] })
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        await act(async () => { await Promise.resolve() })
+
+        const error = container.querySelector('[data-testid="person-drawer-edit-action-error"]')
+        expect(error?.textContent).toBe('Failed to upload photo. Please try again.')
+      })
+    })
+  })
+
+  describe('Relationship calculator', () => {
+    const rootId = '@I50@'
+    const rootName = 'Root Person'
+
+    function installRelationshipFetchMock(
+      relationshipResponse?: () => Promise<{ ok: boolean; status?: number; json: () => Promise<unknown> }>
+    ) {
+      const calls: Array<{ url: string }> = []
+      const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+      const fetchMock = jest.fn().mockImplementation(async (url: string) => {
+        calls.push({ url })
+        if (url.startsWith('/api/relationship')) {
+          if (relationshipResponse) return relationshipResponse()
+          return { ok: true, json: async () => ({ from: rootId, to: '@I1@', steps: [{ type: 'parent', name: 'John Smith', sex: 'M' }], label: 'father' }) }
+        }
+        if (url === `${personPath}/my-changes`) {
+          return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
+        }
+        if (url.startsWith(personPath)) {
+          return { ok: true, json: async () => mockDetailResponse }
+        }
+        return { ok: true, json: async () => ({}) }
+      })
+      global.fetch = fetchMock as unknown as typeof fetch
+      return { calls }
+    }
+
+    async function renderDrawerWithRoot(id = rootId, name = rootName) {
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <PersonDrawer
+            person={basePerson}
+            onClose={jest.fn()}
+            onReroot={jest.fn()}
+            onSelectPerson={jest.fn()}
+            rootId={id}
+            rootName={name}
+          />
+        )
+      })
+      await act(async () => { await Promise.resolve() })
+    }
+
+    it('does not render the control when rootId is not provided', async () => {
+      await renderDrawer()
+      expect(container.querySelector('[data-testid="person-drawer-relationship"]')).toBeNull()
+    })
+
+    it('does not render the control when the selected person is the root', async () => {
+      installRelationshipFetchMock()
+      await renderDrawerWithRoot('@I1@', 'John Smith')
+      expect(container.querySelector('[data-testid="person-drawer-relationship"]')).toBeNull()
+    })
+
+    it('shows a "How related to <root>?" button for a non-root person', async () => {
+      installRelationshipFetchMock()
+      await renderDrawerWithRoot()
+      const button = container.querySelector('[data-testid="person-drawer-relationship-button"]')
+      expect(button?.textContent).toBe(`How related to ${rootName}?`)
+    })
+
+    it('fetches from the root to the selected person and displays the kinship label on click', async () => {
+      const { calls } = installRelationshipFetchMock()
+      await renderDrawerWithRoot()
+
+      const button = container.querySelector('[data-testid="person-drawer-relationship-button"]') as HTMLButtonElement
+      await act(async () => { button.click() })
+      await act(async () => { await Promise.resolve() })
+
+      const relCall = calls.find(c => c.url.startsWith('/api/relationship'))
+      expect(relCall?.url).toBe(`/api/relationship?from=${encodeURIComponent(rootId)}&to=${encodeURIComponent('@I1@')}`)
+
+      const result = container.querySelector('[data-testid="person-drawer-relationship-result"]')
+      expect(result?.textContent).toContain('father')
+      expect(container.querySelector('[data-testid="person-drawer-relationship-button"]')).toBeNull()
+    })
+
+    it('shows a loading state while the request is in flight', async () => {
+      let resolveFetch: (value: { ok: boolean; json: () => Promise<unknown> }) => void = () => {}
+      installRelationshipFetchMock(() => new Promise(resolve => { resolveFetch = resolve }))
+
+      await renderDrawerWithRoot()
+
+      const button = container.querySelector('[data-testid="person-drawer-relationship-button"]') as HTMLButtonElement
+      await act(async () => { button.click() })
+
+      expect(button.textContent).toBe('Calculating…')
+      expect(button.disabled).toBe(true)
+
+      await act(async () => {
+        resolveFetch({ ok: true, json: async () => ({ label: 'father' }) })
+        await Promise.resolve()
+      })
+    })
+
+    it('shows an error message returned by the API when the request fails', async () => {
+      installRelationshipFetchMock(async () => ({
+        ok: false,
+        status: 404,
+        json: async () => ({ error: 'No relationship path found within 20 hops' }),
+      }))
+      await renderDrawerWithRoot()
+
+      const button = container.querySelector('[data-testid="person-drawer-relationship-button"]') as HTMLButtonElement
+      await act(async () => { button.click() })
+      await act(async () => { await Promise.resolve() })
+
+      const error = container.querySelector('[data-testid="person-drawer-relationship-error"]')
+      expect(error?.textContent).toBe('No relationship path found within 20 hops')
+    })
+
+    it('shows a generic error message when the request throws', async () => {
+      installRelationshipFetchMock(async () => { throw new Error('Network error') })
+      jest.spyOn(console, 'error').mockImplementation(() => {})
+
+      await renderDrawerWithRoot()
+
+      const button = container.querySelector('[data-testid="person-drawer-relationship-button"]') as HTMLButtonElement
+      await act(async () => { button.click() })
+      await act(async () => { await Promise.resolve() })
+
+      const error = container.querySelector('[data-testid="person-drawer-relationship-error"]')
+      expect(error?.textContent).toBe('Failed to calculate relationship. Please try again.')
+    })
+  })
+
+  describe('Copy link button', () => {
+    it('is not rendered when getShareUrl is not provided', async () => {
+      await renderDrawer()
+      expect(container.querySelector('[data-testid="person-drawer-copy-link"]')).toBeNull()
+    })
+
+    it('copies the URL from getShareUrl and shows a transient "Copied!" confirmation', async () => {
+      const writeText = jest.fn().mockResolvedValue(undefined)
+      Object.assign(navigator, { clipboard: { writeText } })
+      const getShareUrl = jest.fn().mockReturnValue('https://example.com/?root=%40I1%40')
+
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <PersonDrawer
+            person={basePerson}
+            onClose={jest.fn()}
+            onReroot={jest.fn()}
+            onSelectPerson={jest.fn()}
+            getShareUrl={getShareUrl}
+          />
+        )
+      })
+
+      const copyBtn = container.querySelector('[data-testid="person-drawer-copy-link"]') as HTMLButtonElement
+      expect(copyBtn).not.toBeNull()
+
+      await act(async () => { copyBtn.click() })
+      await act(async () => { await Promise.resolve() })
+
+      expect(writeText).toHaveBeenCalledWith('https://example.com/?root=%40I1%40')
+      expect(copyBtn.textContent).toBe('Copied!')
     })
   })
 })

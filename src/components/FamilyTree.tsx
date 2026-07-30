@@ -9,6 +9,8 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import type React from 'react'
+import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession, signIn } from 'next-auth/react'
 import ReactFlow, {
   Background,
@@ -31,8 +33,16 @@ import SearchBar from '@/components/SearchBar'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { applyDagreLayout } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
+import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
 import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE } from '@/constants/tree'
+import { APP_NAME } from '@/constants/branding'
+import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
+
+/** Builds a minimal `PersonData` stub for a person id not present in the current tree view. */
+function personStub(gedcomId: string): PersonData {
+  return { gedcomId, name: '', sex: 'U', birthYear: null, deathYear: null, birthPlace: null, deathPlace: null, occupation: null, notes: null }
+}
 
 /**
  * Minimal person summary used for the search bar and root selection.
@@ -57,8 +67,58 @@ const defaultEdgeOptions = {
 }
 
 /**
- * Floating toolbar displaying tree statistics and depth control.
- * Shows ancestor/descendant counts and allows users to adjust the viewing depth (hops).
+ * Button that copies a shareable tree-viewer URL to the clipboard via
+ * `navigator.clipboard.writeText`, showing a transient "Copied!" or
+ * "Copy failed" label for ~2s before reverting to the resting label.
+ *
+ * @param {Object} props - Component props
+ * @param {Function} props.getUrl - Lazily builds the canonical URL to copy, evaluated on click
+ * @param {string} props.testId - `data-testid` applied to the button
+ * @param {string} [props.className] - Additional classes for styling
+ * @returns {React.ReactElement} Rendered copy-link button
+ */
+function CopyLinkButton({
+  getUrl,
+  testId,
+  className = '',
+}: {
+  getUrl: () => string
+  testId: string
+  className?: string
+}) {
+  const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+
+  const handleClick = async () => {
+    try {
+      await navigator.clipboard.writeText(getUrl())
+      setStatus('copied')
+    } catch {
+      setStatus('failed')
+    }
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => setStatus('idle'), 2000)
+  }
+
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      onClick={handleClick}
+      aria-label="Copy shareable link"
+      className={className}
+    >
+      {status === 'copied' ? 'Copied!' : status === 'failed' ? 'Copy failed' : 'Copy link'}
+    </button>
+  )
+}
+
+/**
+ * Floating toolbar displaying the app name, tree statistics, and depth control.
+ * Shows a small app title followed by ancestor/descendant counts and allows users
+ * to adjust the viewing depth (hops).
  *
  * @param {Object} props - Component props
  * @param {Node[]} props.nodes - All nodes in the current tree visualization
@@ -73,12 +133,14 @@ export function Toolbar({
   hops,
   onHopsChange,
   sliderMax = MAX_HOPS,
+  getShareUrl,
 }: {
   nodes: Node[]
   rootName: string
   hops: number
   onHopsChange: (hops: number) => void
   sliderMax?: number
+  getShareUrl?: () => string
 }) {
   const ancestorGens = nodes.filter(n => n.type === 'person').map(n => (n.data as PersonData).generation).filter((g): g is number => typeof g === 'number' && g < 0)
   const ancestors = ancestorGens.length > 0 ? Math.abs(Math.min(...ancestorGens)) : 0
@@ -91,6 +153,12 @@ export function Toolbar({
       data-testid="toolbar"
       className="absolute bottom-4 inset-x-4 z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-auto sm:flex-nowrap sm:gap-4 sm:py-2"
     >
+      <span
+        data-testid="toolbar-app-name"
+        className="text-xs text-white font-semibold select-none pr-4 border-r border-white/20 tracking-wide"
+      >
+        {APP_NAME}
+      </span>
       <span data-testid="toolbar-person-count" className="text-xs text-white/60 select-none">
         <span className="text-white font-medium">{personCount}</span> people
       </span>
@@ -113,6 +181,20 @@ export function Toolbar({
         className="w-full h-11 sm:w-24 sm:h-auto"
         aria-label="Depth"
       />
+      {getShareUrl && (
+        <CopyLinkButton
+          getUrl={getShareUrl}
+          testId="toolbar-copy-link"
+          className="text-xs text-white/60 hover:text-white select-none pl-4 border-l border-white/20 transition-colors"
+        />
+      )}
+      <Link
+        href="/stats"
+        data-testid="toolbar-stats-link"
+        className="text-xs text-white/60 hover:text-white select-none pl-4 border-l border-white/20 transition-colors"
+      >
+        Stats
+      </Link>
     </div>
   )
 }
@@ -178,6 +260,77 @@ function DrawerDragHandle() {
   )
 }
 
+const TIMELINE_ICONS: Record<TimelineEvent['type'], string> = {
+  birth: '🎂',
+  marriage: '💍',
+  child: '👶',
+  death: '⚰️',
+}
+
+/**
+ * Renders a single chronological entry in the Timeline section: an icon,
+ * a label describing the event (with a clickable person link for marriages
+ * and child births), the place, and — for deaths — age at death.
+ */
+function TimelineEntry({ event, onSelect }: { event: TimelineEvent; onSelect: (id: string) => void }) {
+  let label: React.ReactNode
+  switch (event.type) {
+    case 'birth':
+      label = 'Born'
+      break
+    case 'marriage':
+      label = (
+        <>
+          Married{' '}
+          {event.person ? (
+            <button
+              type="button"
+              onClick={() => onSelect(event.person!.gedcomId)}
+              className="text-indigo-400 hover:text-indigo-300 underline transition-colors"
+            >
+              {event.person.name || 'Unknown'}
+            </button>
+          ) : (
+            'Unknown'
+          )}
+        </>
+      )
+      break
+    case 'child':
+      label = (
+        <>
+          Child born:{' '}
+          {event.person ? (
+            <button
+              type="button"
+              onClick={() => onSelect(event.person!.gedcomId)}
+              className="text-indigo-400 hover:text-indigo-300 underline transition-colors"
+            >
+              {event.person.name || 'Unknown'}
+            </button>
+          ) : (
+            'Unknown'
+          )}
+        </>
+      )
+      break
+    case 'death':
+      label = `Died${event.age !== null ? `, aged ${event.age}` : ''}`
+      break
+  }
+
+  return (
+    <li className="flex items-start gap-2 text-sm text-white/80">
+      <span aria-hidden="true">{TIMELINE_ICONS[event.type]}</span>
+      <span>
+        <span className="text-slate-500 text-xs mr-2">{event.dateUnknown ? '—' : event.year}</span>
+        {label}
+        {event.place && <span className="text-slate-500 text-xs"> · {event.place}</span>}
+      </span>
+    </li>
+  )
+}
+
 /**
  * A shared header/container for sub-views within the PersonDrawer.
  * Provides a back button and title for nested views like edit and add-relative modes.
@@ -237,6 +390,7 @@ const selectCanvasHeight = (s: ReactFlowState) => s.height
  * @param {Function} onReroot - Called with person's gedcomId to re-root the tree
  * @param {Function} onSelectPerson - Called with gedcomId to open another person's drawer
  * @param {Function} [onSelectRoot] - Called to refresh the tree after adding a relative
+ * @param {string} [rootName] - Display name of the current tree root, used to label the relationship calculator
  */
 export function PersonDrawer({
   person,
@@ -245,6 +399,8 @@ export function PersonDrawer({
   onSelectPerson,
   onSelectRoot,
   rootId,
+  rootName,
+  getShareUrl,
 }: {
   person: PersonData
   onClose: () => void
@@ -252,12 +408,15 @@ export function PersonDrawer({
   onSelectPerson: (id: string) => void
   onSelectRoot?: (id: string) => void
   rootId?: string
+  rootName?: string
+  getShareUrl?: () => string
 }) {
   const { data: session, status } = useSession()
   const isSignedIn = status === 'authenticated'
   const isAdmin = session?.user?.role === 'admin'
 
   const dates = formatLifespan(person)
+  const rootLabel = rootName || 'root'
   const [detail, setDetail] = useState<PersonDetailResponse | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailVersion, setDetailVersion] = useState(0)
@@ -284,6 +443,9 @@ export function PersonDrawer({
   const [editDeathPlace, setEditDeathPlace] = useState('')
   const [editOccupation, setEditOccupation] = useState('')
   const [editNotes, setEditNotes] = useState('')
+  const [editPhotoUrl, setEditPhotoUrl] = useState<string | null>(null)
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const photoUploadAbortRef = useRef<AbortController | null>(null)
   const [showEditBirthPlace, setShowEditBirthPlace] = useState(false)
   const [showEditDiedYear, setShowEditDiedYear] = useState(false)
   const [showEditDeathPlace, setShowEditDeathPlace] = useState(false)
@@ -293,6 +455,15 @@ export function PersonDrawer({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [pendingRemoveParentId, setPendingRemoveParentId] = useState<string | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ message: string; onConfirm: () => void } | null>(null)
+  const [suggestionSubmitted, setSuggestionSubmitted] = useState(false)
+
+  const [relationship, setRelationship] = useState<
+    | { status: 'idle' }
+    | { status: 'loading' }
+    | { status: 'error'; message: string }
+    | { status: 'success'; label: string }
+  >({ status: 'idle' })
+  const relationshipAbortRef = useRef<AbortController | null>(null)
 
   const [myChanges, setMyChanges] = useState<{
     createChange: { id: string; changeType: string; targetId: string; newValue: Record<string, unknown>; appliedAt: string } | null
@@ -346,6 +517,45 @@ export function PersonDrawer({
       })
     return () => { cancelled = true; ctrl.abort() }
   }, [person.gedcomId, detailVersion])
+
+  // Aborts any in-flight photo upload when the drawer switches to a different
+  // person, so a stale response can't overwrite the new person's edit form.
+  useEffect(() => {
+    return () => { photoUploadAbortRef.current?.abort() }
+  }, [person.gedcomId])
+
+  // Relationship calculation is on-demand (triggered by the button below), so
+  // reset any previous result whenever the selected person or root changes, and
+  // abort any in-flight request on that change or on unmount.
+  useEffect(() => {
+    setRelationship({ status: 'idle' })
+    return () => { relationshipAbortRef.current?.abort() }
+  }, [person.gedcomId, rootId])
+
+  const handleCalculateRelationship = async () => {
+    if (!rootId) return
+    relationshipAbortRef.current?.abort()
+    const abortCtrl = new AbortController()
+    relationshipAbortRef.current = abortCtrl
+    setRelationship({ status: 'loading' })
+    try {
+      const res = await fetch(
+        `/api/relationship?from=${encodeURIComponent(rootId)}&to=${encodeURIComponent(person.gedcomId)}`,
+        { signal: abortCtrl.signal }
+      )
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const message = typeof body?.error === 'string' ? body.error : 'Failed to calculate relationship. Please try again.'
+        setRelationship({ status: 'error', message })
+        return
+      }
+      setRelationship({ status: 'success', label: body.label })
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return
+      console.error('Failed to calculate relationship', err)
+      setRelationship({ status: 'error', message: 'Failed to calculate relationship. Please try again.' })
+    }
+  }
 
   /**
    * Revert a change via POST /api/changes/[id]/revert.
@@ -402,11 +612,33 @@ export function PersonDrawer({
     setAddRelativeType(type)
     resetAddRelativeForm()
     setActionError(null)
+    setSuggestionSubmitted(false)
     setMode('add-relative')
   }
 
-  /** Submit a relationship change by linking the target person via the relationships endpoint. */
+  /**
+   * Submit a relationship change for the target person.
+   *
+   * Non-admin users adding a *parent* route through `/api/suggestions` for
+   * moderation; every other case (and every admin case) links directly via the
+   * relationships endpoint and goes live immediately.
+   */
   const submitRelationshipChange = async (targetId: string) => {
+    if (!isAdmin && addRelativeType === 'parent') {
+      const suggestRes = await fetch('/api/suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          changeType: 'ADD_RELATIONSHIP',
+          payload: { type: addRelativeType, targetId, childId: person.gedcomId },
+        }),
+      })
+      if (!suggestRes.ok) throw new Error(`HTTP ${suggestRes.status}`)
+      resetAddRelativeForm()
+      setMode('view')
+      setSuggestionSubmitted(true)
+      return
+    }
     const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -642,8 +874,8 @@ export function PersonDrawer({
     openConfirm('Revert this edit? The previous values will be restored.', () => performRevertEdit(changeId))
   }
 
-  /** Opens the edit sub-view, initializing all edit fields from current person/detail. */
-  const openEdit = () => {
+  /** Resets all edit fields from the current person/detail. */
+  const resetEditForm = () => {
     setEditGivenName(person.givenName ?? '')
     setEditFamilyName(person.surname ?? '')
     setEditSex(person.sex ?? 'U')
@@ -653,33 +885,66 @@ export function PersonDrawer({
     setEditDeathPlace(person.deathPlace ?? '')
     setEditOccupation(person.occupation ?? '')
     setEditNotes(person.notes ?? '')
+    setEditPhotoUrl(detail?.photoUrl ?? person.photoUrl ?? null)
     setShowEditBirthPlace(!!(detail?.birthPlace))
     setShowEditDiedYear(!!(person.deathYear))
     setShowEditDeathPlace(!!(person.deathPlace))
     setShowEditOccupation(!!(person.occupation))
     setShowEditNotes(!!(person.notes))
     setActionError(null)
+  }
+
+  /** Opens the edit sub-view, initializing all edit fields from current person/detail. */
+  const openEdit = () => {
+    resetEditForm()
     setMode('edit')
   }
 
   /** Discards pending edits and returns to view mode. */
   const handleCancelEdit = () => {
-    setEditGivenName(person.givenName ?? '')
-    setEditFamilyName(person.surname ?? '')
-    setEditSex(person.sex ?? 'U')
-    setEditBirthYear(person.birthYear ?? '')
-    setEditBirthPlace(detail?.birthPlace ?? '')
-    setEditDiedYear(person.deathYear ?? '')
-    setEditDeathPlace(person.deathPlace ?? '')
-    setEditOccupation(person.occupation ?? '')
-    setEditNotes(person.notes ?? '')
-    setShowEditBirthPlace(!!(detail?.birthPlace))
-    setShowEditDiedYear(!!(person.deathYear))
-    setShowEditDeathPlace(!!(person.deathPlace))
-    setShowEditOccupation(!!(person.occupation))
-    setShowEditNotes(!!(person.notes))
-    setActionError(null)
+    resetEditForm()
     setMode('view')
+  }
+
+  /**
+   * Uploads the selected file to the person's photo route and stores the
+   * returned URL in `editPhotoUrl`, to be submitted via save/suggest.
+   */
+  const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setActionError('Photo must be a JPEG, PNG, or WebP image.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setActionError('Photo must be 5 MB or smaller.')
+      return
+    }
+    photoUploadAbortRef.current?.abort()
+    const ctrl = new AbortController()
+    photoUploadAbortRef.current = ctrl
+    setPhotoUploading(true)
+    setActionError(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/photo`, {
+        method: 'POST',
+        body: formData,
+        signal: ctrl.signal,
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json() as { url: string }
+      setEditPhotoUrl(data.url)
+    } catch (err) {
+      if (ctrl.signal.aborted) return
+      console.error('Failed to upload photo', err)
+      setActionError('Failed to upload photo. Please try again.')
+    } finally {
+      if (!ctrl.signal.aborted) setPhotoUploading(false)
+    }
   }
 
   /**
@@ -700,6 +965,7 @@ export function PersonDrawer({
           deathPlace: showEditDeathPlace ? (editDeathPlace.trim() || null) : null,
           occupation: showEditOccupation ? (editOccupation.trim() || null) : null,
           notes: showEditNotes ? (editNotes.trim() || null) : null,
+          photoUrl: editPhotoUrl,
         }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -728,6 +994,7 @@ export function PersonDrawer({
             deathPlace: showEditDeathPlace ? (editDeathPlace.trim() || null) : null,
             occupation: showEditOccupation ? (editOccupation.trim() || null) : null,
             notes: showEditNotes ? (editNotes.trim() || null) : null,
+            photoUrl: editPhotoUrl,
           },
         }),
       })
@@ -775,6 +1042,38 @@ export function PersonDrawer({
               onChange={e => setEditFamilyName(e.target.value)}
               className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
             />
+          </div>
+          <div>
+            <label htmlFor="edit-photo" className="text-xs text-slate-400 block mb-1">Photo</label>
+            <div className="flex items-center gap-3">
+              {editPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={editPhotoUrl}
+                  alt=""
+                  aria-hidden="true"
+                  data-testid="person-drawer-edit-photo-preview"
+                  className="w-12 h-12 rounded-full object-cover border border-white/20 flex-shrink-0"
+                />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-[10px] text-white/40 flex-shrink-0"
+                >
+                  No photo
+                </span>
+              )}
+              <input
+                id="edit-photo"
+                data-testid="person-drawer-photo-input"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handlePhotoFileChange}
+                disabled={photoUploading}
+                className="text-xs text-white/70 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:bg-white/10 file:text-white/80 file:text-xs hover:file:bg-white/20 disabled:opacity-50"
+              />
+            </div>
+            {photoUploading && <p className="text-xs text-slate-400 mt-1">Uploading…</p>}
           </div>
           <div>
             <p className="text-xs text-slate-400 mb-1">Sex</p>
@@ -932,7 +1231,8 @@ export function PersonDrawer({
             {isAdmin ? (
               <button
                 onClick={handleSaveEdit}
-                className="flex-1 py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+                disabled={photoUploading}
+                className="flex-1 py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
               >
                 Save change
               </button>
@@ -940,7 +1240,8 @@ export function PersonDrawer({
               <button
                 data-testid="suggest-change"
                 onClick={handleSuggestChange}
-                className="flex-1 py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+                disabled={photoUploading}
+                className="flex-1 py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
               >
                 Suggest this change
               </button>
@@ -1052,9 +1353,21 @@ export function PersonDrawer({
       <DrawerDragHandle />
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-        <h2 className="text-white font-semibold text-base truncate flex-1 mr-2">
-          {person.name || <span className="text-slate-500 italic">Unknown</span>}
-        </h2>
+        <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+          {(detail?.photoUrl ?? person.photoUrl) && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={(detail?.photoUrl ?? person.photoUrl) as string}
+              alt=""
+              aria-hidden="true"
+              data-testid="person-drawer-photo"
+              className="w-9 h-9 rounded-full object-cover border border-white/20 flex-shrink-0"
+            />
+          )}
+          <h2 className="text-white font-semibold text-base truncate">
+            {person.name || <span className="text-slate-500 italic">Unknown</span>}
+          </h2>
+        </div>
         {isSignedIn && (
           <button
             data-testid="person-drawer-edit"
@@ -1064,6 +1377,13 @@ export function PersonDrawer({
           >
             ✎
           </button>
+        )}
+        {getShareUrl && (
+          <CopyLinkButton
+            getUrl={getShareUrl}
+            testId="person-drawer-copy-link"
+            className="px-2 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors mr-1 text-[10px] whitespace-nowrap"
+          />
         )}
         <button
           data-testid="person-drawer-close"
@@ -1080,7 +1400,38 @@ export function PersonDrawer({
         {dates && (
           <p className="text-slate-400 text-sm">{dates}</p>
         )}
-        <p className="text-slate-500 text-xs font-mono">{person.gedcomId}</p>
+        <p data-testid="person-drawer-gedcom-id" className="text-slate-500 text-xs font-mono">{person.gedcomId}</p>
+
+        {rootId && person.gedcomId !== rootId && (
+          <div data-testid="person-drawer-relationship">
+            {relationship.status !== 'success' && (
+              <button
+                type="button"
+                data-testid="person-drawer-relationship-button"
+                onClick={handleCalculateRelationship}
+                disabled={relationship.status === 'loading'}
+                className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors disabled:opacity-50"
+              >
+                {relationship.status === 'loading' ? 'Calculating…' : `How related to ${rootLabel}?`}
+              </button>
+            )}
+            {relationship.status === 'error' && (
+              <p data-testid="person-drawer-relationship-error" className="text-red-400 text-xs mt-1">
+                {relationship.message}
+              </p>
+            )}
+            {relationship.status === 'success' && (
+              <p data-testid="person-drawer-relationship-result" className="text-slate-300 text-xs">
+                {person.name || 'This person'} is {rootLabel}&rsquo;s{' '}
+                <span className="font-semibold text-white">{relationship.label}</span>.
+              </p>
+            )}
+          </div>
+        )}
+
+        {suggestionSubmitted && (
+          <p data-testid="suggestion-submitted" className="text-emerald-400 text-xs">Suggestion submitted for admin review.</p>
+        )}
 
         {detailLoading && (
           <div className="flex items-center justify-center py-6">
@@ -1233,6 +1584,22 @@ export function PersonDrawer({
                 </div>
               )}
             </section>
+
+            <section data-testid="person-drawer-timeline">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Timeline</h3>
+              {(() => {
+                const events = buildTimeline(detail)
+                return events.length === 0 ? (
+                  <p className="text-slate-600 text-xs italic">No events recorded</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {events.map((event, i) => (
+                      <TimelineEntry key={i} event={event} onSelect={onSelectPerson} />
+                    ))}
+                  </ul>
+                )
+              })()}
+            </section>
           </>
         )}
       </div>
@@ -1299,20 +1666,25 @@ function FlowCanvas({
   onSelectRoot,
   persons,
   treeVersion,
+  initialUrlState,
 }: {
   rootId: string
   onSelectRoot: (id: string) => void
   persons: Person[]
   treeVersion: number
+  initialUrlState: ReturnType<typeof parseTreeUrlState>
 }) {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [treeBounds, setTreeBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [hops, setHops] = useState(DEFAULT_HOPS)
+  const router = useRouter()
+  const [hops, setHops] = useState(() => initialUrlState.hops ?? DEFAULT_HOPS)
   const [actualMaxDepth, setActualMaxDepth] = useState<number>(MAX_HOPS)
-  const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(null)
+  const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(() =>
+    initialUrlState.person ? personStub(initialUrlState.person) : null
+  )
   const { setViewport } = useReactFlow()
   /**
    * Container-measured canvas dimensions from the ReactFlow store. These reflect
@@ -1323,12 +1695,50 @@ function FlowCanvas({
   const canvasWidth = useStore(selectCanvasWidth)
   const canvasHeight = useStore(selectCanvasHeight)
   const abortRef = useRef<AbortController | null>(null)
+  /** Tracks whether the user has actively changed depth or person, so an untouched initial load never rewrites the URL. */
+  const userInteractedRef = useRef(false)
 
   /** Display name of the current root person, derived from `nodes` and `rootId`. */
   const rootName = useMemo(() => {
     const rootNode = nodes.find(n => n.type === 'person' && (n.data as PersonData).gedcomId === rootId)
     return rootNode ? (rootNode.data as PersonData).name ?? '' : ''
   }, [nodes, rootId])
+
+  /** Updates `selectedPerson`, marking the viewer state as user-touched so URL sync activates. */
+  const selectPerson = useCallback((person: PersonData | null) => {
+    userInteractedRef.current = true
+    setSelectedPerson(person)
+  }, [])
+
+  /** Updates `hops`, marking the viewer state as user-touched so URL sync activates. */
+  const handleHopsChange = useCallback((next: number) => {
+    userInteractedRef.current = true
+    setHops(next)
+  }, [])
+
+  /** Builds the canonical relative URL path for the current root/person/hops state. */
+  const buildPath = useCallback(
+    () => buildTreeUrlPath({ root: rootId || null, person: selectedPerson?.gedcomId ?? null, hops }),
+    [rootId, selectedPerson, hops]
+  )
+
+  /** Builds the canonical shareable URL for the current root/person/hops state. */
+  const buildShareUrl = useCallback(() => {
+    const path = buildPath()
+    return typeof window !== 'undefined' ? `${window.location.origin}${path}` : path
+  }, [buildPath])
+
+  /**
+   * Keeps the URL in sync with viewer state (root, person, hops) via `router.replace`
+   * so re-rooting, depth changes, and person selection are shareable without adding
+   * history entries or scrolling. Skipped until the user has actually interacted (or
+   * the root has changed via {@link onSelectRoot}) so an untouched initial load —
+   * including one that arrived via a deep link — never rewrites the URL.
+   */
+  useEffect(() => {
+    if (!userInteractedRef.current && treeVersion === 0) return
+    router.replace(buildPath(), { scroll: false })
+  }, [buildPath, treeVersion, router])
 
   /**
    * Opens the person drawer when a person node is clicked.
@@ -1338,9 +1748,9 @@ function FlowCanvas({
    */
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     if (node.type === 'person') {
-      setSelectedPerson(node.data as PersonData)
+      selectPerson(node.data as PersonData)
     }
-  }, [])
+  }, [selectPerson])
 
   /**
    * Fetches tree data for the current `rootId` and `hops` depth, applies dagre
@@ -1449,8 +1859,9 @@ function FlowCanvas({
         nodes={nodes}
         rootName={rootName}
         hops={hops}
-        onHopsChange={setHops}
+        onHopsChange={handleHopsChange}
         sliderMax={actualMaxDepth}
+        getShareUrl={buildShareUrl}
       />
       {/* Loading/error overlays — ReactFlow stays mounted so its viewport is always initialized */}
       {loading && (
@@ -1482,19 +1893,21 @@ function FlowCanvas({
       {selectedPerson && (
         <PersonDrawer
           person={selectedPerson}
-          onClose={() => setSelectedPerson(null)}
-          onReroot={(id) => { onSelectRoot(id); setSelectedPerson(null) }}
+          onClose={() => selectPerson(null)}
+          onReroot={(id) => { onSelectRoot(id); selectPerson(null) }}
           onSelectPerson={(id) => {
             const node = nodes.find(n => n.type === 'person' && (n.data as PersonData).gedcomId === id)
             if (node) {
-              setSelectedPerson(node.data as PersonData)
+              selectPerson(node.data as PersonData)
             } else {
               // Person may not be in the current tree view — create minimal stub so drawer can fetch detail
-              setSelectedPerson({ gedcomId: id, name: '', sex: 'U', birthYear: null, deathYear: null, birthPlace: null, deathPlace: null, occupation: null, notes: null })
+              selectPerson(personStub(id))
             }
           }}
           onSelectRoot={onSelectRoot}
           rootId={rootId}
+          rootName={rootName}
+          getShareUrl={buildShareUrl}
         />
       )}
     </>
@@ -1516,6 +1929,10 @@ export default function FamilyTree() {
   const [personsError, setPersonsError] = useState<string | null>(null)
   const [treeVersion, setTreeVersion] = useState(0)
   const [personsVersion, setPersonsVersion] = useState(0)
+  const searchParams = useSearchParams()
+  // Captured once on mount so later URL updates (from our own router.replace calls) don't
+  // re-trigger root resolution — only the URL present on initial load takes precedence.
+  const [initialUrlState] = useState(() => parseTreeUrlState(searchParams))
 
   /**
    * Updates the active root person and persists the selection to localStorage
@@ -1543,9 +1960,11 @@ export default function FamilyTree() {
       })
       .then((data: Person[]) => {
         setPersons(data)
+        // Precedence: URL root param > localStorage > default person > first named > first available.
+        const urlPerson = initialUrlState.root ? data.find(p => p.gedcomId === initialUrlState.root) : null
         const storedId = typeof window !== 'undefined' ? localStorage.getItem(TREE_ROOT_STORAGE_KEY) : null
         const storedPerson = storedId ? data.find(p => p.gedcomId === storedId) : null
-        const defaultPerson = storedPerson ?? data.find(p => p.gedcomId === DEFAULT_ROOT_GEDCOM_ID) ?? data.find(p => p.name?.trim()) ?? data[0]
+        const defaultPerson = urlPerson ?? storedPerson ?? data.find(p => p.gedcomId === DEFAULT_ROOT_GEDCOM_ID) ?? data.find(p => p.name?.trim()) ?? data[0]
         if (defaultPerson) setRootId(defaultPerson.gedcomId)
       })
       .catch((err) => {
@@ -1554,7 +1973,7 @@ export default function FamilyTree() {
         setPersonsError('Could not load family members. Please check your database connection and refresh.')
       })
     return () => ctrl.abort()
-  }, [personsVersion])
+  }, [personsVersion, initialUrlState])
 
   if (personsError) {
     return (
@@ -1569,7 +1988,7 @@ export default function FamilyTree() {
   return (
     <div className="relative w-full h-dvh bg-[#050a18]">
       <ReactFlowProvider>
-        <FlowCanvas rootId={rootId} onSelectRoot={handleSelectRoot} persons={persons} treeVersion={treeVersion} />
+        <FlowCanvas rootId={rootId} onSelectRoot={handleSelectRoot} persons={persons} treeVersion={treeVersion} initialUrlState={initialUrlState} />
       </ReactFlowProvider>
     </div>
   )

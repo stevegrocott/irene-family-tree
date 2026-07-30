@@ -7,6 +7,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toolbar } from '@/components/FamilyTree'
+import { APP_NAME } from '@/constants/branding'
 import type { Node } from 'reactflow'
 import type { PersonData } from '@/types/tree'
 
@@ -117,5 +118,98 @@ describe('Toolbar', () => {
 
     const slider = container.querySelector('[data-testid="toolbar-depth-slider"]')
     expect(slider).not.toBeNull()
+  })
+
+  it('renders the app name from branding constants as the title', async () => {
+    await act(async () => {
+      root = createRoot(container)
+      root.render(
+        <Toolbar
+          nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+          rootName="Root Person"
+          hops={3}
+          onHopsChange={jest.fn()}
+        />,
+      )
+    })
+
+    const appName = container.querySelector('[data-testid="toolbar-app-name"]')
+    expect(appName).not.toBeNull()
+    expect(appName!.textContent).toBe(APP_NAME)
+  })
+
+  it('renders no toolbar (and no app name) when there are no person nodes', async () => {
+    await act(async () => {
+      root = createRoot(container)
+      root.render(
+        <Toolbar nodes={[]} rootName="" hops={3} onHopsChange={jest.fn()} />,
+      )
+    })
+
+    expect(container.querySelector('[data-testid="toolbar"]')).toBeNull()
+    expect(container.querySelector('[data-testid="toolbar-app-name"]')).toBeNull()
+  })
+
+  it('renders a Stats link pointing to /stats', async () => {
+    await act(async () => {
+      root = createRoot(container)
+      root.render(
+        <Toolbar
+          nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+          rootName="Root Person"
+          hops={3}
+          onHopsChange={jest.fn()}
+        />,
+      )
+    })
+
+    const statsLink = container.querySelector('[data-testid="toolbar-stats-link"]')
+    expect(statsLink).not.toBeNull()
+    expect(statsLink!.getAttribute('href')).toBe('/stats')
+  })
+
+  describe('copy link button', () => {
+    it('is not rendered when getShareUrl is not provided', async () => {
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={3}
+            onHopsChange={jest.fn()}
+          />,
+        )
+      })
+
+      expect(container.querySelector('[data-testid="toolbar-copy-link"]')).toBeNull()
+    })
+
+    it('copies the URL from getShareUrl and shows a transient "Copied!" confirmation', async () => {
+      const writeText = jest.fn().mockResolvedValue(undefined)
+      Object.assign(navigator, { clipboard: { writeText } })
+      const getShareUrl = jest.fn().mockReturnValue('https://example.com/?root=%40I0%40')
+
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={3}
+            onHopsChange={jest.fn()}
+            getShareUrl={getShareUrl}
+          />,
+        )
+      })
+
+      const copyBtn = container.querySelector('[data-testid="toolbar-copy-link"]') as HTMLButtonElement
+      expect(copyBtn).not.toBeNull()
+
+      await act(async () => { copyBtn.click() })
+
+      expect(writeText).toHaveBeenCalledWith('https://example.com/?root=%40I0%40')
+      expect(copyBtn.textContent).toBe('Copied!')
+    })
   })
 })

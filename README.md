@@ -1,4 +1,4 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Irene Family Tree is a genealogy viewer built with [Next.js](https://nextjs.org). It renders an interactive, pannable family tree from GEDCOM-imported data, lets signed-in visitors submit suggested edits (new people, corrected details, relationship changes) for review, and gives admins a dedicated queue to approve or reject those suggestions before they're applied to the tree.
 
 ## Getting Started
 

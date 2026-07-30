@@ -31,6 +31,7 @@ const MAX_NODES = 500
  * @property {string | null} [deathPlace] - Death place (Person nodes only)
  * @property {string | null} [occupation] - Occupation (Person nodes only)
  * @property {string | null} [notes] - Free-text notes (Person nodes only)
+ * @property {string | null} [photoUrl] - Profile photo URL (Person nodes only)
  * @property {string} gedcomId - GEDCOM cross-reference identifier
  */
 interface Neo4jNode {
@@ -44,6 +45,7 @@ interface Neo4jNode {
   deathPlace?: string | null
   occupation?: string | null
   notes?: string | null
+  photoUrl?: string | null
   gedcomId: string
 }
 
@@ -121,7 +123,7 @@ export async function GET(
            {_id: elementId(n), _labels: labels(n), name: n.name, sex: n.sex,
             birthYear: n.birthYear, deathYear: n.deathYear, birthPlace: n.birthPlace,
             deathPlace: n.deathPlace, occupation: n.occupation, notes: n.notes,
-            gedcomId: n.gedcomId}
+            photoUrl: n.photoUrl, gedcomId: n.gedcomId}
          ELSE
            {_id: elementId(n), _labels: labels(n), gedcomId: n.gedcomId}
         END] AS nodes,
@@ -160,6 +162,7 @@ export async function GET(
       deathPlace: n.deathPlace ?? null,
       occupation: n.occupation ?? null,
       notes: n.notes ?? null,
+      photoUrl: n.photoUrl ?? null,
     }
 
     const data: PersonData =

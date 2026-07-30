@@ -40,6 +40,8 @@ export interface PersonData {
   generation?: number
   /** `true` when sensitive fields were redacted because this person is likely still living. */
   living?: boolean
+  /** URL of the person's profile photo, or `null`/absent if none is set. */
+  photoUrl?: string | null
 }
 
 /**
@@ -101,6 +103,8 @@ export interface PersonSummary {
   deathYear: string | null
   /** `true` when sensitive fields were redacted because this person is likely still living. */
   living?: boolean
+  /** URL of the person's profile photo, or `null`/absent if none is set. */
+  photoUrl?: string | null
 }
 
 /**
@@ -144,6 +148,8 @@ export interface PersonDetailResponse {
   notes: string | null
   /** `true` when sensitive fields were redacted because this person is likely still living. */
   living?: boolean
+  /** URL of the person's profile photo, or `null`/absent if none is set. */
+  photoUrl?: string | null
   /** Biological or adoptive parents. */
   parents: PersonSummary[]
   /** Siblings sharing at least one common parent union. */

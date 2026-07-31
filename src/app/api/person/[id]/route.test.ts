@@ -147,6 +147,25 @@ describe('GET /api/person/[id]', () => {
     )
   })
 
+  // Issue #186: CHILD is stored union->person in the graph (verified by /api/tree,
+  // revert.ts, and the #180 layout fix). A person->union traversal silently returns
+  // zero rows for 74% of people. This inspects the emitted Cypher text itself rather
+  // than a canned mock row, since a serialisation-only test cannot catch a reversed hop.
+  it('emits the CHILD hop as union->person in both the parents and siblings clauses', async () => {
+    mockRead.mockResolvedValue([personDetail])
+
+    await GET(makeRequest(), makeParams('I001'))
+
+    const query = (mockRead as jest.Mock).mock.calls[0][0] as string
+
+    expect(query).toMatch(/\(p\)<-\[:CHILD\]-\(pu:Union\)<-\[:UNION\]-\(parent:Person\)/)
+    expect(query).toMatch(/\(p\)<-\[:CHILD\]-\(su:Union\)-\[:CHILD\]->\(sib:Person\)/)
+
+    // Guard against the original reversed direction reappearing.
+    expect(query).not.toMatch(/\(p\)-\[:CHILD\]->\(pu:Union\)/)
+    expect(query).not.toMatch(/\(p\)-\[:CHILD\]->\(su:Union\)/)
+  })
+
   /** Asserts all top-level scalar fields are present and correctly valued in the response. */
   it('returns all core scalar fields on the person', async () => {
     mockRead.mockResolvedValue([personDetail])

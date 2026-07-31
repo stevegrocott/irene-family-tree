@@ -6,14 +6,12 @@
  * fromExists/toExists/no-path 404 branches, walking a shortest-path row into
  * kinship steps, and the computed label — without needing a real database.
  */
+import { neo4jErrorResponseMock } from '@/test-utils/neo4jMock'
 import { GET } from './route'
 
 jest.mock('@/lib/neo4j', () => ({
   read: jest.fn(),
-  neo4jErrorResponse: jest.fn((err: unknown, publicMessage: string, status = 500) => {
-    const detail = err instanceof Error ? err.message : String(err)
-    return Response.json({ error: publicMessage, detail }, { status })
-  }),
+  ...neo4jErrorResponseMock(),
 }))
 
 import { read } from '@/lib/neo4j'

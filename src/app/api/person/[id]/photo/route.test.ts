@@ -10,7 +10,7 @@ import { POST } from './route'
 
 jest.mock('@vercel/blob', () => ({
   put: jest.fn(),
-  del: jest.fn(),
+  del: jest.fn().mockResolvedValue(undefined),
 }))
 
 jest.mock('@/auth', () => ({

@@ -186,11 +186,15 @@ describe('Toolbar', () => {
 
       const notice = container.querySelector('[data-testid="toolbar-truncation-notice"]')
       expect(notice).not.toBeNull()
-      expect(notice!.textContent).toMatch(/truncat/i)
+      // The visible text is degraded to "⚠ + node count" to keep this the
+      // smallest practical contributor to toolbar width; the full sentence
+      // lives in `title` (see the test below).
+      expect(notice!.textContent).toContain('⚠')
       expect(notice!.textContent).toContain('588')
+      expect(notice!.getAttribute('title')).toMatch(/truncat/i)
     })
 
-    it('constrains the truncation notice to one line with a max-width and ellipsis, with the full text available via title', async () => {
+    it('constrains the truncation notice to one line with a max-width and ellipsis, showing a degraded ⚠ + node count with the full text available via title', async () => {
       await act(async () => {
         root = createRoot(container)
         root.render(
@@ -213,8 +217,11 @@ describe('Toolbar', () => {
       expect(notice!.className).toEqual(expect.stringContaining('overflow-hidden'))
       expect(notice!.className).toEqual(expect.stringContaining('text-ellipsis'))
       expect(notice!.className).toMatch(/max-w-/)
-      // Full text preserved via title so it's still available (e.g. on hover).
-      expect(notice!.getAttribute('title')).toBe(notice!.textContent)
+      // Degraded visible text: just the warning glyph and node count.
+      expect(notice!.textContent).toBe('⚠ 588')
+      // Full prose preserved via title so it's still available (e.g. on hover).
+      expect(notice!.getAttribute('title')).toBe('⚠ Tree truncated — showing a partial view of 588 total nodes')
+      expect(notice!.getAttribute('title')).not.toBe(notice!.textContent)
     })
 
     it('shows no truncation notice when truncated is false', async () => {

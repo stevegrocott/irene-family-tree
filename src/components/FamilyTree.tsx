@@ -171,13 +171,16 @@ export function Toolbar({
       {truncated === true && (
         // Intentionally omits flex-shrink-0: this item absorbs tight-width pressure via
         // max-w-[10rem]/sm:max-w-[16rem] + min-w-0 + text-ellipsis, while sibling items stay fixed-size.
+        // The visible text is degraded to "⚠ + node count" (rather than the full prose) so this
+        // remains the toolbar's widest contributor in name only, not in practice — the full
+        // sentence is still available in `title` (e.g. on hover).
         <span
           data-testid="toolbar-truncation-notice"
           role="status"
           title={`⚠ Tree truncated${typeof totalNodes === 'number' ? ` — showing a partial view of ${totalNodes} total nodes` : ''}`}
           className="text-xs text-amber-300 select-none max-w-[10rem] overflow-hidden whitespace-nowrap text-ellipsis min-w-0 sm:max-w-[16rem]"
         >
-          ⚠ Tree truncated{typeof totalNodes === 'number' ? ` — showing a partial view of ${totalNodes} total nodes` : ''}
+          ⚠{typeof totalNodes === 'number' ? ` ${totalNodes}` : ' Truncated'}
         </span>
       )}
       <span data-testid="toolbar-gen-up" className="text-xs text-white/60 select-none flex-shrink-0 whitespace-nowrap">

@@ -161,29 +161,32 @@ export function Toolbar({
     >
       <span
         data-testid="toolbar-app-name"
-        className="text-xs text-white font-semibold select-none pr-4 border-r border-white/20 tracking-wide"
+        className="text-xs text-white font-semibold select-none pr-4 border-r border-white/20 tracking-wide flex-shrink-0 whitespace-nowrap"
       >
         {APP_NAME}
       </span>
-      <span data-testid="toolbar-person-count" className="text-xs text-white/60 select-none">
+      <span data-testid="toolbar-person-count" className="text-xs text-white/60 select-none flex-shrink-0 whitespace-nowrap">
         <span className="text-white font-medium">{personCount}</span> people
       </span>
       {truncated === true && (
+        // Intentionally omits flex-shrink-0: this item absorbs tight-width pressure via
+        // max-w-[10rem]/sm:max-w-[16rem] + min-w-0 + text-ellipsis, while sibling items stay fixed-size.
         <span
           data-testid="toolbar-truncation-notice"
           role="status"
-          className="text-xs text-amber-300 select-none"
+          title={`⚠ Tree truncated${typeof totalNodes === 'number' ? ` — showing a partial view of ${totalNodes} total nodes` : ''}`}
+          className="text-xs text-amber-300 select-none max-w-[10rem] overflow-hidden whitespace-nowrap text-ellipsis min-w-0 sm:max-w-[16rem]"
         >
           ⚠ Tree truncated{typeof totalNodes === 'number' ? ` — showing a partial view of ${totalNodes} total nodes` : ''}
         </span>
       )}
-      <span data-testid="toolbar-gen-up" className="text-xs text-white/60 select-none">
+      <span data-testid="toolbar-gen-up" className="text-xs text-white/60 select-none flex-shrink-0 whitespace-nowrap">
         <span className="text-white font-medium">{ancestors}</span> gen up
       </span>
-      <span data-testid="toolbar-gen-down" className="text-xs text-white/60 select-none">
+      <span data-testid="toolbar-gen-down" className="text-xs text-white/60 select-none flex-shrink-0 whitespace-nowrap">
         <span className="text-white font-medium">{descendants}</span> gen down
       </span>
-      <span data-testid="toolbar-viewing" className="text-xs text-white/60 select-none">
+      <span data-testid="toolbar-viewing" className="text-xs text-white/60 select-none flex-shrink-0 whitespace-nowrap">
         VIEWING: <span className="text-white font-medium">{rootName}</span>
       </span>
       <input
@@ -193,20 +196,20 @@ export function Toolbar({
         max={sliderMax}
         value={hops}
         onChange={e => onHopsChange(Number(e.target.value))}
-        className="w-full h-11 sm:w-24 sm:h-auto"
+        className="w-full h-11 flex-shrink-0 sm:w-24 sm:h-auto"
         aria-label="Depth"
       />
       {getShareUrl && (
         <CopyLinkButton
           getUrl={getShareUrl}
           testId="toolbar-copy-link"
-          className="text-xs text-white/60 hover:text-white select-none pl-4 border-l border-white/20 transition-colors"
+          className="text-xs text-white/60 hover:text-white select-none pl-4 border-l border-white/20 transition-colors flex-shrink-0 whitespace-nowrap"
         />
       )}
       <Link
         href="/stats"
         data-testid="toolbar-stats-link"
-        className="text-xs text-white/60 hover:text-white select-none pl-4 border-l border-white/20 transition-colors"
+        className="text-xs text-white/60 hover:text-white select-none pl-4 border-l border-white/20 transition-colors flex-shrink-0 whitespace-nowrap"
       >
         Stats
       </Link>

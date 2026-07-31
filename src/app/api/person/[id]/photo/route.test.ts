@@ -8,6 +8,11 @@
  */
 import { POST } from './route'
 
+jest.mock('next/server', () => ({
+  ...jest.requireActual('next/server'),
+  after: (callback: () => unknown) => callback(),
+}))
+
 jest.mock('@vercel/blob', () => ({
   put: jest.fn(),
   del: jest.fn().mockResolvedValue(undefined),

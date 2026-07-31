@@ -4,7 +4,7 @@
  * Route: POST /api/person/[id]/photo
  */
 
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { randomUUID } from 'crypto'
 import { put, del } from '@vercel/blob'
 import { auth } from '@/auth'
@@ -93,9 +93,11 @@ export async function POST(
   }
 
   if (previousPhotoUrl) {
-    del(previousPhotoUrl).catch(err => {
-      console.error('Failed to delete previous photo blob (non-fatal)', err)
-    })
+    after(() =>
+      del(previousPhotoUrl).catch(err => {
+        console.error('Failed to delete previous photo blob (non-fatal)', err)
+      })
+    )
   }
 
   return NextResponse.json({ url: result.url })

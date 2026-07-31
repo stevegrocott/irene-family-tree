@@ -122,11 +122,24 @@ describe('buildTimeline — undated events', () => {
     expect(events[1]).toMatchObject({ type: 'marriage', year: null, dateUnknown: true })
   })
 
-  it('routes non-numeric years to the trailing Date unknown group without producing NaN ordering', () => {
+  it('extracts the year from a GEDCOM approximate-date qualifier instead of routing it to Date unknown', () => {
     const events = buildTimeline(
       detail({
         birthYear: '1900',
         deathYear: 'Abt. 1970',
+      })
+    )
+
+    expect(events).toHaveLength(2)
+    expect(events[0]).toMatchObject({ type: 'birth', year: 1900 })
+    expect(events[1]).toMatchObject({ type: 'death', year: 1970, dateUnknown: false })
+  })
+
+  it('routes years with no extractable four-digit year to the trailing Date unknown group without producing NaN ordering', () => {
+    const events = buildTimeline(
+      detail({
+        birthYear: '1900',
+        deathYear: 'unknown',
       })
     )
 

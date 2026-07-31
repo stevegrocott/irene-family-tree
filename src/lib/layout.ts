@@ -64,7 +64,8 @@ function generationsFromLayout(
  * Applies a hierarchical dagre layout to family tree nodes and edges.
  *
  * Person nodes are sized at 200×76, union nodes at 14×14.
- * CHILD edges are reversed for dagre so that parents rank above children.
+ * Edges are expected pre-transformed (CHILD: union→person, UNION: person→union)
+ * so that parents rank above unions above children; this function uses them as-is.
  * An optional rootId triggers a BFS generation pass stored on each node's data.
  *
  * @param nodes - React Flow nodes to position

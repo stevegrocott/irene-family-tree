@@ -4,9 +4,11 @@
  * centred on a given GEDCOM person ID, formatted as React Flow nodes and edges.
  */
 
-import { read } from '@/lib/neo4j'
+import { read, neo4jErrorResponse } from '@/lib/neo4j'
 import { FlowNode, FlowEdge, TreeResponse, PersonData, UnionData } from '@/types/tree'
 import { MIN_HOPS, DEFAULT_HOPS, MAX_HOPS, UNION_LABEL } from '@/constants/tree'
+import { auth } from '@/auth'
+import { isLikelyLiving, redactPerson } from '@/lib/privacy'
 
 /** Force Node.js runtime so the Neo4j driver can open TCP connections. */
 export const runtime = 'nodejs'
@@ -29,6 +31,7 @@ const MAX_NODES = 500
  * @property {string | null} [deathPlace] - Death place (Person nodes only)
  * @property {string | null} [occupation] - Occupation (Person nodes only)
  * @property {string | null} [notes] - Free-text notes (Person nodes only)
+ * @property {string | null} [photoUrl] - Profile photo URL (Person nodes only)
  * @property {string} gedcomId - GEDCOM cross-reference identifier
  */
 interface Neo4jNode {
@@ -42,6 +45,7 @@ interface Neo4jNode {
   deathPlace?: string | null
   occupation?: string | null
   notes?: string | null
+  photoUrl?: string | null
   gedcomId: string
 }
 
@@ -119,7 +123,7 @@ export async function GET(
            {_id: elementId(n), _labels: labels(n), name: n.name, sex: n.sex,
             birthYear: n.birthYear, deathYear: n.deathYear, birthPlace: n.birthPlace,
             deathPlace: n.deathPlace, occupation: n.occupation, notes: n.notes,
-            gedcomId: n.gedcomId}
+            photoUrl: n.photoUrl, gedcomId: n.gedcomId}
          ELSE
            {_id: elementId(n), _labels: labels(n), gedcomId: n.gedcomId}
         END] AS nodes,
@@ -132,34 +136,41 @@ export async function GET(
       { id: rootId, maxNodes: MAX_NODES }
     )
   } catch (err) {
-    console.error('Neo4j query failed', err)
-    return Response.json({ error: 'Failed to query graph database' }, { status: 500 })
+    return neo4jErrorResponse(err, 'Failed to query graph database')
   }
 
   if (!rows.length) return Response.json({ error: 'Person not found' }, { status: 404 })
 
   const { nodes, rels } = rows[0]
 
+  const session = await auth()
+  const isAnonymous = !session?.user
+
   const flowNodes: FlowNode[] = nodes.map((n) => {
     const isUnion = n._labels.includes(UNION_LABEL)
-    return isUnion
-      ? { id: n._id, type: 'union' as const, data: { gedcomId: n.gedcomId } as UnionData, position: { x: 0, y: 0 } }
-      : {
-          id: n._id,
-          type: 'person' as const,
-          data: {
-            gedcomId: n.gedcomId,
-            name: n.name ?? '',
-            sex: n.sex ?? '',
-            birthYear: n.birthYear ?? null,
-            deathYear: n.deathYear ?? null,
-            birthPlace: n.birthPlace ?? null,
-            deathPlace: n.deathPlace ?? null,
-            occupation: n.occupation ?? null,
-            notes: n.notes ?? null,
-          } as PersonData,
-          position: { x: 0, y: 0 },
-        }
+    if (isUnion) {
+      return { id: n._id, type: 'union' as const, data: { gedcomId: n.gedcomId } as UnionData, position: { x: 0, y: 0 } }
+    }
+
+    const person = {
+      gedcomId: n.gedcomId,
+      name: n.name ?? '',
+      sex: n.sex ?? null,
+      birthYear: n.birthYear ?? null,
+      deathYear: n.deathYear ?? null,
+      birthPlace: n.birthPlace ?? null,
+      deathPlace: n.deathPlace ?? null,
+      occupation: n.occupation ?? null,
+      notes: n.notes ?? null,
+      photoUrl: n.photoUrl ?? null,
+    }
+
+    const data: PersonData =
+      isAnonymous && isLikelyLiving(person)
+        ? { ...redactPerson(person), sex: person.sex ?? '' }
+        : { ...person, sex: person.sex ?? '' }
+
+    return { id: n._id, type: 'person' as const, data, position: { x: 0, y: 0 } }
   })
 
   const flowEdges: FlowEdge[] = rels.map((r) => ({

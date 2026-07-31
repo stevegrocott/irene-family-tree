@@ -18,7 +18,7 @@ export type RevertOutcome =
 
 export interface ChangeRow {
   id: string
-  changeType: 'CREATE_PERSON' | 'ADD_RELATIONSHIP' | 'UPDATE_PERSON' | 'DELETE_PERSON'
+  changeType: 'CREATE_PERSON' | 'ADD_RELATIONSHIP' | 'UPDATE_PERSON' | 'DELETE_PERSON' | 'MERGE_PERSON'
   targetId: string
   previousValue: string | null
   newValue: string
@@ -208,6 +208,14 @@ export async function revertChange(
     )
 
     return { ok: true }
+  }
+
+  if (change.changeType === 'MERGE_PERSON') {
+    // Merging rewires relationships and deletes the duplicate person outright;
+    // there is no general way to reconstruct the duplicate's prior edges, so
+    // merges are explicitly irreversible rather than falling through to the
+    // generic "unsupported" response.
+    return { ok: false, status: 409, error: 'Cannot revert: merge is irreversible' }
   }
 
   return { ok: false, status: 409, error: 'Unsupported change type' }

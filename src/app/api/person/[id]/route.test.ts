@@ -10,6 +10,10 @@ import { GET, PATCH } from './route'
 jest.mock('@/lib/neo4j', () => ({
   read: jest.fn(),
   write: jest.fn(),
+  neo4jErrorResponse: jest.fn((err: unknown, publicMessage: string, status = 500) => {
+    const detail = err instanceof Error ? err.message : String(err)
+    return Response.json({ error: publicMessage, detail }, { status })
+  }),
 }))
 
 jest.mock('@/lib/changes', () => ({
@@ -26,6 +30,9 @@ const mockWrite = write as jest.MockedFunction<typeof write>
 
 import { recordChange } from '@/lib/changes'
 const mockRecordChange = recordChange as jest.MockedFunction<typeof recordChange>
+
+import { auth } from '@/auth'
+const mockAuth = auth as unknown as jest.MockedFunction<() => Promise<unknown>>
 
 /**
  * Creates a minimal Request object targeting the person-by-id endpoint.
@@ -116,7 +123,7 @@ describe('GET /api/person/[id]', () => {
     const body = await response.json()
 
     expect(response.status).toBe(500)
-    expect(body).toEqual({ error: 'Failed to query graph database' })
+    expect(body).toEqual({ error: 'Failed to query graph database', detail: 'Connection refused' })
   })
 
   /** Returns 200 with the complete PersonDetail object when a matching record is found. */
@@ -266,6 +273,18 @@ describe('GET /api/person/[id]', () => {
     expect(body.notes).toBeNull()
   })
 
+  it.each([
+    ['returns photoUrl on the person', 'https://example.com/photo.jpg'],
+    ['handles a null photoUrl', null],
+  ])('%s', async (desc, photoUrl) => {
+    mockRead.mockResolvedValue([{ ...personDetail, photoUrl }])
+
+    const response = await GET(makeRequest(), makeParams('I001'))
+    const body = await response.json()
+
+    expect(body.photoUrl).toBe(photoUrl)
+  })
+
   /** Verifies `marriageYear` and `marriagePlace` on a MarriageDetail entry can both be null. */
   it('handles a marriage with nullable year and place', async () => {
     const noDatePlace = {
@@ -279,6 +298,100 @@ describe('GET /api/person/[id]', () => {
 
     expect(body.marriages[0].marriageYear).toBeNull()
     expect(body.marriages[0].marriagePlace).toBeNull()
+  })
+
+  // Issue #142: for anonymous requests the root person and every nested
+  // parent / sibling / spouse / child summary must be redacted when likely living.
+  describe('privacy redaction for likely-living persons', () => {
+    const CURRENT_YEAR = new Date().getFullYear()
+    /** Born recently enough to be within the 105-year living threshold. */
+    const RECENT = String(CURRENT_YEAR - 40)
+    /** Born long enough ago that the person cannot plausibly be living. */
+    const ANCIENT = String(CURRENT_YEAR - 130)
+
+    /** Living root, with a living child and a long-dead parent, sibling and spouse. */
+    const livingDetail = {
+      ...personDetail,
+      birthYear: RECENT,
+      deathYear: null,
+      deathPlace: null,
+      parents: [{ gedcomId: 'I002', name: 'James Doe', sex: 'M', birthYear: ANCIENT, deathYear: '1940' }],
+      siblings: [{ gedcomId: 'I003', name: 'Jane Doe', sex: 'F', birthYear: ANCIENT, deathYear: null }],
+      marriages: [
+        {
+          unionId: 'F001',
+          marriageYear: '1925',
+          marriagePlace: 'Boston, MA',
+          spouse: { gedcomId: 'I004', name: 'Mary Smith', sex: 'F', birthYear: RECENT, deathYear: null },
+          children: [
+            { gedcomId: 'I005', name: 'Robert Doe', sex: 'M', birthYear: RECENT, deathYear: null },
+          ],
+        },
+      ],
+    }
+
+    it('redacts the root person for anonymous requests', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      mockRead.mockResolvedValue([livingDetail])
+
+      const body = await (await GET(makeRequest(), makeParams('I001'))).json()
+
+      expect(body.living).toBe(true)
+      expect(body.name).toBe('John Doe')
+      expect(body.birthYear).toBeNull()
+      expect(body.deathYear).toBeNull()
+      expect(body.birthPlace).toBeNull()
+      expect(body.deathPlace).toBeNull()
+      expect(body.occupation).toBeNull()
+      expect(body.notes).toBeNull()
+    })
+
+    it('redacts photoUrl for anonymous requests against a likely-living person', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      mockRead.mockResolvedValue([{ ...livingDetail, photoUrl: 'https://example.com/photo.jpg' }])
+
+      const body = await (await GET(makeRequest(), makeParams('I001'))).json()
+
+      expect(body.photoUrl).toBeNull()
+    })
+
+    it('redacts living nested spouse and child summaries for anonymous requests', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      mockRead.mockResolvedValue([livingDetail])
+
+      const body = await (await GET(makeRequest(), makeParams('I001'))).json()
+
+      const spouse = body.marriages[0].spouse
+      expect(spouse.living).toBe(true)
+      expect(spouse.name).toBe('Mary Smith')
+      expect(spouse.birthYear).toBeNull()
+
+      const child = body.marriages[0].children[0]
+      expect(child.living).toBe(true)
+      expect(child.name).toBe('Robert Doe')
+      expect(child.birthYear).toBeNull()
+    })
+
+    it('leaves deceased nested parent and sibling summaries untouched for anonymous requests', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      mockRead.mockResolvedValue([livingDetail])
+
+      const body = await (await GET(makeRequest(), makeParams('I001'))).json()
+
+      expect(body.parents[0]).toEqual(livingDetail.parents[0])
+      // Born >105 years ago with no death year: not plausibly living, so not redacted.
+      expect(body.siblings[0]).toEqual(livingDetail.siblings[0])
+    })
+
+    it('returns full data including nested summaries when signed in', async () => {
+      mockRead.mockResolvedValue([livingDetail])
+
+      const body = await (await GET(makeRequest(), makeParams('I001'))).json()
+
+      expect(body).toEqual(livingDetail)
+      expect(body.living).toBeUndefined()
+      expect(body.marriages[0].spouse.living).toBeUndefined()
+    })
   })
 })
 
@@ -363,7 +476,7 @@ describe('PATCH /api/person/[id]', () => {
     const response = await PATCH(makePatchRequest('I001', { name: 'Alice' }), makeParams('I001'))
 
     expect(response.status).toBe(500)
-    expect((await response.json())).toEqual({ error: 'Failed to update graph database' })
+    expect((await response.json())).toEqual({ error: 'Failed to update graph database', detail: 'DB error' })
   })
 
   it('passes the id and only allowed fields to the write call', async () => {
@@ -397,6 +510,7 @@ describe('PATCH /api/person/[id]', () => {
       name: 'Alice', sex: 'F', birthYear: '1990', birthDate: '1990-01-01',
       birthPlace: 'Paris', deathYear: '2070', deathDate: '2070-12-31',
       deathPlace: 'Lyon', occupation: 'Engineer', notes: 'No notes',
+      photoUrl: 'https://example.com/alice.jpg',
     }
 
     const response = await PATCH(makePatchRequest('I001', allFields), makeParams('I001'))
@@ -406,6 +520,38 @@ describe('PATCH /api/person/[id]', () => {
       expect.any(String),
       expect.objectContaining({ fields: allFields })
     )
+  })
+
+  it.each([
+    ['accepts a valid https photoUrl', 'https://example.com/photo.jpg'],
+    ['accepts a null photoUrl to clear the photo', null],
+  ])('%s', async (desc, photoUrl) => {
+    mockWrite.mockResolvedValue([{ ...updatedPerson, photoUrl }])
+
+    const response = await PATCH(makePatchRequest('I001', { photoUrl }), makeParams('I001'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ fields: { photoUrl } })
+    )
+    expect(body.photoUrl).toBe(photoUrl)
+  })
+
+  it.each([
+    ['returns 400 when photoUrl is an http (non-https) URL', 'http://example.com/photo.jpg'],
+    ['returns 400 when photoUrl is not a valid URL', 'not-a-url'],
+  ])('%s', async (desc, photoUrl) => {
+    const response = await PATCH(
+      makePatchRequest('I001', { photoUrl }),
+      makeParams('I001')
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body).toEqual({ error: 'photoUrl must be an https:// URL or null' })
+    expect(mockWrite).not.toHaveBeenCalled()
   })
 
   it('calls recordChange with previous person, updated person, and session author after successful update', async () => {

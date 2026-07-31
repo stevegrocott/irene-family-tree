@@ -1,4 +1,4 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Irene Family Tree is a genealogy viewer built with [Next.js](https://nextjs.org). It renders an interactive, pannable family tree from GEDCOM-imported data, lets signed-in visitors submit suggested edits (new people, corrected details, relationship changes) for review, and gives admins a dedicated queue to approve or reject those suggestions before they're applied to the tree.
 
 ## Getting Started
 
@@ -39,6 +39,7 @@ The following environment variables must be set in your Vercel project settings 
 | `GOOGLE_CLIENT_ID` | Yes | OAuth 2.0 Client ID from [Google Cloud Console](https://console.cloud.google.com) |
 | `GOOGLE_CLIENT_SECRET` | Yes | OAuth 2.0 Client Secret from Google Cloud Console |
 | `ADMIN_EMAILS` | Yes | Comma-separated list of email addresses granted admin role (e.g. `alice@example.com,bob@example.com`) |
+| `BLOB_READ_WRITE_TOKEN` | Yes | Read/write token for [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) storage, used via `@vercel/blob`. Automatically set in Vercel projects with Blob storage enabled; for local development, generate one from the Vercel dashboard under Storage > Blob. |
 
 ## Deploy on Vercel
 

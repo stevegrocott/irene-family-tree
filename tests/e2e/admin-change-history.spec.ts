@@ -129,4 +129,36 @@ test.describe('Admin Tabs + Change History (/admin)', () => {
     // The button is now disabled and its label changes to "Reverted".
     await expect(page.getByRole('button', { name: 'Reverted' })).toBeDisabled()
   })
+
+  test('revert conflict (409) shows inline error message', async ({ page }) => {
+    await page.route(/\/api\/admin\/changes/, async route => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'Cannot revert: conflicting change exists.' }),
+        })
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ changes: [mockHistoryChange] }),
+        })
+      }
+    })
+
+    await page.goto('/admin')
+    await page.waitForLoadState('networkidle')
+    await page.getByRole('tab', { name: /change history/i }).click()
+
+    await expect(page.getByTestId('change-history')).toBeVisible()
+    await expect(page.getByText(mockHistoryChange.personName)).toBeVisible()
+
+    const revertBtn = page.getByRole('button', { name: 'Revert' })
+    await expect(revertBtn).toBeEnabled()
+    await revertBtn.click()
+
+    await expect(page.getByText('Cannot revert: conflicting change exists.')).toBeVisible({ timeout: 5_000 })
+    await expect(revertBtn).toBeEnabled()
+  })
 })

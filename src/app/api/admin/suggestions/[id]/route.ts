@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
-import { read, write } from '@/lib/neo4j'
+import { read, write, neo4jErrorResponse } from '@/lib/neo4j'
 import { recordChange } from '@/lib/changes'
 import { auth } from '@/auth'
 import { ALLOWED_PATCH_FIELDS } from '@/lib/patches'
@@ -90,8 +90,7 @@ export async function POST(
       { id }
     )
   } catch (err) {
-    console.error('Neo4j query failed', err)
-    return NextResponse.json({ error: 'Failed to query graph database' }, { status: 500 })
+    return neo4jErrorResponse(err, 'Failed to query graph database')
   }
 
   if (!rows.length) {
@@ -207,8 +206,7 @@ RETURN unionId, created`,
       )
     }
   } catch (err) {
-    console.error('Neo4j write failed', err)
-    return NextResponse.json({ error: 'Failed to update graph database' }, { status: 500 })
+    return neo4jErrorResponse(err, 'Failed to update graph database')
   }
 
   return NextResponse.json({ success: true })

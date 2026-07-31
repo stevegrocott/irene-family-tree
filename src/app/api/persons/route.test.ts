@@ -3,6 +3,10 @@ import { GET, POST } from './route'
 jest.mock('@/lib/neo4j', () => ({
   read: jest.fn(),
   write: jest.fn(),
+  neo4jErrorResponse: jest.fn((err: unknown, publicMessage: string, status = 500) => {
+    const detail = err instanceof Error ? err.message : String(err)
+    return Response.json({ error: publicMessage, detail }, { status })
+  }),
 }))
 
 jest.mock('@/lib/changes', () => ({
@@ -19,6 +23,9 @@ const mockWrite = write as jest.MockedFunction<typeof write>
 
 import { recordChange } from '@/lib/changes'
 const mockRecordChange = recordChange as jest.MockedFunction<typeof recordChange>
+
+import { auth } from '@/auth'
+const mockAuth = auth as unknown as jest.MockedFunction<() => Promise<unknown>>
 
 const makeRequest = (url = 'http://localhost/api/persons') =>
   new Request(url) as unknown as Request
@@ -95,6 +102,61 @@ describe('GET /api/persons', () => {
 
     const [query] = (mockRead as jest.Mock).mock.calls[0]
     expect(query).not.toContain('WHERE')
+  })
+
+  // Issue #142: the endpoint stays publicly readable (issue #123), but rows for
+  // likely-living people are redacted when the request is not authenticated.
+  describe('privacy redaction for likely-living persons', () => {
+    const living = {
+      gedcomId: 'I010',
+      name: 'Jane Living',
+      sex: 'F',
+      birthYear: '1990',
+      deathYear: null,
+      birthPlace: 'Sheffield',
+    }
+    const deceased = {
+      gedcomId: 'I011',
+      name: 'John Gone',
+      sex: 'M',
+      birthYear: '1900',
+      deathYear: '1980',
+      birthPlace: 'Leeds',
+    }
+
+    it('redacts living rows for anonymous requests', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      mockRead.mockResolvedValue([living, deceased])
+
+      const body = await (await GET(makeRequest())).json()
+
+      expect(body[0]).toEqual({
+        gedcomId: 'I010',
+        name: 'Jane Living',
+        sex: 'F',
+        birthYear: null,
+        deathYear: null,
+        birthPlace: null,
+        living: true,
+      })
+    })
+
+    it('leaves deceased rows untouched for anonymous requests', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      mockRead.mockResolvedValue([living, deceased])
+
+      const body = await (await GET(makeRequest())).json()
+
+      expect(body[1]).toEqual(deceased)
+    })
+
+    it('returns full data for every row when signed in', async () => {
+      mockRead.mockResolvedValue([living, deceased])
+
+      const body = await (await GET(makeRequest())).json()
+
+      expect(body).toEqual([living, deceased])
+    })
   })
 })
 
@@ -186,8 +248,10 @@ describe('POST /api/persons', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {})
 
     const response = await POST(makePostRequest({ name: 'Alice' }))
+    const body = await response.json()
 
     expect(response.status).toBe(500)
+    expect(body.detail).toBe('DB error')
   })
 
   it('calls recordChange with null previousValue and created person data after successful POST', async () => {

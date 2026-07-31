@@ -3,6 +3,10 @@ import { POST } from './route'
 jest.mock('@/lib/neo4j', () => ({
   read: jest.fn(),
   write: jest.fn(),
+  neo4jErrorResponse: jest.fn((err: unknown, publicMessage: string, status = 500) => {
+    const detail = err instanceof Error ? err.message : String(err)
+    return Response.json({ error: publicMessage, detail }, { status })
+  }),
 }))
 
 jest.mock('@/auth', () => ({
@@ -112,7 +116,7 @@ describe('POST /api/admin/suggestions/[id]', () => {
     const body = await response.json()
 
     expect(response.status).toBe(500)
-    expect(body).toEqual({ error: 'Failed to query graph database' })
+    expect(body).toEqual({ error: 'Failed to query graph database', detail: 'Connection refused' })
   })
 
   it('returns 404 when no suggestion record is found', async () => {
@@ -410,7 +414,7 @@ describe('POST /api/admin/suggestions/[id]', () => {
     const body = await response.json()
 
     expect(response.status).toBe(500)
-    expect(body).toEqual({ error: 'Failed to update graph database' })
+    expect(body).toEqual({ error: 'Failed to update graph database', detail: 'Write failed' })
   })
 
   it('passes the suggestion id from route params to the Neo4j read call against PendingChange', async () => {

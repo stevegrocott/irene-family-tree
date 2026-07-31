@@ -3,16 +3,18 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
-const TABS = { SUGGESTIONS: 'suggestions', HISTORY: 'history' } as const
+const TABS = { SUGGESTIONS: 'suggestions', HISTORY: 'history', DUPLICATES: 'duplicates' } as const
 type Tab = typeof TABS[keyof typeof TABS]
 
 const TAB_IDS: Record<Tab, string> = {
   suggestions: 'tab-suggestions',
   history: 'tab-history',
+  duplicates: 'tab-duplicates',
 }
 const PANEL_IDS: Record<Tab, string> = {
   suggestions: 'panel-suggestions',
   history: 'panel-history',
+  duplicates: 'panel-duplicates',
 }
 
 const TAB_ACTIVE = 'px-4 py-2 rounded-xl text-sm font-medium bg-white/10 backdrop-blur-md border border-white/20 text-white shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-colors'
@@ -26,13 +28,16 @@ const TAB_INACTIVE = 'px-4 py-2 rounded-xl text-sm font-medium bg-transparent bo
  *
  * @param suggestionsSlot - Content rendered when the "Pending Suggestions" tab is active
  * @param historySlot - Content rendered when the "Change History" tab is active
+ * @param duplicatesSlot - Content rendered when the "Duplicates" tab is active
  */
 export function AdminTabs({
   suggestionsSlot,
   historySlot,
+  duplicatesSlot,
 }: {
   suggestionsSlot: ReactNode
   historySlot: ReactNode
+  duplicatesSlot: ReactNode
 }) {
   const [activeTab, setActiveTab] = useState<Tab>(TABS.SUGGESTIONS)
 
@@ -61,6 +66,17 @@ export function AdminTabs({
         >
           Change History
         </button>
+        <button
+          type="button"
+          role="tab"
+          id={TAB_IDS[TABS.DUPLICATES]}
+          aria-selected={activeTab === TABS.DUPLICATES}
+          aria-controls={PANEL_IDS[TABS.DUPLICATES]}
+          onClick={() => setActiveTab(TABS.DUPLICATES)}
+          className={activeTab === TABS.DUPLICATES ? TAB_ACTIVE : TAB_INACTIVE}
+        >
+          Duplicates
+        </button>
       </div>
       <div
         role="tabpanel"
@@ -77,6 +93,14 @@ export function AdminTabs({
         hidden={activeTab !== TABS.HISTORY}
       >
         {historySlot}
+      </div>
+      <div
+        role="tabpanel"
+        id={PANEL_IDS[TABS.DUPLICATES]}
+        aria-labelledby={TAB_IDS[TABS.DUPLICATES]}
+        hidden={activeTab !== TABS.DUPLICATES}
+      >
+        {duplicatesSlot}
       </div>
     </>
   )

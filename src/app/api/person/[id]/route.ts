@@ -6,10 +6,11 @@
  */
 
 import { NextResponse } from 'next/server'
-import { read, write } from '@/lib/neo4j'
+import { read, write, neo4jErrorResponse } from '@/lib/neo4j'
 import { recordChange } from '@/lib/changes'
 import { auth } from '@/auth'
-import { ALLOWED_PATCH_FIELDS } from '@/lib/patches'
+import { ALLOWED_PATCH_FIELDS, isValidPhotoUrl } from '@/lib/patches'
+import { isLikelyLiving, redactPerson } from '@/lib/privacy'
 import type { PersonSummary, MarriageDetail } from '@/types/tree'
 
 /** Forces the route to run in the Node.js runtime (required for Neo4j driver). */
@@ -37,12 +38,41 @@ interface PersonDetailRow {
   occupation: string | null
   /** Free-text notes from the GEDCOM record, or null if none. */
   notes: string | null
+  /** URL of the person's profile photo, or null if none is set. */
+  photoUrl: string | null
   /** Biological or adoptive parents identified in the graph. */
   parents: PersonSummary[]
   /** Siblings sharing at least one common parent union. */
   siblings: PersonSummary[]
   /** All recorded marriages/unions with spouse and children for each. */
   marriages: MarriageDetail[]
+  /** `true` when sensitive fields were redacted because this person is likely still living. */
+  living?: boolean
+}
+
+/**
+ * Redacts a {@link PersonSummary} (parent, sibling, spouse, or child row) when
+ * the person is likely still living, keeping only identity fields.
+ */
+function redactSummaryIfLiving(p: PersonSummary): PersonSummary {
+  const full = {
+    ...p,
+    birthPlace: null,
+    deathPlace: null,
+    occupation: null,
+    notes: null,
+    photoUrl: p.photoUrl ?? null,
+  }
+  if (!isLikelyLiving(full)) return p
+  const redacted = redactPerson(full)
+  return {
+    gedcomId: redacted.gedcomId,
+    name: redacted.name,
+    sex: redacted.sex,
+    birthYear: null,
+    deathYear: null,
+    living: true,
+  }
 }
 
 /**
@@ -125,21 +155,51 @@ export async function GET(
        p.deathPlace  AS deathPlace,
        p.occupation  AS occupation,
        p.notes       AS notes,
+       p.photoUrl    AS photoUrl,
        [x IN parents  WHERE x IS NOT NULL] AS parents,
        [x IN siblings WHERE x IS NOT NULL] AS siblings,
        [x IN marriages WHERE x IS NOT NULL] AS marriages`,
     { id }
     )
   } catch (err) {
-    console.error('Neo4j query failed', err)
-    return NextResponse.json({ error: 'Failed to query graph database' }, { status: 500 })
+    return neo4jErrorResponse(err, 'Failed to query graph database')
   }
 
   if (!rows.length || rows[0].gedcomId == null) {
     return NextResponse.json({ error: 'Person not found' }, { status: 404 })
   }
 
-  return NextResponse.json(rows[0])
+  const row = rows[0]
+  const session = await auth()
+  if (!session?.user) {
+    const rootFields = isLikelyLiving(row)
+      ? {
+          sex: redactPerson(row).sex,
+          birthYear: null,
+          deathYear: null,
+          birthPlace: null,
+          deathPlace: null,
+          occupation: null,
+          notes: null,
+          photoUrl: null,
+          living: true as const,
+        }
+      : {}
+
+    return NextResponse.json({
+      ...row,
+      ...rootFields,
+      parents: row.parents.map(redactSummaryIfLiving),
+      siblings: row.siblings.map(redactSummaryIfLiving),
+      marriages: row.marriages.map((m) => ({
+        ...m,
+        spouse: m.spouse ? redactSummaryIfLiving(m.spouse) : null,
+        children: m.children.map(redactSummaryIfLiving),
+      })),
+    } satisfies PersonDetailRow)
+  }
+
+  return NextResponse.json(row)
 }
 
 interface UpdatedPerson {
@@ -154,6 +214,7 @@ interface UpdatedPerson {
   deathPlace: string | null
   occupation: string | null
   notes: string | null
+  photoUrl: string | null
 }
 
 export async function PATCH(
@@ -183,6 +244,13 @@ export async function PATCH(
     return NextResponse.json({ error: 'No valid fields provided' }, { status: 400 })
   }
 
+  if ('photoUrl' in fields && !isValidPhotoUrl(fields.photoUrl)) {
+    return NextResponse.json(
+      { error: 'photoUrl must be an https:// URL or null' },
+      { status: 400 }
+    )
+  }
+
   let previousPerson: UpdatedPerson | null = null
   try {
     const previousRows = await read<UpdatedPerson>(
@@ -191,13 +259,13 @@ export async function PATCH(
               p.birthYear AS birthYear, p.birthDate AS birthDate,
               p.birthPlace AS birthPlace, p.deathYear AS deathYear,
               p.deathDate AS deathDate, p.deathPlace AS deathPlace,
-              p.occupation AS occupation, p.notes AS notes`,
+              p.occupation AS occupation, p.notes AS notes,
+              p.photoUrl AS photoUrl`,
       { id }
     )
     previousPerson = previousRows?.[0] ?? null
   } catch (err) {
-    console.error('Neo4j pre-update read failed', err)
-    return NextResponse.json({ error: 'Failed to read current state for change tracking' }, { status: 500 })
+    return neo4jErrorResponse(err, 'Failed to read current state for change tracking')
   }
 
   let rows: UpdatedPerson[]
@@ -209,12 +277,12 @@ export async function PATCH(
               p.birthYear AS birthYear, p.birthDate AS birthDate,
               p.birthPlace AS birthPlace, p.deathYear AS deathYear,
               p.deathDate AS deathDate, p.deathPlace AS deathPlace,
-              p.occupation AS occupation, p.notes AS notes`,
+              p.occupation AS occupation, p.notes AS notes,
+              p.photoUrl AS photoUrl`,
       { id, fields }
     )
   } catch (err) {
-    console.error('Neo4j write failed', err)
-    return NextResponse.json({ error: 'Failed to update graph database' }, { status: 500 })
+    return neo4jErrorResponse(err, 'Failed to update graph database')
   }
 
   if (!rows.length || rows[0].gedcomId == null) {

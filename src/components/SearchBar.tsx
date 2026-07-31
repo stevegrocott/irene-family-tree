@@ -54,13 +54,13 @@ export default function SearchBar({ onSelect, persons: personsProp }: Props) {
     : []
 
   return (
-    <div className="absolute top-4 left-4 z-10 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-3 w-64 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+    <div className="absolute top-4 inset-x-4 z-10 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:inset-x-auto sm:left-4 sm:w-64">
       <input
         value={query}
         onChange={e => setQuery(e.target.value)}
         placeholder="Search by name, place or year…"
         data-testid="search-input"
-        className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-indigo-400/60 focus:bg-white/15 transition-all"
+        className="w-full min-h-11 bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-indigo-400/60 focus:bg-white/15 transition-all"
       />
       {results.length > 0 && (
         <ul data-testid="search-results" className="search-results mt-2 space-y-0.5 max-h-48 overflow-y-auto">
@@ -69,7 +69,7 @@ export default function SearchBar({ onSelect, persons: personsProp }: Props) {
               key={p.gedcomId}
               data-testid="search-result-item"
               onClick={() => { onSelect(p.gedcomId); setQuery('') }}
-              className="px-3 py-2 rounded-lg text-sm text-white/80 cursor-pointer hover:bg-white/15 hover:text-white transition-colors"
+              className="min-h-11 flex items-center px-3 py-2 rounded-lg text-sm text-white/80 cursor-pointer hover:bg-white/15 hover:text-white transition-colors"
             >
               <span
                 className={`sex-dot w-2 h-2 rounded-full inline-block mr-1.5 ${

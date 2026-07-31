@@ -252,6 +252,71 @@ describe('Toolbar', () => {
     })
   })
 
+  describe('layout resilience at tight widths', () => {
+    it('prevents toolbar items from shrinking (and their text wrapping into columns) when space is tight', async () => {
+      const nodes: Node<PersonData>[] = [
+        makePersonNode('@I0@', 0, 'Root Person'),
+        makePersonNode('@I1@', -1, 'Parent One'),
+        makePersonNode('@I2@', 1, 'Child One'),
+      ]
+      const getShareUrl = jest.fn().mockReturnValue('https://example.com/?root=%40I0%40')
+
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={nodes}
+            rootName="Root Person"
+            hops={3}
+            onHopsChange={jest.fn()}
+            getShareUrl={getShareUrl}
+          />,
+        )
+      })
+
+      // Every item in the toolbar's flex row must resist the browser's
+      // default flex-shrink behavior and keep its text on one line —
+      // otherwise, at widths just below the point where the whole row
+      // would wrap, individual items shrink below their content width and
+      // their text wraps into a tall, cramped column instead of the item
+      // moving to the next row as a whole.
+      const shrinkResistantTestIds = [
+        'toolbar-app-name',
+        'toolbar-person-count',
+        'toolbar-gen-up',
+        'toolbar-gen-down',
+        'toolbar-viewing',
+        'toolbar-depth-slider',
+        'toolbar-copy-link',
+        'toolbar-stats-link',
+      ]
+
+      for (const testId of shrinkResistantTestIds) {
+        const el = container.querySelector(`[data-testid="${testId}"]`)
+        expect(el).not.toBeNull()
+        expect(el!.className).toEqual(expect.stringContaining('flex-shrink-0'))
+      }
+
+      // Text-bearing items must also disallow internal line-wrapping so a
+      // shrink-resistant item can't still wrap its own text.
+      const noWrapTestIds = [
+        'toolbar-app-name',
+        'toolbar-person-count',
+        'toolbar-gen-up',
+        'toolbar-gen-down',
+        'toolbar-viewing',
+        'toolbar-copy-link',
+        'toolbar-stats-link',
+      ]
+
+      for (const testId of noWrapTestIds) {
+        const el = container.querySelector(`[data-testid="${testId}"]`)
+        expect(el).not.toBeNull()
+        expect(el!.className).toEqual(expect.stringContaining('whitespace-nowrap'))
+      }
+    })
+  })
+
   describe('copy link button', () => {
     it('is not rendered when getShareUrl is not provided', async () => {
       await act(async () => {

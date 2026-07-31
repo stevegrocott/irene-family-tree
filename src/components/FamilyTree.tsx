@@ -169,6 +169,8 @@ export function Toolbar({
         <span className="text-white font-medium">{personCount}</span> people
       </span>
       {truncated === true && (
+        // Intentionally omits flex-shrink-0: this item absorbs tight-width pressure via
+        // max-w-[10rem]/sm:max-w-[16rem] + min-w-0 + text-ellipsis, while sibling items stay fixed-size.
         <span
           data-testid="toolbar-truncation-notice"
           role="status"

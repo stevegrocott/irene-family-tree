@@ -175,27 +175,29 @@ describe('POST /api/person/[id]/photo', () => {
       name: "deletes the person's previous photo blob after a successful upload",
       readResult: [{ photoUrl: OLD_URL }],
       delRejects: false,
+      expectDelCalled: true,
       expectDelCalledWith: OLD_URL,
     },
     {
       name: 'does not attempt deletion when the person has no previous photo',
       readResult: [{ photoUrl: null }],
       delRejects: false,
-      expectDelCalledWith: null,
+      expectDelCalled: false,
     },
     {
       name: 'succeeds even when the previous-photo lookup fails',
       readResult: new Error('Neo4j unavailable'),
       delRejects: false,
-      expectDelCalledWith: null,
+      expectDelCalled: false,
     },
     {
       name: 'succeeds even when deleting the previous photo blob fails',
       readResult: [{ photoUrl: OLD_URL }],
       delRejects: true,
+      expectDelCalled: true,
       expectDelCalledWith: OLD_URL,
     },
-  ])('$name', async ({ readResult, delRejects, expectDelCalledWith }) => {
+  ])('$name', async ({ readResult, delRejects, expectDelCalled, expectDelCalledWith }) => {
     if (readResult instanceof Error) {
       mockRead.mockRejectedValue(readResult)
     } else {
@@ -212,10 +214,9 @@ describe('POST /api/person/[id]/photo', () => {
 
     expect(response.status).toBe(200)
     expect(body).toEqual({ url: NEW_URL })
-    if (expectDelCalledWith) {
+    expect(mockDel).toHaveBeenCalledTimes(expectDelCalled ? 1 : 0)
+    if (expectDelCalled) {
       expect(mockDel).toHaveBeenCalledWith(expectDelCalledWith)
-    } else {
-      expect(mockDel).not.toHaveBeenCalled()
     }
   })
 })

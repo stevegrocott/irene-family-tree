@@ -93,11 +93,9 @@ export async function POST(
   }
 
   if (previousPhotoUrl) {
-    try {
-      await del(previousPhotoUrl)
-    } catch (err) {
+    del(previousPhotoUrl).catch(err => {
       console.error('Failed to delete previous photo blob (non-fatal)', err)
-    }
+    })
   }
 
   return NextResponse.json({ url: result.url })

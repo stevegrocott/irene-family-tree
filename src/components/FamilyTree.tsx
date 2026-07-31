@@ -422,24 +422,12 @@ export function PersonDrawer({
       if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`)
       const newPerson = await createRes.json() as Person
       createdPerson = newPerson
-      if (isAdmin) {
-        const linkRes = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ targetId: newPerson.gedcomId, type: addRelativeType }),
-        })
-        if (!linkRes.ok && linkRes.status !== 409) throw new Error(`HTTP ${linkRes.status}`)
-      } else {
-        const suggestRes = await fetch('/api/suggestions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            changeType: 'ADD_RELATIONSHIP',
-            payload: { type: addRelativeType, targetId: newPerson.gedcomId, childId: person.gedcomId },
-          }),
-        })
-        if (!suggestRes.ok) throw new Error(`HTTP ${suggestRes.status}`)
-      }
+      const linkRes = await fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/relationships`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetId: newPerson.gedcomId, type: addRelativeType }),
+      })
+      if (!linkRes.ok && linkRes.status !== 409) throw new Error(`HTTP ${linkRes.status}`)
       resetAddRelativeForm()
       setMode('view')
       setDetailVersion(v => v + 1)

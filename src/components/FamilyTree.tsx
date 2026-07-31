@@ -157,7 +157,7 @@ export function Toolbar({
   return (
     <div
       data-testid="toolbar"
-      className="absolute bottom-4 inset-x-4 z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-auto sm:flex-nowrap sm:gap-4 sm:py-2"
+      className="absolute bottom-4 inset-x-4 z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-auto sm:max-w-[calc(100vw-2rem)] sm:flex-nowrap sm:gap-4 sm:py-2"
     >
       <span
         data-testid="toolbar-app-name"

@@ -253,6 +253,30 @@ describe('Toolbar', () => {
   })
 
   describe('layout resilience at tight widths', () => {
+    it('bounds the toolbar container width to the viewport so it cannot overhang either edge', async () => {
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={3}
+            onHopsChange={jest.fn()}
+          />,
+        )
+      })
+
+      // Issue #190: the toolbar is centered via left-1/2 + -translate-x-1/2
+      // with an auto width above the `sm` breakpoint, so once its intrinsic
+      // content width exceeds the viewport it overhangs symmetrically and
+      // gets clipped at both edges. A max-width bound tied to the viewport
+      // (not a fixed pixel value) caps the box so it can only shrink toward
+      // the centerline instead of growing past it.
+      const toolbar = container.querySelector('[data-testid="toolbar"]')
+      expect(toolbar).not.toBeNull()
+      expect(toolbar!.className).toMatch(/max-w-\[calc\(100vw/)
+    })
+
     it('prevents toolbar items from shrinking (and their text wrapping into columns) when space is tight', async () => {
       const nodes: Node<PersonData>[] = [
         makePersonNode('@I0@', 0, 'Root Person'),

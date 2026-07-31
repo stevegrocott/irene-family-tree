@@ -80,7 +80,7 @@ describe('GET /api/tree/[rootId]', () => {
   })
 
   it('returns 200 with nodes and edges arrays on success', async () => {
-    mockRead.mockResolvedValue([{ nodes: [], rels: [] }])
+    mockRead.mockResolvedValue([{ nodes: [], rels: [], totalNodes: 0 }])
 
     const response = await GET(makeRequest(), makeParams('I001'))
     const body = await response.json()
@@ -90,6 +90,39 @@ describe('GET /api/tree/[rootId]', () => {
     expect(body).toHaveProperty('edges')
     expect(Array.isArray(body.nodes)).toBe(true)
     expect(Array.isArray(body.edges)).toBe(true)
+  })
+
+  describe('totalNodes and truncated', () => {
+    it('reports totalNodes and truncated: false when under the MAX_NODES cap', async () => {
+      mockRead.mockResolvedValue([{ nodes: [personNode], rels: [], totalNodes: 1 }])
+
+      const response = await GET(makeRequest(), makeParams('I001'))
+      const body = await response.json()
+
+      expect(body.totalNodes).toBe(1)
+      expect(body.truncated).toBe(false)
+    })
+
+    it('reports truncated: true when totalNodes exceeds the MAX_NODES cap', async () => {
+      mockRead.mockResolvedValue([{ nodes: [personNode], rels: [], totalNodes: 501 }])
+
+      const response = await GET(makeRequest(), makeParams('I001'))
+      const body = await response.json()
+
+      expect(body.totalNodes).toBe(501)
+      expect(body.truncated).toBe(true)
+    })
+
+    it('substitutes maxNodes into the Cypher query params', async () => {
+      mockRead.mockResolvedValue([{ nodes: [], rels: [], totalNodes: 0 }])
+
+      await GET(makeRequest(), makeParams('I001'))
+
+      expect(mockRead).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ maxNodes: 500 })
+      )
+    })
   })
 
   it('maps Person nodes to the correct FlowNode shape', async () => {

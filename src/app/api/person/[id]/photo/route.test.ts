@@ -2,24 +2,34 @@
  * Unit tests for POST /api/person/[id]/photo.
  *
  * Verifies auth gating, multipart validation (missing file, disallowed type,
- * oversized file), and the successful upload path. `@vercel/blob`'s `put` and
- * `@/auth`'s `auth` are fully mocked so no real network calls are made.
+ * oversized file), the successful upload path, and cleanup of the person's
+ * previous photo blob. `@vercel/blob`'s `put`/`del`, `@/lib/neo4j`'s `read`,
+ * and `@/auth`'s `auth` are fully mocked so no real network calls are made.
  */
 import { POST } from './route'
 
 jest.mock('@vercel/blob', () => ({
   put: jest.fn(),
+  del: jest.fn(),
 }))
 
 jest.mock('@/auth', () => ({
   auth: jest.fn().mockResolvedValue({ user: { email: 'editor@example.com', name: 'Editor User' } }),
 }))
 
-import { put } from '@vercel/blob'
+jest.mock('@/lib/neo4j', () => ({
+  read: jest.fn().mockResolvedValue([{ photoUrl: null }]),
+}))
+
+import { put, del } from '@vercel/blob'
 const mockPut = put as jest.MockedFunction<typeof put>
+const mockDel = del as jest.MockedFunction<typeof del>
 
 import { auth } from '@/auth'
 const mockAuth = auth as unknown as jest.MockedFunction<() => Promise<unknown>>
+
+import { read } from '@/lib/neo4j'
+const mockRead = read as jest.MockedFunction<typeof read>
 
 /**
  * Constructs the route segment params object expected by the Next.js handler.
@@ -44,6 +54,7 @@ const makeFile = (name: string, type: string, sizeBytes: number) =>
 describe('POST /api/person/[id]/photo', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockRead.mockResolvedValue([{ photoUrl: null }])
   })
 
   it('returns 401 when there is no session', async () => {
@@ -154,5 +165,66 @@ describe('POST /api/person/[id]/photo', () => {
 
     expect(response.status).toBe(500)
     expect(body).toEqual({ error: 'Failed to upload photo', detail: 'Blob store unavailable' })
+    expect(mockDel).not.toHaveBeenCalled()
+  })
+
+  it("deletes the person's previous photo blob after a successful upload", async () => {
+    mockRead.mockResolvedValue([
+      { photoUrl: 'https://blob.vercel-storage.com/person-photos/I001-old.jpg' },
+    ])
+    mockPut.mockResolvedValue({ url: 'https://blob.vercel-storage.com/person-photos/I001-new.jpg' } as never)
+
+    const response = await POST(
+      makeRequest(makeFile('photo.jpg', 'image/jpeg', 1024)),
+      makeParams('I001')
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockDel).toHaveBeenCalledWith('https://blob.vercel-storage.com/person-photos/I001-old.jpg')
+  })
+
+  it('does not attempt deletion when the person has no previous photo', async () => {
+    mockRead.mockResolvedValue([{ photoUrl: null }])
+    mockPut.mockResolvedValue({ url: 'https://blob.vercel-storage.com/person-photos/I001-new.jpg' } as never)
+
+    const response = await POST(
+      makeRequest(makeFile('photo.jpg', 'image/jpeg', 1024)),
+      makeParams('I001')
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockDel).not.toHaveBeenCalled()
+  })
+
+  it('succeeds even when the previous-photo lookup fails', async () => {
+    mockRead.mockRejectedValue(new Error('Neo4j unavailable'))
+    mockPut.mockResolvedValue({ url: 'https://blob.vercel-storage.com/person-photos/I001-new.jpg' } as never)
+
+    const response = await POST(
+      makeRequest(makeFile('photo.jpg', 'image/jpeg', 1024)),
+      makeParams('I001')
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual({ url: 'https://blob.vercel-storage.com/person-photos/I001-new.jpg' })
+    expect(mockDel).not.toHaveBeenCalled()
+  })
+
+  it('succeeds even when deleting the previous photo blob fails', async () => {
+    mockRead.mockResolvedValue([
+      { photoUrl: 'https://blob.vercel-storage.com/person-photos/I001-old.jpg' },
+    ])
+    mockPut.mockResolvedValue({ url: 'https://blob.vercel-storage.com/person-photos/I001-new.jpg' } as never)
+    mockDel.mockRejectedValue(new Error('Blob not found'))
+
+    const response = await POST(
+      makeRequest(makeFile('photo.jpg', 'image/jpeg', 1024)),
+      makeParams('I001')
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual({ url: 'https://blob.vercel-storage.com/person-photos/I001-new.jpg' })
   })
 })

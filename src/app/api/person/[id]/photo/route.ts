@@ -6,8 +6,9 @@
 
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
-import { put } from '@vercel/blob'
+import { put, del } from '@vercel/blob'
 import { auth } from '@/auth'
+import { read } from '@/lib/neo4j'
 
 /** Forces the route to run in the Node.js runtime (required for @vercel/blob and multipart parsing). */
 export const runtime = 'nodejs'
@@ -25,7 +26,9 @@ const ALLOWED_MIME_TYPES: Record<string, string> = {
  *
  * Accepts a multipart/form-data request containing a `file` field with a
  * JPEG, PNG, or WebP image up to 5 MB, uploads it to Vercel Blob storage,
- * and returns its public URL.
+ * and returns its public URL. After a successful upload, deletes the
+ * person's previously stored photo blob (if any and if different from the
+ * new one) so replaced photos do not leak storage.
  *
  * @param request - The incoming multipart/form-data request.
  * @param params - Route parameters containing the person's GEDCOM `id`.
@@ -66,6 +69,17 @@ export async function POST(
     return NextResponse.json({ error: 'File must be 5 MB or smaller' }, { status: 400 })
   }
 
+  let previousPhotoUrl: string | null = null
+  try {
+    const rows = await read<{ photoUrl: string | null }>(
+      `MATCH (p:Person {gedcomId: $id}) RETURN p.photoUrl AS photoUrl`,
+      { id }
+    )
+    previousPhotoUrl = rows[0]?.photoUrl ?? null
+  } catch (err) {
+    console.error('Failed to read previous photo for cleanup (non-fatal)', err)
+  }
+
   const pathname = `person-photos/${id}-${randomUUID()}.${extension}`
 
   let result: { url: string }
@@ -74,6 +88,14 @@ export async function POST(
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ error: 'Failed to upload photo', detail }, { status: 500 })
+  }
+
+  if (previousPhotoUrl && previousPhotoUrl !== result.url) {
+    try {
+      await del(previousPhotoUrl)
+    } catch (err) {
+      console.error('Failed to delete previous photo blob (non-fatal)', err)
+    }
   }
 
   return NextResponse.json({ url: result.url })

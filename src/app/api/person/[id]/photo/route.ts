@@ -69,22 +69,23 @@ export async function POST(
     return NextResponse.json({ error: 'File must be 5 MB or smaller' }, { status: 400 })
   }
 
-  let previousPhotoUrl: string | null = null
-  try {
-    const rows = await read<{ photoUrl: string | null }>(
-      `MATCH (p:Person {gedcomId: $id}) RETURN p.photoUrl AS photoUrl`,
-      { id }
-    )
-    previousPhotoUrl = rows[0]?.photoUrl ?? null
-  } catch (err) {
-    console.error('Failed to read previous photo for cleanup (non-fatal)', err)
-  }
-
   const pathname = `person-photos/${id}-${randomUUID()}.${extension}`
 
+  let previousPhotoUrl: string | null = null
   let result: { url: string }
   try {
-    result = await put(pathname, file, { access: 'public' })
+    const [rows, uploadResult] = await Promise.all([
+      read<{ photoUrl: string | null }>(
+        `MATCH (p:Person {gedcomId: $id}) RETURN p.photoUrl AS photoUrl`,
+        { id }
+      ).catch(err => {
+        console.error('Failed to read previous photo for cleanup (non-fatal)', err)
+        return []
+      }),
+      put(pathname, file, { access: 'public' }),
+    ])
+    previousPhotoUrl = rows[0]?.photoUrl ?? null
+    result = uploadResult
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ error: 'Failed to upload photo', detail }, { status: 500 })

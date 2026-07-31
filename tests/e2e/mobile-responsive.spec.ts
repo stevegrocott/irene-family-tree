@@ -246,6 +246,77 @@ test.describe('mobile responsive toolbar and search', () => {
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth)
   })
 
+  test('toolbar keeps the truncation notice on a single line at 1010px and 360px', async ({
+    page,
+  }) => {
+    // Issue #187: once the truncation notice (#181) is present, its text
+    // wraps inside its own span below ~1200px, stretching the whole toolbar
+    // from a single row (66px on a 1440px baseline) to a wrapped 146px
+    // column. Measure a wide-viewport baseline, then confirm the regression
+    // doesn't reappear at narrower widths with the notice showing.
+    const truncatedTreeResponse = {
+      ...mockTreeResponse,
+      truncated: true,
+      totalNodes: 766,
+    }
+    await mockPersonsAndTree(page, [mockPerson], truncatedTreeResponse)
+
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto('/')
+
+    const toolbar = page.getByTestId('toolbar')
+    await expect(toolbar).toBeVisible({ timeout: 15_000 })
+    const appName = page.getByTestId('toolbar-app-name')
+    const notice = page.getByTestId('toolbar-truncation-notice')
+    await expect(notice).toBeVisible()
+
+    const baselineBox = await toolbar.boundingBox()
+    expect(baselineBox).not.toBeNull()
+    const baselineHeight = baselineBox!.height
+
+    // At 1010px the toolbar sits above Tailwind's `sm` (640px) breakpoint,
+    // where `sm:flex-nowrap` applies — the container itself cannot wrap
+    // onto a second flex line, so it must stay a genuine single row.
+    await page.setViewportSize({ width: 1010, height: 780 })
+    const [toolbarBoxAt1010, appNameBoxAt1010, noticeBoxAt1010] = await Promise.all([
+      toolbar.boundingBox(),
+      appName.boundingBox(),
+      notice.boundingBox(),
+    ])
+    expect(toolbarBoxAt1010).not.toBeNull()
+    expect(appNameBoxAt1010).not.toBeNull()
+    expect(noticeBoxAt1010).not.toBeNull()
+
+    // AC1/AC5: no more than ~1.3x the wide-viewport row height — the
+    // pre-fix regression doubled it (2.2x) by wrapping the notice.
+    expect(toolbarBoxAt1010!.height).toBeLessThanOrEqual(baselineHeight * 1.3 + LAYOUT_TOLERANCE_PX)
+
+    // AC2: the toolbar items share a single row — the notice sits at the
+    // same top offset as the never-wrapping app name.
+    expect(Math.abs(noticeBoxAt1010!.y - appNameBoxAt1010!.y)).toBeLessThanOrEqual(LAYOUT_TOLERANCE_PX)
+    await expect(notice).toBeVisible()
+
+    // At 360px the toolbar is below the `sm` breakpoint, where the
+    // container's own `flex-wrap` legitimately stacks items onto separate
+    // rows regardless of this fix — that isn't the regression. What must
+    // still hold is the actual #187 mechanism: the notice's own row stays a
+    // single text line (matching a sibling item that never wraps) instead
+    // of wrapping internally into a tall multi-line column.
+    await page.setViewportSize({ width: 360, height: 780 })
+    const [appNameBoxAt360, noticeBoxAt360] = await Promise.all([
+      appName.boundingBox(),
+      notice.boundingBox(),
+    ])
+    expect(appNameBoxAt360).not.toBeNull()
+    expect(noticeBoxAt360).not.toBeNull()
+
+    // AC2/AC3: the notice stays a single line — no taller than the app
+    // name's own (single-line) row — rather than the tall wrapped column
+    // the pre-fix mechanism produced.
+    expect(noticeBoxAt360!.height).toBeLessThanOrEqual(appNameBoxAt360!.height + LAYOUT_TOLERANCE_PX)
+    await expect(notice).toBeVisible()
+  })
+
   test('toolbar slider and search result rows meet the 44px touch target minimum', async ({
     page,
   }) => {

@@ -84,6 +84,18 @@ export function toPhotoPathname(value: string): string | null {
 
 
 /**
+ * Extracts photo URLs from a raw payload/change-value string, falling back to
+ * scanning the raw text itself when it fails to parse as JSON. A record that
+ * cannot be understood must never be read as "references nothing" — AC9
+ * requires malformed data to fail closed rather than silently drop a root.
+ */
+function extractPhotoUrlsFromRaw(raw: string | null, into: Set<string> = new Set()): Set<string> {
+  if (raw === null || raw === undefined) return into
+  const parsed = safeParseJson(raw)
+  return parsed !== null ? extractPhotoUrls(parsed, into) : extractPhotoUrls(raw, into)
+}
+
+/**
  * Builds the set of photo pathnames still reachable from live data: current
  * Person.photoUrl values, pending suggestion payloads (which may still be
  * approved and applied), and live Change records (whose previousValue a revert
@@ -108,11 +120,11 @@ export function buildReachablePhotoPathnames(
 
   for (const url of personPhotoUrls) addPhotoPathname(url)
   for (const payload of pendingPayloads) {
-    for (const url of extractPhotoUrls(safeParseJson(payload))) addPhotoPathname(url)
+    for (const url of extractPhotoUrlsFromRaw(payload)) addPhotoPathname(url)
   }
   for (const { previousValue, newValue } of liveChanges) {
-    for (const url of extractPhotoUrls(safeParseJson(previousValue))) addPhotoPathname(url)
-    for (const url of extractPhotoUrls(safeParseJson(newValue))) addPhotoPathname(url)
+    for (const url of extractPhotoUrlsFromRaw(previousValue)) addPhotoPathname(url)
+    for (const url of extractPhotoUrlsFromRaw(newValue)) addPhotoPathname(url)
   }
 
   return reachable

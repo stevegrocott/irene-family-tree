@@ -122,6 +122,16 @@ describe('buildReachablePhotoPathnames', () => {
     expect(reachable.size).toBe(0)
   })
 
+  it('fails closed: still reaches a photo referenced inside malformed JSON', () => {
+    const malformed = `{"photoUrl": "${url('malformed.jpg')}"`
+    const reachable = buildReachablePhotoPathnames(
+      [],
+      [malformed],
+      [{ previousValue: malformed, newValue: null }]
+    )
+    expect(reachable.has(`${PHOTO_PREFIX}malformed.jpg`)).toBe(true)
+  })
+
   it('still reaches a photo referenced by a bare JSON string payload', () => {
     const reachable = buildReachablePhotoPathnames([], [JSON.stringify(url('bare.jpg'))], [])
     expect(reachable.has(`${PHOTO_PREFIX}bare.jpg`)).toBe(true)

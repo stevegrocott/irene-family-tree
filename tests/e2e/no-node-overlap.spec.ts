@@ -10,7 +10,9 @@ import { test, expect } from '@playwright/test';
  *   3. Collect bounding boxes for all person nodes.
  *   4. Group nodes into y-levels using a tolerance band (nodes within 10px
  *      vertically share the same level).
- *   5. Assert that within each level, no two nodes' x-ranges overlap.
+ *   5. Assert that the tree spans more than one y-level (i.e. the layout
+ *      actually has multiple generations to check for overlap across).
+ *   6. Assert that within each level, no two nodes' x-ranges overlap.
  */
 test.describe('no person node overlap', () => {
   test.beforeEach(async ({ page }) => {
@@ -55,6 +57,10 @@ test.describe('no person node overlap', () => {
         levels.push([box]);
       }
     }
+
+    // Sanity check: the default tree must span more than one generation so
+    // this test actually exercises cross-level layout, not just a single row.
+    expect(levels.length).toBeGreaterThan(1);
 
     // Within each level, assert no two x-ranges overlap
     for (const level of levels) {

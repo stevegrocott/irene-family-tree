@@ -1,8 +1,9 @@
+import { neo4jErrorResponseMock } from '@/test-utils/neo4jMock'
 import { POST } from './route'
 
 jest.mock('@/lib/neo4j', () => ({
   write: jest.fn(),
-  ...require('@/test-utils/neo4jMock').neo4jErrorResponseMock(),
+  ...neo4jErrorResponseMock(),
 }))
 
 jest.mock('@/auth', () => ({

@@ -5,11 +5,12 @@
  * logic in isolation: HTTP status codes, FlowNode / FlowEdge mapping, default
  * values for optional fields, and the bounce-traversal relationship directions.
  */
+import { neo4jErrorResponseMock } from '@/test-utils/neo4jMock'
 import { GET } from './route'
 
 jest.mock('@/lib/neo4j', () => ({
   read: jest.fn(),
-  ...require('@/test-utils/neo4jMock').neo4jErrorResponseMock(),
+  ...neo4jErrorResponseMock(),
 }))
 
 // The route calls `auth()` to decide whether to redact likely-living persons

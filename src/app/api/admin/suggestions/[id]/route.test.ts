@@ -1,10 +1,10 @@
+import { neo4jErrorResponseMock } from '@/test-utils/neo4jMock'
 import { POST } from './route'
 
 jest.mock('@/lib/neo4j', () => ({
   read: jest.fn(),
   write: jest.fn(),
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.mock factories are hoisted above imports
-  ...require('@/test-utils/neo4jMock').neo4jErrorResponseMock(),
+  ...neo4jErrorResponseMock(),
 }))
 
 jest.mock('@/auth', () => ({

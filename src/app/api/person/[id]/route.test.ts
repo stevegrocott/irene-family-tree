@@ -5,12 +5,13 @@
  * response shapes for success, not-found, and database-error scenarios.
  * Neo4j `read` is fully mocked so no live database connection is required.
  */
+import { neo4jErrorResponseMock } from '@/test-utils/neo4jMock'
 import { GET, PATCH } from './route'
 
 jest.mock('@/lib/neo4j', () => ({
   read: jest.fn(),
   write: jest.fn(),
-  ...require('@/test-utils/neo4jMock').neo4jErrorResponseMock(),
+  ...neo4jErrorResponseMock(),
 }))
 
 jest.mock('@/lib/changes', () => ({

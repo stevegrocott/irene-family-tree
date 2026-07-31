@@ -10,10 +10,7 @@ import { GET } from './route'
 
 jest.mock('@/lib/neo4j', () => ({
   read: jest.fn(),
-  neo4jErrorResponse: jest.fn((err: unknown, publicMessage: string, status = 500) => {
-    const detail = err instanceof Error ? err.message : String(err)
-    return Response.json({ error: publicMessage, detail }, { status })
-  }),
+  ...require('@/test-utils/neo4jMock').neo4jErrorResponseMock(),
 }))
 
 import { read } from '@/lib/neo4j'

@@ -186,11 +186,15 @@ describe('Toolbar', () => {
 
       const notice = container.querySelector('[data-testid="toolbar-truncation-notice"]')
       expect(notice).not.toBeNull()
-      expect(notice!.textContent).toMatch(/truncat/i)
+      // The visible text is degraded to "⚠ + node count" to keep this the
+      // smallest practical contributor to toolbar width; the full sentence
+      // lives in `title` (see the test below).
+      expect(notice!.textContent).toContain('⚠')
       expect(notice!.textContent).toContain('588')
+      expect(notice!.getAttribute('title')).toMatch(/truncat/i)
     })
 
-    it('constrains the truncation notice to one line with a max-width and ellipsis, with the full text available via title', async () => {
+    it('constrains the truncation notice to one line with a max-width and ellipsis, showing a degraded ⚠ + node count with the full text available via title', async () => {
       await act(async () => {
         root = createRoot(container)
         root.render(
@@ -213,8 +217,11 @@ describe('Toolbar', () => {
       expect(notice!.className).toEqual(expect.stringContaining('overflow-hidden'))
       expect(notice!.className).toEqual(expect.stringContaining('text-ellipsis'))
       expect(notice!.className).toMatch(/max-w-/)
-      // Full text preserved via title so it's still available (e.g. on hover).
-      expect(notice!.getAttribute('title')).toBe(notice!.textContent)
+      // Degraded visible text: just the warning glyph and node count.
+      expect(notice!.textContent).toBe('⚠ 588')
+      // Full prose preserved via title so it's still available (e.g. on hover).
+      expect(notice!.getAttribute('title')).toBe('⚠ Tree truncated — showing a partial view of 588 total nodes')
+      expect(notice!.getAttribute('title')).not.toBe(notice!.textContent)
     })
 
     it('shows no truncation notice when truncated is false', async () => {
@@ -253,6 +260,30 @@ describe('Toolbar', () => {
   })
 
   describe('layout resilience at tight widths', () => {
+    it('bounds the toolbar container width to the viewport so it cannot overhang either edge', async () => {
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={3}
+            onHopsChange={jest.fn()}
+          />,
+        )
+      })
+
+      // Issue #190: the toolbar is centered via left-1/2 + -translate-x-1/2
+      // with an auto width above the `sm` breakpoint, so once its intrinsic
+      // content width exceeds the viewport it overhangs symmetrically and
+      // gets clipped at both edges. A max-width bound tied to the viewport
+      // (not a fixed pixel value) caps the box so it can only shrink toward
+      // the centerline instead of growing past it.
+      const toolbar = container.querySelector('[data-testid="toolbar"]')
+      expect(toolbar).not.toBeNull()
+      expect(toolbar!.className).toMatch(/max-w-\[calc\(100vw/)
+    })
+
     it('prevents toolbar items from shrinking (and their text wrapping into columns) when space is tight', async () => {
       const nodes: Node<PersonData>[] = [
         makePersonNode('@I0@', 0, 'Root Person'),

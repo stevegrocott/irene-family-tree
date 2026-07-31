@@ -389,6 +389,28 @@ describe('GET /api/person/[id]', () => {
       expect(child.birthYear).toBeNull()
     })
 
+    it('redacts living nested parent and sibling summaries for anonymous requests', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      const livingRelatives = {
+        ...livingDetail,
+        parents: [{ gedcomId: 'I006', name: 'Living Parent', sex: 'F', birthYear: RECENT, deathYear: null }],
+        siblings: [{ gedcomId: 'I007', name: 'Living Sibling', sex: 'M', birthYear: RECENT, deathYear: null }],
+      }
+      mockRead.mockResolvedValue([livingRelatives])
+
+      const body = await (await GET(makeRequest(), makeParams('I001'))).json()
+
+      const parent = body.parents[0]
+      expect(parent.living).toBe(true)
+      expect(parent.name).toBe('Living Parent')
+      expect(parent.birthYear).toBeNull()
+
+      const sibling = body.siblings[0]
+      expect(sibling.living).toBe(true)
+      expect(sibling.name).toBe('Living Sibling')
+      expect(sibling.birthYear).toBeNull()
+    })
+
     it('leaves deceased nested parent and sibling summaries untouched for anonymous requests', async () => {
       mockAuth.mockResolvedValueOnce(null)
       mockRead.mockResolvedValue([livingDetail])

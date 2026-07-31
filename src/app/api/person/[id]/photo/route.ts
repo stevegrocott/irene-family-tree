@@ -27,8 +27,8 @@ const ALLOWED_MIME_TYPES: Record<string, string> = {
  * Accepts a multipart/form-data request containing a `file` field with a
  * JPEG, PNG, or WebP image up to 5 MB, uploads it to Vercel Blob storage,
  * and returns its public URL. After a successful upload, deletes the
- * person's previously stored photo blob (if any and if different from the
- * new one) so replaced photos do not leak storage.
+ * person's previously stored photo blob (if any) so replaced photos do not
+ * leak storage.
  *
  * @param request - The incoming multipart/form-data request.
  * @param params - Route parameters containing the person's GEDCOM `id`.
@@ -91,7 +91,7 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to upload photo', detail }, { status: 500 })
   }
 
-  if (previousPhotoUrl && previousPhotoUrl !== result.url) {
+  if (previousPhotoUrl) {
     try {
       await del(previousPhotoUrl)
     } catch (err) {

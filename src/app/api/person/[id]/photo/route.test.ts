@@ -167,55 +167,42 @@ describe('POST /api/person/[id]/photo', () => {
     expect(mockDel).not.toHaveBeenCalled()
   })
 
-  it("deletes the person's previous photo blob after a successful upload", async () => {
-    mockRead.mockResolvedValue([
-      { photoUrl: 'https://blob.vercel-storage.com/person-photos/I001-old.jpg' },
-    ])
-    mockPut.mockResolvedValue({ url: 'https://blob.vercel-storage.com/person-photos/I001-new.jpg' } as never)
+  const OLD_URL = 'https://blob.vercel-storage.com/person-photos/I001-old.jpg'
+  const NEW_URL = 'https://blob.vercel-storage.com/person-photos/I001-new.jpg'
 
-    const response = await POST(
-      makeRequest(makeFile('photo.jpg', 'image/jpeg', 1024)),
-      makeParams('I001')
-    )
-
-    expect(response.status).toBe(200)
-    expect(mockDel).toHaveBeenCalledWith('https://blob.vercel-storage.com/person-photos/I001-old.jpg')
-  })
-
-  it('does not attempt deletion when the person has no previous photo', async () => {
-    mockRead.mockResolvedValue([{ photoUrl: null }])
-    mockPut.mockResolvedValue({ url: 'https://blob.vercel-storage.com/person-photos/I001-new.jpg' } as never)
-
-    const response = await POST(
-      makeRequest(makeFile('photo.jpg', 'image/jpeg', 1024)),
-      makeParams('I001')
-    )
-
-    expect(response.status).toBe(200)
-    expect(mockDel).not.toHaveBeenCalled()
-  })
-
-  it('succeeds even when the previous-photo lookup fails', async () => {
-    mockRead.mockRejectedValue(new Error('Neo4j unavailable'))
-    mockPut.mockResolvedValue({ url: 'https://blob.vercel-storage.com/person-photos/I001-new.jpg' } as never)
-
-    const response = await POST(
-      makeRequest(makeFile('photo.jpg', 'image/jpeg', 1024)),
-      makeParams('I001')
-    )
-    const body = await response.json()
-
-    expect(response.status).toBe(200)
-    expect(body).toEqual({ url: 'https://blob.vercel-storage.com/person-photos/I001-new.jpg' })
-    expect(mockDel).not.toHaveBeenCalled()
-  })
-
-  it('succeeds even when deleting the previous photo blob fails', async () => {
-    mockRead.mockResolvedValue([
-      { photoUrl: 'https://blob.vercel-storage.com/person-photos/I001-old.jpg' },
-    ])
-    mockPut.mockResolvedValue({ url: 'https://blob.vercel-storage.com/person-photos/I001-new.jpg' } as never)
-    mockDel.mockRejectedValue(new Error('Blob not found'))
+  it.each([
+    {
+      name: "deletes the person's previous photo blob after a successful upload",
+      readResult: [{ photoUrl: OLD_URL }],
+      delRejects: false,
+      expectDelCalledWith: OLD_URL,
+    },
+    {
+      name: 'does not attempt deletion when the person has no previous photo',
+      readResult: [{ photoUrl: null }],
+      delRejects: false,
+      expectDelCalledWith: null,
+    },
+    {
+      name: 'succeeds even when the previous-photo lookup fails',
+      readResult: new Error('Neo4j unavailable'),
+      delRejects: false,
+      expectDelCalledWith: null,
+    },
+    {
+      name: 'succeeds even when deleting the previous photo blob fails',
+      readResult: [{ photoUrl: OLD_URL }],
+      delRejects: true,
+      expectDelCalledWith: OLD_URL,
+    },
+  ])('$name', async ({ readResult, delRejects, expectDelCalledWith }) => {
+    if (readResult instanceof Error) {
+      mockRead.mockRejectedValue(readResult)
+    } else {
+      mockRead.mockResolvedValue(readResult)
+    }
+    mockPut.mockResolvedValue({ url: NEW_URL } as never)
+    if (delRejects) mockDel.mockRejectedValue(new Error('Blob not found'))
 
     const response = await POST(
       makeRequest(makeFile('photo.jpg', 'image/jpeg', 1024)),
@@ -224,6 +211,11 @@ describe('POST /api/person/[id]/photo', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(body).toEqual({ url: 'https://blob.vercel-storage.com/person-photos/I001-new.jpg' })
+    expect(body).toEqual({ url: NEW_URL })
+    if (expectDelCalledWith) {
+      expect(mockDel).toHaveBeenCalledWith(expectDelCalledWith)
+    } else {
+      expect(mockDel).not.toHaveBeenCalled()
+    }
   })
 })

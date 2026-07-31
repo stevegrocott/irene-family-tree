@@ -87,6 +87,7 @@ export async function POST(
     previousPhotoUrl = rows[0]?.photoUrl ?? null
     result = uploadResult
   } catch (err) {
+    console.error('Failed to upload photo', err)
     const detail = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ error: 'Failed to upload photo', detail }, { status: 500 })
   }

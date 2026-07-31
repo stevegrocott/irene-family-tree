@@ -272,6 +272,74 @@ test.describe('PersonDrawer CRUD', () => {
     await expect(drawer).toContainText('London, England')
   })
 
+  // ── Parents display ────────────────────────────────────────────────────────
+
+  test('view: drawer lists parents for a person known to have them', async ({ page }) => {
+    await mockSignedInSession(page)
+
+    await page.route(/\/api\/persons/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            gedcomId: '@ITEST@',
+            name: 'Alice Test',
+            sex: 'F',
+            birthYear: '1900',
+            deathYear: null,
+            birthPlace: 'London, England',
+          },
+        ]),
+      })
+    )
+
+    await page.route(/\/api\/tree\//, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(aliceTreeResponse),
+      })
+    )
+
+    await page.route(/\/api\/person\//, async (route) => {
+      if (route.request().url().includes('/relationships')) {
+        await route.continue()
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...mockPersonDetail,
+          parents: [
+            { gedcomId: '@IFATHER@', name: 'Frank Test', sex: 'M', birthYear: '1870', deathYear: null },
+            { gedcomId: '@IMOTHER@', name: 'Grace Test', sex: 'F', birthYear: '1875', deathYear: null },
+          ],
+        }),
+      })
+    })
+
+    await page.goto('/')
+
+    // Wait for the tree to render.
+    await expect(page.getByTestId('toolbar-viewing')).toBeVisible({ timeout: 15_000 })
+
+    // Open the drawer for Alice Test.
+    const personNode = page.locator('.react-flow__node-person').first()
+    await expect(personNode).toBeVisible({ timeout: 10_000 })
+    await personNode.click()
+
+    const drawer = page.getByTestId('person-drawer')
+    await expect(drawer).toBeVisible()
+
+    // Parents section renders both known parents by name.
+    const parentsSection = page.getByTestId('person-drawer-parents')
+    await expect(parentsSection).toBeVisible({ timeout: 5_000 })
+    await expect(parentsSection).toContainText('Frank Test')
+    await expect(parentsSection).toContainText('Grace Test')
+  })
+
   // ── Add-relative flow ──────────────────────────────────────────────────────
 
   test('add-relative: + Add child opens search; selecting adds relationship to drawer', async ({

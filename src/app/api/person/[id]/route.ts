@@ -99,10 +99,10 @@ export async function GET(
     `MATCH (p:Person {gedcomId: $id})
 
      // Parents: unions where p is a child, then find persons connected via UNION to those unions
-     OPTIONAL MATCH (p)-[:CHILD]->(pu:Union)<-[:UNION]-(parent:Person)
+     OPTIONAL MATCH (p)<-[:CHILD]-(pu:Union)<-[:UNION]-(parent:Person)
 
      // Siblings: unions where p is a child, then other children of those same unions
-     OPTIONAL MATCH (p)-[:CHILD]->(su:Union)<-[:CHILD]-(sib:Person)
+     OPTIONAL MATCH (p)<-[:CHILD]-(su:Union)-[:CHILD]->(sib:Person)
      WHERE sib <> p
 
      WITH p,

@@ -190,6 +190,33 @@ describe('Toolbar', () => {
       expect(notice!.textContent).toContain('588')
     })
 
+    it('constrains the truncation notice to one line with a max-width and ellipsis, with the full text available via title', async () => {
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={3}
+            onHopsChange={jest.fn()}
+            truncated={true}
+            totalNodes={588}
+          />,
+        )
+      })
+
+      const notice = container.querySelector('[data-testid="toolbar-truncation-notice"]')
+      expect(notice).not.toBeNull()
+      // One line, max-width, ellipsis for overflow — matches the truncation
+      // pattern already used elsewhere (e.g. PersonNode.tsx).
+      expect(notice!.className).toEqual(expect.stringContaining('whitespace-nowrap'))
+      expect(notice!.className).toEqual(expect.stringContaining('overflow-hidden'))
+      expect(notice!.className).toEqual(expect.stringContaining('text-ellipsis'))
+      expect(notice!.className).toMatch(/max-w-/)
+      // Full text preserved via title so it's still available (e.g. on hover).
+      expect(notice!.getAttribute('title')).toBe(notice!.textContent)
+    })
+
     it('shows no truncation notice when truncated is false', async () => {
       await act(async () => {
         root = createRoot(container)

@@ -172,7 +172,8 @@ export function Toolbar({
         <span
           data-testid="toolbar-truncation-notice"
           role="status"
-          className="text-xs text-amber-300 select-none"
+          title={`⚠ Tree truncated${typeof totalNodes === 'number' ? ` — showing a partial view of ${totalNodes} total nodes` : ''}`}
+          className="text-xs text-amber-300 select-none max-w-[10rem] overflow-hidden whitespace-nowrap text-ellipsis sm:max-w-[16rem]"
         >
           ⚠ Tree truncated{typeof totalNodes === 'number' ? ` — showing a partial view of ${totalNodes} total nodes` : ''}
         </span>

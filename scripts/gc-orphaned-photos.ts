@@ -47,6 +47,8 @@ export type ListPage = {
 
 export type ListFn = (opts: { prefix: string; cursor?: string; limit?: number }) => Promise<ListPage>
 
+export type DelFn = (urls: string[]) => Promise<unknown>
+
 /**
  * Recursively walks an arbitrary JSON value (PendingChange payloads and
  * Change previous/new values have no fixed shape across change types) and
@@ -196,6 +198,41 @@ export async function listAllPhotoBlobs(listFn: ListFn): Promise<BlobInfo[]> {
   return blobs
 }
 
+/**
+ * The delete step, and the safety gate in front of it: nothing is deleted
+ * unless `apply` is true.
+ *
+ * Extracted from `main()` so this gate is directly testable — AC1 requires a
+ * test proving `del()` is never called on a dry run, and `main()` itself is not
+ * exported because it owns env loading and the neo4j driver lifecycle.
+ *
+ * @returns the number of blobs actually deleted (0 on a dry run).
+ */
+export async function deleteOrphanedBlobs(
+  orphaned: BlobInfo[],
+  apply: boolean,
+  delFn: DelFn
+): Promise<number> {
+  if (!apply) {
+    console.log('\nDry run only. Re-run with --apply to delete these blobs.')
+    return 0
+  }
+
+  const toDelete = selectDeletableUrls(orphaned)
+  if (toDelete.length === 0) {
+    console.log('\nNothing to delete.')
+    return 0
+  }
+
+  let deleted = 0
+  for (const batch of chunk(toDelete, DELETE_BATCH_SIZE)) {
+    await delFn(batch)
+    deleted += batch.length
+    console.log(`Deleted ${deleted}/${toDelete.length}...`)
+  }
+  return deleted
+}
+
 export interface CliOptions {
   apply: boolean
   minAgeHours: number
@@ -276,24 +313,10 @@ async function main() {
     console.log(`  ${blob.pathname}  (${blob.size} bytes, uploaded ${new Date(blob.uploadedAt).toISOString()})`)
   }
 
-  if (!apply) {
-    console.log('\nDry run only. Re-run with --apply to delete these blobs.')
-    return
+  const deleted = await deleteOrphanedBlobs(orphaned, apply, urls => del(urls))
+  if (deleted > 0) {
+    console.log(`\nDeleted ${deleted} orphaned blob(s), reclaiming ${reclaimedBytes} bytes.`)
   }
-
-  const toDelete = selectDeletableUrls(orphaned)
-  if (toDelete.length === 0) {
-    console.log('\nNothing to delete.')
-    return
-  }
-
-  let deleted = 0
-  for (const batch of chunk(toDelete, DELETE_BATCH_SIZE)) {
-    await del(batch)
-    deleted += batch.length
-    console.log(`Deleted ${deleted}/${toDelete.length}...`)
-  }
-  console.log(`\nDeleted ${deleted} orphaned blob(s), reclaiming ${reclaimedBytes} bytes.`)
 }
 
 if (require.main === module) {

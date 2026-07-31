@@ -10,6 +10,7 @@ import {
   chunk,
   listAllPhotoBlobs,
   parseCliArgs,
+  deleteOrphanedBlobs,
   type BlobInfo,
 } from './gc-orphaned-photos'
 
@@ -267,5 +268,68 @@ describe('parseCliArgs', () => {
 
   it('rejects an unrecognised flag rather than silently ignoring it', () => {
     expect(() => parseCliArgs(['--min-age-hrs=2'])).toThrow(/--min-age-hrs/)
+  })
+})
+
+describe('deleteOrphanedBlobs', () => {
+  let logSpy: jest.SpyInstance
+
+  beforeEach(() => {
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    logSpy.mockRestore()
+  })
+
+  const orphans = [blob({ url: url('a.jpg') }), blob({ url: url('b.jpg') })]
+
+  // AC1: the dry run is the default, and it must never reach the delete API.
+  it('does not call del() when apply is false, even with orphans present', async () => {
+    const del = jest.fn().mockResolvedValue(undefined)
+    const deleted = await deleteOrphanedBlobs(orphans, false, del)
+
+    expect(del).not.toHaveBeenCalled()
+    expect(deleted).toBe(0)
+  })
+
+  it('deletes every orphan URL when apply is true', async () => {
+    const del = jest.fn().mockResolvedValue(undefined)
+    const deleted = await deleteOrphanedBlobs(orphans, true, del)
+
+    expect(del).toHaveBeenCalledTimes(1)
+    expect(del).toHaveBeenCalledWith([url('a.jpg'), url('b.jpg')])
+    expect(deleted).toBe(2)
+  })
+
+  it('does not call del() when apply is true but nothing is orphaned', async () => {
+    const del = jest.fn().mockResolvedValue(undefined)
+    const deleted = await deleteOrphanedBlobs([], true, del)
+
+    expect(del).not.toHaveBeenCalled()
+    expect(deleted).toBe(0)
+  })
+
+  // AC7: the prefix guard must fire before anything reaches del().
+  it('throws without deleting anything when an orphan sits outside the photo prefix', async () => {
+    const del = jest.fn().mockResolvedValue(undefined)
+    const foreign = blob({ url: 'https://example.public.blob.vercel-storage.com/other/x.jpg' })
+
+    await expect(deleteOrphanedBlobs([foreign], true, del)).rejects.toThrow(/Refusing to delete/)
+    expect(del).not.toHaveBeenCalled()
+  })
+
+  it('splits deletions into batches within the blob API limit', async () => {
+    const del = jest.fn().mockResolvedValue(undefined)
+    const many = Array.from({ length: DELETE_BATCH_SIZE + 5 }, (_, i) =>
+      blob({ url: url(`batch-${i}.jpg`) })
+    )
+
+    const deleted = await deleteOrphanedBlobs(many, true, del)
+
+    expect(del).toHaveBeenCalledTimes(2)
+    expect(del.mock.calls[0][0]).toHaveLength(DELETE_BATCH_SIZE)
+    expect(del.mock.calls[1][0]).toHaveLength(5)
+    expect(deleted).toBe(DELETE_BATCH_SIZE + 5)
   })
 })

@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "jest",
     "import": "ts-node --project tsconfig.scripts.json scripts/import-gedcom.ts",
-    "export": "ts-node --project tsconfig.scripts.json scripts/export-gedcom.ts"
+    "export": "ts-node --project tsconfig.scripts.json scripts/export-gedcom.ts",
+    "gc:photos": "ts-node --project tsconfig.scripts.json scripts/gc-orphaned-photos.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",

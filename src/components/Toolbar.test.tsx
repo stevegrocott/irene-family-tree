@@ -168,6 +168,63 @@ describe('Toolbar', () => {
     expect(statsLink!.getAttribute('href')).toBe('/stats')
   })
 
+  describe('truncation notice', () => {
+    it('shows a truncation notice when truncated is true', async () => {
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={3}
+            onHopsChange={jest.fn()}
+            truncated={true}
+            totalNodes={588}
+          />,
+        )
+      })
+
+      const notice = container.querySelector('[data-testid="toolbar-truncation-notice"]')
+      expect(notice).not.toBeNull()
+      expect(notice!.textContent).toMatch(/truncat/i)
+      expect(notice!.textContent).toContain('588')
+    })
+
+    it('shows no truncation notice when truncated is false', async () => {
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={3}
+            onHopsChange={jest.fn()}
+            truncated={false}
+            totalNodes={2}
+          />,
+        )
+      })
+
+      expect(container.querySelector('[data-testid="toolbar-truncation-notice"]')).toBeNull()
+    })
+
+    it('shows no truncation notice when truncated is omitted', async () => {
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={3}
+            onHopsChange={jest.fn()}
+          />,
+        )
+      })
+
+      expect(container.querySelector('[data-testid="toolbar-truncation-notice"]')).toBeNull()
+    })
+  })
+
   describe('copy link button', () => {
     it('is not rendered when getShareUrl is not provided', async () => {
       await act(async () => {

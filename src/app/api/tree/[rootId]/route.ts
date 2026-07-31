@@ -74,6 +74,10 @@ interface Neo4jRel {
  * nodes, then maps the raw Neo4j result to React Flow `FlowNode` / `FlowEdge`
  * shapes with placeholder positions.
  *
+ * The traversal's matched node count is capped at `MAX_NODES` to bound payload
+ * size; the response reports the pre-cap total via `totalNodes` and whether the
+ * cap was applied via `truncated`.
+ *
  * Query Parameters:
  * - `hops` (optional): Number of relationship hops to traverse from root person
  *   (default: DEFAULT_HOPS, range: MIN_HOPS to MAX_HOPS, clamped if exceeds max)
@@ -102,21 +106,22 @@ export async function GET(
     hops = Math.min(parseInt(hopsParam, 10), MAX_HOPS)
   }
 
-  let rows: { nodes: Neo4jNode[]; rels: Neo4jRel[] }[]
+  let rows: { nodes: Neo4jNode[]; rels: Neo4jRel[]; totalNodes: number }[]
   try {
-    rows = await read<{ nodes: Neo4jNode[]; rels: Neo4jRel[] }>(
+    rows = await read<{ nodes: Neo4jNode[]; rels: Neo4jRel[]; totalNodes: number }>(
       `MATCH (root:Person {gedcomId: $id})
 
        OPTIONAL MATCH (root)-[:CHILD|UNION*1..${hops}]-(other)
        WHERE other:Person OR other:Union
 
-       WITH root, ([root] + collect(DISTINCT other))[0..$maxNodes] AS allNodes
+       WITH root, [root] + collect(DISTINCT other) AS foundNodes
+       WITH size(foundNodes) AS totalNodes, foundNodes[0..$maxNodes] AS allNodes
 
        UNWIND allNodes AS n
        OPTIONAL MATCH (n)-[r:CHILD|UNION]-(m)
        WHERE m IN allNodes
 
-       WITH allNodes, collect(DISTINCT r) AS allRels
+       WITH allNodes, totalNodes, collect(DISTINCT r) AS allRels
 
        RETURN [n IN allNodes | CASE
          WHEN 'Person' IN labels(n) THEN
@@ -132,7 +137,8 @@ export async function GET(
          type:  type(r),
          start: elementId(startNode(r)),
          end:   elementId(endNode(r))
-       }] AS rels`,
+       }] AS rels,
+       totalNodes`,
       { id: rootId, maxNodes: MAX_NODES }
     )
   } catch (err) {
@@ -141,7 +147,8 @@ export async function GET(
 
   if (!rows.length) return Response.json({ error: 'Person not found' }, { status: 404 })
 
-  const { nodes, rels } = rows[0]
+  const { nodes, rels, totalNodes = nodes.length } = rows[0]
+  const truncated = totalNodes > MAX_NODES
 
   const session = await auth()
   const isAnonymous = !session?.user
@@ -180,5 +187,10 @@ export async function GET(
     label: r.type,
   }))
 
-  return Response.json({ nodes: flowNodes, edges: flowEdges } satisfies TreeResponse)
+  return Response.json({
+    nodes: flowNodes,
+    edges: flowEdges,
+    totalNodes,
+    truncated,
+  } satisfies TreeResponse)
 }

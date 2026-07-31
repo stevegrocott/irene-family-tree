@@ -166,4 +166,8 @@ export interface TreeResponse {
   nodes: FlowNode[]
   /** All relationship edges connecting those nodes. */
   edges: FlowEdge[]
+  /** Total number of nodes matched by the traversal before the `MAX_NODES` cap was applied. */
+  totalNodes: number
+  /** `true` when the matched node count exceeded `MAX_NODES` and the result was capped. */
+  truncated: boolean
 }

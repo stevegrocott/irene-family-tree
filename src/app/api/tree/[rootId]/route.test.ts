@@ -80,7 +80,7 @@ describe('GET /api/tree/[rootId]', () => {
   })
 
   it('returns 200 with nodes and edges arrays on success', async () => {
-    mockRead.mockResolvedValue([{ nodes: [], rels: [] }])
+    mockRead.mockResolvedValue([{ nodes: [], rels: [], totalNodes: 0 }])
 
     const response = await GET(makeRequest(), makeParams('I001'))
     const body = await response.json()
@@ -90,6 +90,39 @@ describe('GET /api/tree/[rootId]', () => {
     expect(body).toHaveProperty('edges')
     expect(Array.isArray(body.nodes)).toBe(true)
     expect(Array.isArray(body.edges)).toBe(true)
+  })
+
+  describe('totalNodes and truncated', () => {
+    it('reports totalNodes and truncated: false when under the MAX_NODES cap', async () => {
+      mockRead.mockResolvedValue([{ nodes: [personNode], rels: [], totalNodes: 1 }])
+
+      const response = await GET(makeRequest(), makeParams('I001'))
+      const body = await response.json()
+
+      expect(body.totalNodes).toBe(1)
+      expect(body.truncated).toBe(false)
+    })
+
+    it('reports truncated: true when totalNodes exceeds the MAX_NODES cap', async () => {
+      mockRead.mockResolvedValue([{ nodes: [personNode], rels: [], totalNodes: 501 }])
+
+      const response = await GET(makeRequest(), makeParams('I001'))
+      const body = await response.json()
+
+      expect(body.totalNodes).toBe(501)
+      expect(body.truncated).toBe(true)
+    })
+
+    it('substitutes maxNodes into the Cypher query params', async () => {
+      mockRead.mockResolvedValue([{ nodes: [], rels: [], totalNodes: 0 }])
+
+      await GET(makeRequest(), makeParams('I001'))
+
+      expect(mockRead).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ maxNodes: 500 })
+      )
+    })
   })
 
   it('maps Person nodes to the correct FlowNode shape', async () => {
@@ -281,6 +314,63 @@ describe('GET /api/tree/[rootId]', () => {
         expect.stringContaining('*1..60'),
         expect.any(Object)
       )
+    })
+  })
+
+  // Issue #181: the traversal caps at MAX_NODES (500) nodes per request. The
+  // response must say so via `truncated`/`totalNodes` rather than silently
+  // dropping relatives, so both the API contract and the UI can be honest
+  // about a partial tree. The mocked Neo4j row carries `totalNodes` alongside
+  // `nodes`/`rels` — the count of all nodes reachable by the traversal before
+  // the `[0..$maxNodes]` cap is applied.
+  describe('truncation reporting (issue #181)', () => {
+    const makeNodes = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        _id: `node:${i}`,
+        _labels: ['Person'],
+        gedcomId: `I${i}`,
+      }))
+
+    it('reports truncated: true and the full totalNodes count when the traversal exceeds MAX_NODES (500)', async () => {
+      mockRead.mockResolvedValue([{ nodes: makeNodes(500), rels: [], totalNodes: 650 }])
+
+      const response = await GET(makeRequest(), makeParams('I001'))
+      const body = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(body.truncated).toBe(true)
+      expect(body.totalNodes).toBe(650)
+      expect(body.nodes).toHaveLength(500)
+    })
+
+    it('reports truncated: false when exactly MAX_NODES are reachable and none are left out', async () => {
+      mockRead.mockResolvedValue([{ nodes: makeNodes(500), rels: [], totalNodes: 500 }])
+
+      const response = await GET(makeRequest(), makeParams('I001'))
+      const body = await response.json()
+
+      expect(body.truncated).toBe(false)
+      expect(body.totalNodes).toBe(500)
+    })
+
+    it('reports truncated: false when the traversal is well under MAX_NODES', async () => {
+      mockRead.mockResolvedValue([{ nodes: makeNodes(10), rels: [], totalNodes: 10 }])
+
+      const response = await GET(makeRequest(), makeParams('I001'))
+      const body = await response.json()
+
+      expect(body.truncated).toBe(false)
+      expect(body.totalNodes).toBe(10)
+    })
+
+    it('still returns nodes and edges arrays when the response is truncated (additive change)', async () => {
+      mockRead.mockResolvedValue([{ nodes: makeNodes(500), rels: [], totalNodes: 650 }])
+
+      const response = await GET(makeRequest(), makeParams('I001'))
+      const body = await response.json()
+
+      expect(Array.isArray(body.nodes)).toBe(true)
+      expect(Array.isArray(body.edges)).toBe(true)
     })
   })
 

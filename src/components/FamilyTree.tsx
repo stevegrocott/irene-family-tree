@@ -125,6 +125,8 @@ function CopyLinkButton({
  * @param {string} props.rootName - Display name of the current root person
  * @param {number} props.hops - Current viewing depth (hops)
  * @param {Function} props.onHopsChange - Callback when user adjusts the depth slider
+ * @param {boolean} [props.truncated] - Whether the API response reported the tree was truncated
+ * @param {number} [props.totalNodes] - Total node count reported by the API when truncated
  * @returns {React.ReactElement | null} Rendered toolbar or null if no persons are visible
  */
 export function Toolbar({
@@ -134,6 +136,8 @@ export function Toolbar({
   onHopsChange,
   sliderMax = MAX_HOPS,
   getShareUrl,
+  truncated = false,
+  totalNodes,
 }: {
   nodes: Node[]
   rootName: string
@@ -141,6 +145,8 @@ export function Toolbar({
   onHopsChange: (hops: number) => void
   sliderMax?: number
   getShareUrl?: () => string
+  truncated?: boolean
+  totalNodes?: number
 }) {
   const ancestorGens = nodes.filter(n => n.type === 'person').map(n => (n.data as PersonData).generation).filter((g): g is number => typeof g === 'number' && g < 0)
   const ancestors = ancestorGens.length > 0 ? Math.abs(Math.min(...ancestorGens)) : 0
@@ -162,6 +168,15 @@ export function Toolbar({
       <span data-testid="toolbar-person-count" className="text-xs text-white/60 select-none">
         <span className="text-white font-medium">{personCount}</span> people
       </span>
+      {truncated === true && (
+        <span
+          data-testid="toolbar-truncation-notice"
+          role="status"
+          className="text-xs text-amber-300 select-none"
+        >
+          ⚠ Tree truncated{typeof totalNodes === 'number' ? ` — showing a partial view of ${totalNodes} total nodes` : ''}
+        </span>
+      )}
       <span data-testid="toolbar-gen-up" className="text-xs text-white/60 select-none">
         <span className="text-white font-medium">{ancestors}</span> gen up
       </span>
@@ -1679,6 +1694,8 @@ function FlowCanvas({
   const [treeBounds, setTreeBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [truncated, setTruncated] = useState(false)
+  const [totalNodes, setTotalNodes] = useState<number | undefined>(undefined)
   const router = useRouter()
   const [hops, setHops] = useState(() => initialUrlState.hops ?? DEFAULT_HOPS)
   const [actualMaxDepth, setActualMaxDepth] = useState<number>(MAX_HOPS)
@@ -1799,9 +1816,13 @@ function FlowCanvas({
       ))
       setEdges(laid.edges)
       setTreeBounds(laid.bounds)
+      setTruncated(data.truncated === true)
+      setTotalNodes(typeof data.totalNodes === 'number' ? data.totalNodes : undefined)
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
       setError(err instanceof Error ? err.message : 'Unknown error')
+      setTruncated(false)
+      setTotalNodes(undefined)
     } finally {
       setLoading(false)
     }
@@ -1859,6 +1880,8 @@ function FlowCanvas({
         onHopsChange={handleHopsChange}
         sliderMax={actualMaxDepth}
         getShareUrl={buildShareUrl}
+        truncated={truncated}
+        totalNodes={totalNodes}
       />
       {/* Loading/error overlays — ReactFlow stays mounted so its viewport is always initialized */}
       {loading && (

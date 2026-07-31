@@ -317,6 +317,63 @@ describe('GET /api/tree/[rootId]', () => {
     })
   })
 
+  // Issue #181: the traversal caps at MAX_NODES (500) nodes per request. The
+  // response must say so via `truncated`/`totalNodes` rather than silently
+  // dropping relatives, so both the API contract and the UI can be honest
+  // about a partial tree. The mocked Neo4j row carries `totalNodes` alongside
+  // `nodes`/`rels` — the count of all nodes reachable by the traversal before
+  // the `[0..$maxNodes]` cap is applied.
+  describe('truncation reporting (issue #181)', () => {
+    const makeNodes = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        _id: `node:${i}`,
+        _labels: ['Person'],
+        gedcomId: `I${i}`,
+      }))
+
+    it('reports truncated: true and the full totalNodes count when the traversal exceeds MAX_NODES (500)', async () => {
+      mockRead.mockResolvedValue([{ nodes: makeNodes(500), rels: [], totalNodes: 650 }])
+
+      const response = await GET(makeRequest(), makeParams('I001'))
+      const body = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(body.truncated).toBe(true)
+      expect(body.totalNodes).toBe(650)
+      expect(body.nodes).toHaveLength(500)
+    })
+
+    it('reports truncated: false when exactly MAX_NODES are reachable and none are left out', async () => {
+      mockRead.mockResolvedValue([{ nodes: makeNodes(500), rels: [], totalNodes: 500 }])
+
+      const response = await GET(makeRequest(), makeParams('I001'))
+      const body = await response.json()
+
+      expect(body.truncated).toBe(false)
+      expect(body.totalNodes).toBe(500)
+    })
+
+    it('reports truncated: false when the traversal is well under MAX_NODES', async () => {
+      mockRead.mockResolvedValue([{ nodes: makeNodes(10), rels: [], totalNodes: 10 }])
+
+      const response = await GET(makeRequest(), makeParams('I001'))
+      const body = await response.json()
+
+      expect(body.truncated).toBe(false)
+      expect(body.totalNodes).toBe(10)
+    })
+
+    it('still returns nodes and edges arrays when the response is truncated (additive change)', async () => {
+      mockRead.mockResolvedValue([{ nodes: makeNodes(500), rels: [], totalNodes: 650 }])
+
+      const response = await GET(makeRequest(), makeParams('I001'))
+      const body = await response.json()
+
+      expect(Array.isArray(body.nodes)).toBe(true)
+      expect(Array.isArray(body.edges)).toBe(true)
+    })
+  })
+
   // Issue #142: anonymous visitors must not see birth/death/occupation/notes
   // for people who are likely still living.
   describe('privacy redaction for likely-living persons', () => {

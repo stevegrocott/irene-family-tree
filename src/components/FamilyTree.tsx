@@ -35,7 +35,7 @@ import { applyDagreLayout } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, EDGE_TYPES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -1776,16 +1776,13 @@ function FlowCanvas({
         position: n.position,
       }))
 
-      const rawEdges: Edge[] = data.edges.map((e) => {
-        const isChild = e.label === EDGE_TYPES.CHILD
-        return {
-          id: e.id,
-          source: isChild ? e.target : e.source,
-          target: isChild ? e.source : e.target,
-          style: EDGE_STYLES[e.label] ?? defaultEdgeStyle,
-          data: { relType: e.label },
-        }
-      })
+      const rawEdges: Edge[] = data.edges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        style: EDGE_STYLES[e.label] ?? defaultEdgeStyle,
+        data: { relType: e.label },
+      }))
 
       const laid = applyDagreLayout(rawNodes, rawEdges, { rootId })
       setNodes(laid.nodes)

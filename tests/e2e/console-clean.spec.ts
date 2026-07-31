@@ -38,9 +38,11 @@ test.describe('console clean on tree load', () => {
     const toolbarViewing = page.getByTestId('toolbar-viewing');
     await expect(toolbarViewing).toContainText('Irene', { timeout: 15_000 });
 
-    // Give any late console warnings (e.g. from a second strict-mode render
-    // pass) a brief chance to arrive before asserting.
+    // Wait for a person node to render, then give any late console warnings
+    // (e.g. from a second strict-mode render pass) a brief settling window
+    // before asserting.
     await expect(page.locator('.react-flow__node-person').first()).toBeVisible();
+    await page.waitForTimeout(250);
 
     expect(reactFlowMessages).toEqual([]);
   });

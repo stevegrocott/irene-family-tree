@@ -854,4 +854,71 @@ describe('PersonDrawer', () => {
       expect(copyBtn.textContent).toBe('Copied!')
     })
   })
+
+  describe('Facts — empty values render ghost buttons, never a dash', () => {
+    const filledDetail = {
+      ...mockDetailResponse,
+      birthPlace: 'Boston, MA',
+      deathPlace: 'Chicago, IL',
+      occupation: 'Carpenter',
+      notes: 'Some biographical notes.',
+    }
+
+    it('renders a "+ Add …" ghost button in place of each empty fact', async () => {
+      await renderDrawer()
+
+      expect(container.querySelector('[data-testid="person-drawer-fact-birthplace"]')).toBeNull()
+      expect(container.querySelector('[data-testid="person-drawer-fact-deathplace"]')).toBeNull()
+      expect(container.querySelector('[data-testid="person-drawer-fact-occupation"]')).toBeNull()
+      expect(container.querySelector('[data-testid="person-drawer-fact-notes"]')).toBeNull()
+
+      expect(container.querySelector('[data-testid="person-drawer-fact-birthplace-add"]')?.textContent).toBe('+ Add birth place')
+      expect(container.querySelector('[data-testid="person-drawer-fact-deathplace-add"]')?.textContent).toBe('+ Add death place')
+      expect(container.querySelector('[data-testid="person-drawer-fact-occupation-add"]')?.textContent).toBe('+ Add occupation')
+      expect(container.querySelector('[data-testid="person-drawer-fact-notes-add"]')?.textContent).toBe('+ Add notes')
+
+      const facts = container.querySelector('[data-testid="person-drawer-facts"]')
+      expect(facts?.textContent).not.toContain('—')
+    })
+
+    it('renders the value row instead of a ghost button when a fact is present', async () => {
+      global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => filledDetail })
+      await renderDrawer()
+
+      expect(container.querySelector('[data-testid="person-drawer-fact-birthplace"]')?.textContent).toContain('Boston, MA')
+      expect(container.querySelector('[data-testid="person-drawer-fact-deathplace"]')?.textContent).toContain('Chicago, IL')
+      expect(container.querySelector('[data-testid="person-drawer-fact-occupation"]')?.textContent).toContain('Carpenter')
+      expect(container.querySelector('[data-testid="person-drawer-fact-notes"]')?.textContent).toContain('Some biographical notes.')
+
+      expect(container.querySelector('[data-testid="person-drawer-fact-birthplace-add"]')).toBeNull()
+      expect(container.querySelector('[data-testid="person-drawer-fact-deathplace-add"]')).toBeNull()
+      expect(container.querySelector('[data-testid="person-drawer-fact-occupation-add"]')).toBeNull()
+      expect(container.querySelector('[data-testid="person-drawer-fact-notes-add"]')).toBeNull()
+    })
+
+    it('signed-in: clicking a ghost button opens edit mode with that field expanded', async () => {
+      mockSession('user')
+      await renderDrawer()
+
+      const birthplaceAdd = container.querySelector('[data-testid="person-drawer-fact-birthplace-add"]') as HTMLButtonElement
+      await act(async () => { birthplaceAdd.click() })
+
+      expect(container.querySelector('[data-testid="person-drawer-edit-form"]')).not.toBeNull()
+      const input = container.querySelector('#edit-birth-place') as HTMLInputElement | null
+      expect(input).not.toBeNull()
+      expect(input!.value).toBe('')
+    })
+
+    it('signed-out: clicking a ghost button prompts sign-in instead of opening edit mode', async () => {
+      mockSession(null)
+      const signInSpy = jest.spyOn(NextAuthReact, 'signIn').mockImplementation(() => Promise.resolve(undefined) as never)
+      await renderDrawer()
+
+      const birthplaceAdd = container.querySelector('[data-testid="person-drawer-fact-birthplace-add"]') as HTMLButtonElement
+      await act(async () => { birthplaceAdd.click() })
+
+      expect(signInSpy).toHaveBeenCalledWith('google')
+      expect(container.querySelector('[data-testid="person-drawer-edit-form"]')).toBeNull()
+    })
+  })
 })

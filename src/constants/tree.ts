@@ -107,6 +107,13 @@ export const STATUS_PILL_ROOT_CLASS = `${STATUS_PILL_BASE_CLASS} bg-[var(--ft-br
 export const FACT_ROW_LABEL_CLASS = '[font:var(--ft-micro)] uppercase tracking-[var(--ft-micro-track)] text-ink-3 flex-shrink-0'
 export const FACT_ROW_VALUE_CLASS = '[font:var(--ft-body)] text-ink text-right min-w-0'
 
+/**
+ * Ghost "+ Add …" button rendered in place of a Facts value when it's empty
+ * (docs/DESIGN_SYSTEM.md §4.1: "never a dash"), styled per the Ghost button
+ * variant in §5.4 — transparent at rest, `--ft-surface-2` on hover.
+ */
+export const FACT_ROW_GHOST_CLASS = '[font:var(--ft-body)] text-ink-2 hover:text-ink hover:bg-surface-2 rounded-lg px-2 -mr-2 py-0.5 transition-colors'
+
 /** Absolute-positioned top-right floating panel — see AuthButton.tsx. */
 export const FLOATING_PANEL_BASE_CLASS = 'absolute top-4 right-4 z-10 flex items-center gap-2 bg-surface border border-line rounded-[var(--ft-r-md)] shadow-[var(--ft-shadow-1)]'
 

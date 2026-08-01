@@ -36,7 +36,7 @@ import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import { computeLineage } from '@/lib/lineage'
 import type { TreeResponse, PersonData, UnionData, PersonDetailResponse, PersonSummary, FlowNode, FlowEdge } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -313,6 +313,40 @@ function FactRow({
       <span className={`${FACT_ROW_VALUE_CLASS} ${mono ? 'font-mono' : ''} ${wrap ? 'whitespace-pre-wrap' : 'truncate'}`}>
         {value}
       </span>
+    </div>
+  )
+}
+
+/**
+ * A Facts row shown when its value is empty: the label stays put, and an
+ * inline `+ Add …` ghost button takes the value slot instead of a dash
+ * (docs/DESIGN_SYSTEM.md §4.1). Clicking it jumps straight into the edit
+ * sub-view with that field expanded for immediate entry.
+ *
+ * @param {Object} props - Component props
+ * @param {string} props.label - Fact label, e.g. "Birthplace"
+ * @param {string} props.addLabel - Field name used in the button text, e.g. "birth place"
+ * @param {Function} props.onClick - Called when the ghost button is activated
+ * @param {string} [props.testId] - Optional `data-testid` for the button
+ * @returns {React.ReactElement} Rendered ghost Facts row
+ */
+function FactRowGhostButton({
+  label,
+  addLabel,
+  onClick,
+  testId,
+}: {
+  label: string
+  addLabel: string
+  onClick: () => void
+  testId?: string
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-[var(--ft-row-gap)]">
+      <span className={FACT_ROW_LABEL_CLASS}>{label}</span>
+      <button type="button" data-testid={testId} onClick={onClick} className={FACT_ROW_GHOST_CLASS}>
+        + Add {addLabel}
+      </button>
     </div>
   )
 }
@@ -960,6 +994,33 @@ export function PersonDrawer({
     setMode('edit')
   }
 
+  /**
+   * Opens the edit sub-view with a single optional field pre-expanded, so a
+   * Facts row's "+ Add …" ghost button drops the user straight into that
+   * field's input rather than the generic edit form.
+   * @param {Function} expandField - Setter that reveals the target field's input (e.g. `() => setShowEditBirthPlace(true)`)
+   */
+  const openEditField = (expandField: () => void) => {
+    resetEditForm()
+    expandField()
+    setMode('edit')
+  }
+
+  /**
+   * Handles a Facts ghost "+ Add …" button click. Signed-out visitors are
+   * prompted to sign in first (mirrors the footer's "Sign in to suggest
+   * edits" CTA); signed-in users jump straight into the edit sub-view with
+   * the field expanded.
+   * @param {Function} expandField - Setter that reveals the target field's input
+   */
+  const handleAddFact = (expandField: () => void) => {
+    if (!isSignedIn) {
+      signIn('google')
+      return
+    }
+    openEditField(expandField)
+  }
+
   /** Discards pending edits and returns to view mode. */
   const handleCancelEdit = () => {
     resetEditForm()
@@ -1497,17 +1558,53 @@ export function PersonDrawer({
         {/* Facts — label/value rows, full-bleed rule below, rows divided by hairlines (docs/DESIGN_SYSTEM.md §4.1) */}
         <div data-testid="person-drawer-facts" className="px-5 border-b border-line divide-y divide-line">
           <FactRow testId="person-drawer-gedcom-id" label="ID" value={person.gedcomId} mono />
-          {detail?.birthPlace && (
-            <FactRow testId="person-drawer-fact-birthplace" label="Birthplace" value={detail.birthPlace} mono />
+          {detail && (
+            detail.birthPlace ? (
+              <FactRow testId="person-drawer-fact-birthplace" label="Birthplace" value={detail.birthPlace} mono />
+            ) : (
+              <FactRowGhostButton
+                testId="person-drawer-fact-birthplace-add"
+                label="Birthplace"
+                addLabel="birth place"
+                onClick={() => handleAddFact(() => setShowEditBirthPlace(true))}
+              />
+            )
           )}
-          {detail?.deathPlace && (
-            <FactRow testId="person-drawer-fact-deathplace" label="Death place" value={detail.deathPlace} mono />
+          {detail && (
+            detail.deathPlace ? (
+              <FactRow testId="person-drawer-fact-deathplace" label="Death place" value={detail.deathPlace} mono />
+            ) : (
+              <FactRowGhostButton
+                testId="person-drawer-fact-deathplace-add"
+                label="Death place"
+                addLabel="death place"
+                onClick={() => handleAddFact(() => setShowEditDeathPlace(true))}
+              />
+            )
           )}
-          {detail?.occupation && (
-            <FactRow testId="person-drawer-fact-occupation" label="Occupation" value={detail.occupation} />
+          {detail && (
+            detail.occupation ? (
+              <FactRow testId="person-drawer-fact-occupation" label="Occupation" value={detail.occupation} />
+            ) : (
+              <FactRowGhostButton
+                testId="person-drawer-fact-occupation-add"
+                label="Occupation"
+                addLabel="occupation"
+                onClick={() => handleAddFact(() => setShowEditOccupation(true))}
+              />
+            )
           )}
-          {detail?.notes && (
-            <FactRow testId="person-drawer-fact-notes" label="Notes" value={detail.notes} wrap />
+          {detail && (
+            detail.notes ? (
+              <FactRow testId="person-drawer-fact-notes" label="Notes" value={detail.notes} wrap />
+            ) : (
+              <FactRowGhostButton
+                testId="person-drawer-fact-notes-add"
+                label="Notes"
+                addLabel="notes"
+                onClick={() => handleAddFact(() => setShowEditNotes(true))}
+              />
+            )
           )}
         </div>
 

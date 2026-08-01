@@ -150,7 +150,10 @@ function buildRealisticTreeResponse() {
  */
 async function openDrawer(page: Page) {
   await page.goto('/')
-  await expect(page.getByTestId('toolbar-viewing')).toBeVisible({ timeout: 15_000 })
+  // Below `sm` (640px) the toolbar starts collapsed behind `toolbar-toggle`
+  // (issue #202), so that's the readiness signal here, not the toolbar
+  // content itself.
+  await expect(page.getByTestId('toolbar-toggle')).toBeVisible({ timeout: 15_000 })
 
   const personNode = page.locator('.react-flow__node-person').first()
   await expect(personNode).toBeVisible({ timeout: 10_000 })
@@ -159,6 +162,39 @@ async function openDrawer(page: Page) {
   const drawer = page.getByTestId('person-drawer')
   await expect(drawer).toBeVisible()
   return drawer
+}
+
+/** Taps the collapsed toolbar's icon button to reveal the toolbar sheet below the `sm` breakpoint. */
+async function openMobileToolbar(page: Page) {
+  await page.getByTestId('toolbar-toggle').tap()
+  await expect(page.getByTestId('toolbar')).toBeVisible()
+}
+
+/** Taps the collapsed search icon button to reveal the search panel below the `sm` breakpoint. */
+async function openMobileSearch(page: Page) {
+  await page.getByTestId('search-toggle').tap()
+  await expect(page.getByTestId('search-panel')).toBeVisible()
+}
+
+/**
+ * Waits for the React Flow canvas transform to stop changing.
+ *
+ * On the 342-node fixture `fitView` re-runs after the tree data resolves, so a
+ * node can pass Playwright's stability check and then shift out from under the
+ * pointer before the click lands. Polling the viewport's transform until two
+ * consecutive samples match waits for the actual settled state rather than
+ * guessing with a fixed timeout.
+ */
+async function waitForCanvasSettled(page: Page) {
+  const viewport = page.locator('.react-flow__viewport')
+  let previous: string | null = null
+  for (let i = 0; i < 30; i++) {
+    const current = await viewport.getAttribute('style')
+    if (current !== null && current === previous) return
+    previous = current
+    await page.waitForTimeout(150)
+  }
+  throw new Error('React Flow canvas transform never settled')
 }
 
 /** Measures document scroll/client width to detect horizontal overflow. */
@@ -285,8 +321,13 @@ test.describe('mobile responsive toolbar and search', () => {
     await mockPersonsAndTree(page, [mockPerson], mockTreeResponse)
     await page.goto('/')
 
+    // Below `sm` (640px) both start collapsed behind icon buttons (issue #202).
+    await expect(page.getByTestId('toolbar-toggle')).toBeVisible({ timeout: 15_000 })
+    await openMobileToolbar(page)
+    await openMobileSearch(page)
+
     const toolbar = page.getByTestId('toolbar')
-    await expect(toolbar).toBeVisible({ timeout: 15_000 })
+    const searchPanel = page.getByTestId('search-panel')
     const searchInput = page.getByTestId('search-input')
     await expect(searchInput).toBeVisible()
 
@@ -294,12 +335,14 @@ test.describe('mobile responsive toolbar and search', () => {
     expect(viewport).not.toBeNull()
     const viewportWidth = viewport!.width
 
-    const [toolbarBox, searchBox, overflow] = await Promise.all([
+    const [toolbarBox, panelBox, searchBox, overflow] = await Promise.all([
       toolbar.boundingBox(),
+      searchPanel.boundingBox(),
       searchInput.boundingBox(),
       getHorizontalOverflow(page),
     ])
     expect(toolbarBox).not.toBeNull()
+    expect(panelBox).not.toBeNull()
     expect(searchBox).not.toBeNull()
 
     // Both floating panels stay fully inside the viewport width.
@@ -308,9 +351,12 @@ test.describe('mobile responsive toolbar and search', () => {
     expect(searchBox!.x).toBeGreaterThanOrEqual(0)
     expect(searchBox!.x + searchBox!.width).toBeLessThanOrEqual(viewportWidth + LAYOUT_TOLERANCE_PX)
 
-    // The search bar spans most of the available width rather than a fixed
+    // The search panel spans most of the available width rather than a fixed
     // desktop-sized panel (w-64 = 256px would be much narrower than this).
-    expect(searchBox!.width).toBeGreaterThan(300)
+    // Measured on the panel, not the input: since #202 the input shares its row
+    // with a 44px close button, so the input alone is ~52px narrower.
+    expect(panelBox!.width).toBeGreaterThan(300)
+    expect(searchBox!.width).toBeGreaterThan(panelBox!.width - 100)
 
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth)
   })
@@ -369,18 +415,29 @@ test.describe('mobile responsive toolbar and search', () => {
     await expect(notice).toBeVisible()
   })
 
-  test('toolbar slider and search result rows meet the 44px touch target minimum', async ({
+  test('toolbar depth stepper and search result rows meet the 44px touch target minimum', async ({
     page,
   }) => {
     await mockPersonsAndTree(page, [mockPerson], mockTreeResponse)
     await page.goto('/')
 
-    const slider = page.getByTestId('toolbar-depth-slider')
-    await expect(slider).toBeVisible({ timeout: 15_000 })
-    const sliderBox = await slider.boundingBox()
-    expect(sliderBox).not.toBeNull()
-    expect(sliderBox!.height).toBeGreaterThanOrEqual(44)
+    // Below `sm` (640px) both start collapsed behind icon buttons (issue #202).
+    await expect(page.getByTestId('toolbar-toggle')).toBeVisible({ timeout: 15_000 })
+    await openMobileToolbar(page)
 
+    const decrement = page.getByTestId('toolbar-depth-decrement')
+    const increment = page.getByTestId('toolbar-depth-increment')
+    await expect(decrement).toBeVisible()
+    const [decrementBox, incrementBox] = await Promise.all([
+      decrement.boundingBox(),
+      increment.boundingBox(),
+    ])
+    expect(decrementBox).not.toBeNull()
+    expect(incrementBox).not.toBeNull()
+    expect(decrementBox!.height).toBeGreaterThanOrEqual(44)
+    expect(incrementBox!.height).toBeGreaterThanOrEqual(44)
+
+    await openMobileSearch(page)
     const searchInput = page.getByTestId('search-input')
     await searchInput.fill('Mobile')
     const resultItem = page.getByTestId('search-result-item').first()
@@ -388,5 +445,162 @@ test.describe('mobile responsive toolbar and search', () => {
     const resultBox = await resultItem.boundingBox()
     expect(resultBox).not.toBeNull()
     expect(resultBox!.height).toBeGreaterThanOrEqual(44)
+  })
+})
+
+/**
+ * AC7/AC8 (issue #202) at the narrowest supported viewport, 360x640, using the
+ * realistic multi-person fixture rather than the single-person one that caused
+ * the false pass in #190.
+ */
+test.describe('mobile chrome at 360x640', () => {
+  test.use({ viewport: { width: 360, height: 640 } })
+
+  test('toolbar and search collapse to icon buttons with no horizontal overflow', async ({
+    page,
+  }) => {
+    await mockPersonsAndTree(page, [mockRealisticRootPerson], buildRealisticTreeResponse())
+    await page.goto('/')
+
+    // AC1/AC2: below `sm` both chrome panels start collapsed behind icon buttons.
+    const toolbarToggle = page.getByTestId('toolbar-toggle')
+    const searchToggle = page.getByTestId('search-toggle')
+    await expect(toolbarToggle).toBeVisible({ timeout: 15_000 })
+    await expect(searchToggle).toBeVisible()
+    await expect(page.getByTestId('toolbar')).toBeHidden()
+    await expect(page.getByTestId('search-panel')).toBeHidden()
+
+    // Both toggles clear the 44px touch-target floor.
+    const [toolbarToggleBox, searchToggleBox] = await Promise.all([
+      toolbarToggle.boundingBox(),
+      searchToggle.boundingBox(),
+    ])
+    expect(toolbarToggleBox).not.toBeNull()
+    expect(searchToggleBox).not.toBeNull()
+    expect(toolbarToggleBox!.height).toBeGreaterThanOrEqual(44)
+    expect(toolbarToggleBox!.width).toBeGreaterThanOrEqual(44)
+    expect(searchToggleBox!.height).toBeGreaterThanOrEqual(44)
+    expect(searchToggleBox!.width).toBeGreaterThanOrEqual(44)
+
+    // AC7: expanding both sheets must not push the page wider than 360px.
+    await openMobileToolbar(page)
+    await openMobileSearch(page)
+
+    const overflow = await getHorizontalOverflow(page)
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth)
+
+    const [toolbarBox, searchBox] = await Promise.all([
+      page.getByTestId('toolbar').boundingBox(),
+      page.getByTestId('search-panel').boundingBox(),
+    ])
+    expect(toolbarBox).not.toBeNull()
+    expect(searchBox).not.toBeNull()
+    expect(toolbarBox!.x).toBeGreaterThanOrEqual(-LAYOUT_TOLERANCE_PX)
+    expect(toolbarBox!.x + toolbarBox!.width).toBeLessThanOrEqual(360 + LAYOUT_TOLERANCE_PX)
+    expect(searchBox!.x).toBeGreaterThanOrEqual(-LAYOUT_TOLERANCE_PX)
+    expect(searchBox!.x + searchBox!.width).toBeLessThanOrEqual(360 + LAYOUT_TOLERANCE_PX)
+  })
+
+  test('depth stepper replaces the slider and meets the 44px touch target', async ({ page }) => {
+    await mockPersonsAndTree(page, [mockRealisticRootPerson], buildRealisticTreeResponse())
+    await page.goto('/')
+
+    await expect(page.getByTestId('toolbar-toggle')).toBeVisible({ timeout: 15_000 })
+    await openMobileToolbar(page)
+
+    const decrement = page.getByTestId('toolbar-depth-decrement')
+    const increment = page.getByTestId('toolbar-depth-increment')
+    await expect(decrement).toBeVisible()
+    await expect(increment).toBeVisible()
+
+    const [decrementBox, incrementBox] = await Promise.all([
+      decrement.boundingBox(),
+      increment.boundingBox(),
+    ])
+    expect(decrementBox).not.toBeNull()
+    expect(incrementBox).not.toBeNull()
+    expect(decrementBox!.height).toBeGreaterThanOrEqual(44)
+    expect(decrementBox!.width).toBeGreaterThanOrEqual(44)
+    expect(incrementBox!.height).toBeGreaterThanOrEqual(44)
+    expect(incrementBox!.width).toBeGreaterThanOrEqual(44)
+  })
+
+  test('AC6: the truncation notice is reachable from the collapsed toolbar', async ({ page }) => {
+    await mockPersonsAndTree(page, [mockRealisticRootPerson], buildRealisticTreeResponse())
+    await page.goto('/')
+
+    await expect(page.getByTestId('toolbar-toggle')).toBeVisible({ timeout: 15_000 })
+    await openMobileToolbar(page)
+
+    await expect(page.getByTestId('toolbar-truncation-notice')).toBeVisible()
+  })
+
+  test('the person drawer opens at the peek detent and expands to full', async ({ page }) => {
+    await mockPersonsAndTree(page, [mockRealisticRootPerson], buildRealisticTreeResponse())
+    await page.route(/\/api\/person\//, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...mockRealisticRootPerson,
+          deathPlace: null,
+          occupation: null,
+          notes: null,
+          parents: [],
+          siblings: [],
+          marriages: [],
+        }),
+      })
+    )
+    await page.goto('/')
+    await expect(page.getByTestId('toolbar-toggle')).toBeVisible({ timeout: 15_000 })
+
+    // The realistic fixture stacks nodes at `x: i * 10`, so they overlap heavily;
+    // `.last()` is painted on top and is the node a pointer actually lands on.
+    //
+    // NOTE: `.click()`, not `.tap()`. On this 342-node fixture a *touch* tap on a
+    // person node does not open the drawer at all, while a mouse click does — the
+    // single-node fixture opens on either. That asymmetry is a real defect in the
+    // canvas' touch handling on dense trees, not a test artifact, and it is out of
+    // scope for #202; tracked separately. Asserting the detents via click keeps
+    // this test honest about what it covers (drawer height) rather than silently
+    // passing a tap path that is known to be broken.
+    const personNode = page.locator('.react-flow__node-person').last()
+    await expect(personNode).toBeVisible({ timeout: 10_000 })
+    await waitForCanvasSettled(page)
+    await personNode.click()
+
+    const drawer = page.getByTestId('person-drawer')
+    await expect(drawer).toBeVisible()
+
+    const viewportHeight = page.viewportSize()!.height
+
+    // AC4: the sheet opens at `peek` (~30vh), not full height.
+    const peekBox = await drawer.boundingBox()
+    expect(peekBox).not.toBeNull()
+    expect(peekBox!.height).toBeLessThanOrEqual(viewportHeight * 0.3 + LAYOUT_TOLERANCE_PX)
+    expect(peekBox!.height).toBeGreaterThanOrEqual(viewportHeight * 0.3 - LAYOUT_TOLERANCE_PX)
+
+    // Tapping the drag handle promotes it to the `full` detent (~72vh).
+    const dragHandle = page.getByTestId('drawer-drag-handle')
+    await expect(dragHandle).toBeVisible()
+    const handleBox = await dragHandle.boundingBox()
+    expect(handleBox).not.toBeNull()
+    expect(handleBox!.height).toBeGreaterThanOrEqual(44)
+
+    await dragHandle.tap()
+    await expect
+      .poll(async () => (await drawer.boundingBox())!.height)
+      .toBeGreaterThan(viewportHeight * 0.3 + LAYOUT_TOLERANCE_PX)
+
+    const fullBox = await drawer.boundingBox()
+    expect(fullBox!.height).toBeLessThanOrEqual(viewportHeight * 0.72 + LAYOUT_TOLERANCE_PX)
+    expect(fullBox!.height).toBeGreaterThanOrEqual(viewportHeight * 0.72 - LAYOUT_TOLERANCE_PX)
+
+    // Tapping again returns it to `peek`.
+    await dragHandle.tap()
+    await expect
+      .poll(async () => (await drawer.boundingBox())!.height)
+      .toBeLessThanOrEqual(viewportHeight * 0.3 + LAYOUT_TOLERANCE_PX)
   })
 })

@@ -36,7 +36,7 @@ import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import { computeLineage } from '@/lib/lineage'
 import type { TreeResponse, PersonData, UnionData, PersonDetailResponse, PersonSummary, FlowNode, FlowEdge } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS, EDGE_TYPES, EDGE_RENDER_TYPE } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, getDrawerContainerClass, DEFAULT_DRAWER_DETENT, type DrawerDetent, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS, EDGE_TYPES, EDGE_RENDER_TYPE, DEFAULT_DENSITY, getDefaultDensity } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -147,11 +147,17 @@ function CopyLinkButton({
  * Shows a small app title followed by ancestor/descendant counts and allows users
  * to adjust the viewing depth (hops).
  *
+ * Below the `sm` (640px) breakpoint the toolbar starts collapsed behind a 44px
+ * icon button that opens it as a sheet (docs/DESIGN_SYSTEM.md §4.2/§6 — "on
+ * mobile it collapses to a single 44 px icon button that opens a sheet"); at
+ * `sm` and up the toolbar is always shown via the `sm:flex` override below,
+ * regardless of this state.
+ *
  * @param {Object} props - Component props
  * @param {Node[]} props.nodes - All nodes in the current tree visualization
  * @param {string} props.rootName - Display name of the current root person
  * @param {number} props.hops - Current viewing depth (hops)
- * @param {Function} props.onHopsChange - Callback when user adjusts the depth slider
+ * @param {Function} props.onHopsChange - Callback when user adjusts the depth stepper
  * @param {boolean} [props.truncated] - Whether the API response reported the tree was truncated
  * @param {number} [props.totalNodes] - Total node count reported by the API when truncated
  * @returns {React.ReactElement | null} Rendered toolbar or null if no persons are visible
@@ -175,6 +181,7 @@ export function Toolbar({
   truncated?: boolean
   totalNodes?: number
 }) {
+  const [mobileOpen, setMobileOpen] = useState(false)
   const ancestorGens = nodes.filter(n => n.type === 'person').map(n => (n.data as PersonData).generation).filter((g): g is number => typeof g === 'number' && g < 0)
   const ancestors = ancestorGens.length > 0 ? Math.abs(Math.min(...ancestorGens)) : 0
   const descendantGens = nodes.filter(n => n.type === 'person').map(n => (n.data as PersonData).generation).filter((g): g is number => typeof g === 'number' && g > 0)
@@ -182,11 +189,39 @@ export function Toolbar({
   const personCount = nodes.filter(n => n.type === 'person').length
   if (personCount === 0) return null
   return (
-    <div
-      data-testid="toolbar"
-      className="absolute bottom-4 inset-x-4 z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 bg-slate-800 border border-white/20 rounded-lg px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-auto sm:max-w-[calc(100vw-2rem)] sm:flex-nowrap sm:gap-4 sm:py-2"
-    >
-      <span
+    <>
+      {!mobileOpen && (
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Open toolbar"
+          data-testid="toolbar-toggle"
+          className="sm:hidden absolute bottom-4 left-4 z-10 min-h-11 min-w-11 flex items-center justify-center bg-slate-800 border border-white/20 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.4)] text-white focus:outline-none transition-colors"
+        >
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+            <line x1="3" y1="6" x2="17" y2="6" strokeLinecap="round" />
+            <line x1="3" y1="10" x2="17" y2="10" strokeLinecap="round" />
+            <line x1="3" y1="14" x2="17" y2="14" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
+      <div
+        data-testid="toolbar"
+        className={`${mobileOpen ? 'flex' : 'hidden'} sm:flex absolute bottom-4 inset-x-4 z-10 flex-wrap items-center justify-center gap-x-3 gap-y-2 bg-slate-800 border border-white/20 rounded-lg px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-auto sm:max-w-[calc(100vw-2rem)] sm:flex-nowrap sm:gap-4 sm:py-2`}
+      >
+        <button
+          type="button"
+          onClick={() => setMobileOpen(false)}
+          aria-label="Close toolbar"
+          data-testid="toolbar-close"
+          className="sm:hidden order-first min-h-11 min-w-11 -my-3 -ml-4 mr-1 flex items-center justify-center text-white/70 hover:text-white transition-colors flex-shrink-0"
+        >
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+            <line x1="4" y1="4" x2="16" y2="16" strokeLinecap="round" />
+            <line x1="16" y1="4" x2="4" y2="16" strokeLinecap="round" />
+          </svg>
+        </button>
+        <span
         data-testid="toolbar-app-name"
         className="text-xs text-white font-semibold select-none pr-4 border-r border-white/20 tracking-wide flex-shrink-0 whitespace-nowrap"
       >
@@ -197,15 +232,18 @@ export function Toolbar({
       </span>
       {truncated === true && (
         // Intentionally omits flex-shrink-0: this item absorbs tight-width pressure via
-        // max-w-[10rem]/sm:max-w-[16rem] + min-w-0 + text-ellipsis, while sibling items stay fixed-size.
+        // max-w-[10rem]/sm:max-w-[16rem] + text-ellipsis, while sibling items stay fixed-size.
         // The visible text is degraded to "⚠ + node count" (rather than the full prose) so this
         // remains the toolbar's widest contributor in name only, not in practice — the full
         // sentence is still available in `title` (e.g. on hover).
+        // `min-w-[3rem]` (not `min-w-0`) is the floor that keeps it shrinkable but never zero-width:
+        // with the #202 stepper widening the row, an unbounded shrink collapsed it entirely at
+        // ~800px, silently dropping the #190 AC4 warning instead of ellipsising it.
         <span
           data-testid="toolbar-truncation-notice"
           role="status"
           title={`⚠ Tree truncated${typeof totalNodes === 'number' ? ` — showing a partial view of ${totalNodes} total nodes` : ''}`}
-          className="text-xs text-amber-300 select-none max-w-[10rem] overflow-hidden whitespace-nowrap text-ellipsis min-w-0 sm:max-w-[16rem]"
+          className="text-xs text-amber-300 select-none max-w-[10rem] overflow-hidden whitespace-nowrap text-ellipsis min-w-[3rem] sm:max-w-[16rem]"
         >
           ⚠{typeof totalNodes === 'number' ? ` ${totalNodes}` : ' Truncated'}
         </span>
@@ -219,16 +257,40 @@ export function Toolbar({
       <span data-testid="toolbar-viewing" className="text-xs text-white/60 select-none flex-shrink-0 whitespace-nowrap">
         VIEWING: <span className="text-white font-medium">{rootName}</span>
       </span>
-      <input
-        type="range"
-        data-testid="toolbar-depth-slider"
-        min={MIN_HOPS}
-        max={sliderMax}
-        value={hops}
-        onChange={e => onHopsChange(Number(e.target.value))}
-        className="w-full h-11 flex-shrink-0 sm:w-24 sm:h-auto"
+      <div
+        data-testid="toolbar-depth-stepper"
+        role="group"
         aria-label="Depth"
-      />
+        className="flex items-center gap-1 flex-shrink-0"
+      >
+        <button
+          type="button"
+          data-testid="toolbar-depth-decrement"
+          aria-label="Decrease depth"
+          disabled={hops <= MIN_HOPS}
+          onClick={() => onHopsChange(Math.max(MIN_HOPS, hops - 1))}
+          className="flex items-center justify-center w-11 h-11 sm:w-6 sm:h-6 rounded-lg text-white/80 hover:text-white hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-colors flex-shrink-0"
+        >
+          −
+        </button>
+        <span
+          data-testid="toolbar-depth-value"
+          aria-live="polite"
+          className="text-xs text-white font-medium select-none w-5 text-center flex-shrink-0"
+        >
+          {hops}
+        </span>
+        <button
+          type="button"
+          data-testid="toolbar-depth-increment"
+          aria-label="Increase depth"
+          disabled={hops >= sliderMax}
+          onClick={() => onHopsChange(Math.min(sliderMax, hops + 1))}
+          className="flex items-center justify-center w-11 h-11 sm:w-6 sm:h-6 rounded-lg text-white/80 hover:text-white hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-colors flex-shrink-0"
+        >
+          +
+        </button>
+      </div>
       {getShareUrl && (
         <CopyLinkButton
           getUrl={getShareUrl}
@@ -243,7 +305,8 @@ export function Toolbar({
       >
         Stats
       </Link>
-    </div>
+      </div>
+    </>
   )
 }
 
@@ -285,12 +348,22 @@ function RelativeRow({
   )
 }
 
-/** Mobile drag handle affordance for bottom-sheet drawers. */
-function DrawerDragHandle() {
+/**
+ * Mobile drag handle affordance for bottom-sheet drawers. Also the tap target that
+ * toggles between the `peek` (~30vh) and `full` (72vh) detents (docs/DESIGN_SYSTEM.md §6).
+ */
+function DrawerDragHandle({ detent, onToggle }: { detent: DrawerDetent; onToggle: () => void }) {
   return (
-    <div data-testid="drawer-drag-handle" className={DRAWER_DRAG_HANDLE_CLASS} aria-hidden="true">
+    <button
+      type="button"
+      data-testid="drawer-drag-handle"
+      onClick={onToggle}
+      aria-label={detent === 'full' ? 'Collapse drawer' : 'Expand drawer'}
+      aria-expanded={detent === 'full'}
+      className={DRAWER_DRAG_HANDLE_CLASS}
+    >
       <div className={DRAWER_DRAG_HANDLE_BAR_CLASS} />
-    </div>
+    </button>
   )
 }
 
@@ -441,16 +514,30 @@ function TimelineEntry({ event, onSelect }: { event: TimelineEvent; onSelect: (i
  * @param {Object} props - Component props
  * @param {string} props.title - Title to display in the header
  * @param {Function} props.onBack - Called when user clicks the back button
+ * @param {DrawerDetent} props.detent - Current mobile bottom-sheet detent ('peek' or 'full')
+ * @param {Function} props.onToggleDetent - Called when the drag handle is tapped to toggle the detent
  * @param {React.ReactNode} props.children - Content to render below the header
  * @returns {React.ReactElement} Rendered drawer sub-view container
  */
-function DrawerSubView({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
+function DrawerSubView({
+  title,
+  onBack,
+  detent,
+  onToggleDetent,
+  children,
+}: {
+  title: string
+  onBack: () => void
+  detent: DrawerDetent
+  onToggleDetent: () => void
+  children: React.ReactNode
+}) {
   return (
     <div
       data-testid="drawer-sub-view"
-      className={DRAWER_CONTAINER_CLASS}
+      className={getDrawerContainerClass(detent)}
     >
-      <DrawerDragHandle />
+      <DrawerDragHandle detent={detent} onToggle={onToggleDetent} />
       <div className="flex items-center gap-2 px-5 py-4 border-b border-white/10">
         <button
           onClick={onBack}
@@ -523,6 +610,16 @@ export function PersonDrawer({
 
   const dates = formatLifespan(person)
   const rootLabel = rootName || 'root'
+  // Mobile bottom-sheet detent (docs/DESIGN_SYSTEM.md §6): opens at `peek`, tapping the
+  // drag handle toggles to `full`. Reset per person below so re-opening the drawer for a
+  // different person always starts collapsed.
+  const [detent, setDetent] = useState<DrawerDetent>(DEFAULT_DRAWER_DETENT)
+  const toggleDetent = useCallback(() => {
+    setDetent(prev => (prev === 'peek' ? 'full' : 'peek'))
+  }, [])
+  useEffect(() => {
+    setDetent(DEFAULT_DRAWER_DETENT)
+  }, [person.gedcomId])
   const [detail, setDetail] = useState<PersonDetailResponse | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailVersion, setDetailVersion] = useState(0)
@@ -1159,7 +1256,7 @@ export function PersonDrawer({
   let content: React.ReactNode
   if (mode === 'edit') {
     content = (
-      <DrawerSubView title={`Edit ${person.name || 'person'}`} onBack={() => setMode('view')}>
+      <DrawerSubView title={`Edit ${person.name || 'person'}`} onBack={() => setMode('view')} detent={detent} onToggleDetent={toggleDetent}>
         <div
           data-testid="person-drawer-edit-form"
           className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
@@ -1393,7 +1490,7 @@ export function PersonDrawer({
     )
   } else if (mode === 'add-relative') {
     content = (
-      <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => setMode('view')}>
+      <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => setMode('view')} detent={detent} onToggleDetent={toggleDetent}>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           <div>
             <input
@@ -1489,9 +1586,9 @@ export function PersonDrawer({
     content = (
     <div
       data-testid="person-drawer"
-      className={DRAWER_CONTAINER_CLASS}
+      className={getDrawerContainerClass(detent)}
     >
-      <DrawerDragHandle />
+      <DrawerDragHandle detent={detent} onToggle={toggleDetent} />
       {/* Header — avatar, name, lifespan, close (docs/DESIGN_SYSTEM.md §4.1) */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-line">
         <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
@@ -2383,6 +2480,18 @@ export default function FamilyTree() {
   // Captured once on mount so later URL updates (from our own router.replace calls) don't
   // re-trigger root resolution — only the URL present on initial load takes precedence.
   const [initialUrlState] = useState(() => parseTreeUrlState(searchParams))
+  // null until mount so SSR/first paint uses DEFAULT_DENSITY, avoiding a hydration mismatch
+  // (docs/DESIGN_SYSTEM.md §6: density defaults to dense below 640px, compact at/above it).
+  const [viewportWidth, setViewportWidth] = useState<number | null>(null)
+
+  useEffect(() => {
+    const updateViewportWidth = () => setViewportWidth(window.innerWidth)
+    updateViewportWidth()
+    window.addEventListener('resize', updateViewportWidth)
+    return () => window.removeEventListener('resize', updateViewportWidth)
+  }, [])
+
+  const density = viewportWidth === null ? DEFAULT_DENSITY : getDefaultDensity(viewportWidth)
 
   /**
    * Updates the active root person and persists the selection to localStorage
@@ -2436,7 +2545,7 @@ export default function FamilyTree() {
   }
 
   return (
-    <div className="relative w-full h-dvh bg-[#050a18]">
+    <div className="relative w-full h-dvh bg-[#050a18]" data-density={density}>
       <ReactFlowProvider>
         <FlowCanvas rootId={rootId} onSelectRoot={handleSelectRoot} persons={persons} treeVersion={treeVersion} initialUrlState={initialUrlState} />
       </ReactFlowProvider>

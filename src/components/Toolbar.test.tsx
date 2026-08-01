@@ -116,8 +116,10 @@ describe('Toolbar', () => {
     expect(viewing).not.toBeNull()
     expect(viewing!.textContent).toContain('Root Person')
 
-    const slider = container.querySelector('[data-testid="toolbar-depth-slider"]')
-    expect(slider).not.toBeNull()
+    const stepper = container.querySelector('[data-testid="toolbar-depth-stepper"]')
+    expect(stepper).not.toBeNull()
+    const value = container.querySelector('[data-testid="toolbar-depth-value"]')
+    expect(value!.textContent).toBe('3')
   })
 
   it('renders the app name from branding constants as the title', async () => {
@@ -317,7 +319,7 @@ describe('Toolbar', () => {
         'toolbar-gen-up',
         'toolbar-gen-down',
         'toolbar-viewing',
-        'toolbar-depth-slider',
+        'toolbar-depth-stepper',
         'toolbar-copy-link',
         'toolbar-stats-link',
       ]
@@ -390,6 +392,176 @@ describe('Toolbar', () => {
 
       expect(writeText).toHaveBeenCalledWith('https://example.com/?root=%40I0%40')
       expect(copyBtn.textContent).toBe('Copied!')
+    })
+  })
+
+  describe('depth stepper', () => {
+    it('renders a "− n +" stepper showing the current hops value', async () => {
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={4}
+            onHopsChange={jest.fn()}
+            sliderMax={10}
+          />,
+        )
+      })
+
+      expect(container.querySelector('[data-testid="toolbar-depth-decrement"]')!.textContent).toBe('−')
+      expect(container.querySelector('[data-testid="toolbar-depth-increment"]')!.textContent).toBe('+')
+      expect(container.querySelector('[data-testid="toolbar-depth-value"]')!.textContent).toBe('4')
+    })
+
+    it('calls onHopsChange with hops - 1 when the decrement button is clicked', async () => {
+      const onHopsChange = jest.fn()
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={4}
+            onHopsChange={onHopsChange}
+            sliderMax={10}
+          />,
+        )
+      })
+
+      const decrementBtn = container.querySelector('[data-testid="toolbar-depth-decrement"]') as HTMLButtonElement
+      await act(async () => { decrementBtn.click() })
+
+      expect(onHopsChange).toHaveBeenCalledWith(3)
+    })
+
+    it('calls onHopsChange with hops + 1 when the increment button is clicked', async () => {
+      const onHopsChange = jest.fn()
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={4}
+            onHopsChange={onHopsChange}
+            sliderMax={10}
+          />,
+        )
+      })
+
+      const incrementBtn = container.querySelector('[data-testid="toolbar-depth-increment"]') as HTMLButtonElement
+      await act(async () => { incrementBtn.click() })
+
+      expect(onHopsChange).toHaveBeenCalledWith(5)
+    })
+
+    it('disables the decrement button and clamps at MIN_HOPS', async () => {
+      const onHopsChange = jest.fn()
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={1}
+            onHopsChange={onHopsChange}
+            sliderMax={10}
+          />,
+        )
+      })
+
+      const decrementBtn = container.querySelector('[data-testid="toolbar-depth-decrement"]') as HTMLButtonElement
+      expect(decrementBtn.disabled).toBe(true)
+
+      await act(async () => { decrementBtn.click() })
+      expect(onHopsChange).not.toHaveBeenCalled()
+    })
+
+    it('disables the increment button and clamps at sliderMax (MAX_HOPS by default)', async () => {
+      const onHopsChange = jest.fn()
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={10}
+            onHopsChange={onHopsChange}
+            sliderMax={10}
+          />,
+        )
+      })
+
+      const incrementBtn = container.querySelector('[data-testid="toolbar-depth-increment"]') as HTMLButtonElement
+      expect(incrementBtn.disabled).toBe(true)
+
+      await act(async () => { incrementBtn.click() })
+      expect(onHopsChange).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('mobile collapse (below 640px the toolbar is a 44px icon button that opens a sheet)', () => {
+    async function renderToolbar() {
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={3}
+            onHopsChange={jest.fn()}
+          />,
+        )
+      })
+    }
+
+    it('renders a 44px toolbar toggle button and keeps the toolbar hidden below sm', async () => {
+      await renderToolbar()
+
+      const toggle = container.querySelector<HTMLButtonElement>('[data-testid="toolbar-toggle"]')
+      expect(toggle).not.toBeNull()
+      expect(toggle!.getAttribute('aria-label')).toBe('Open toolbar')
+      expect(toggle!.className).toMatch(/min-h-11/)
+      expect(toggle!.className).toMatch(/min-w-11/)
+      // Hidden at sm+ (desktop keeps the toolbar open, not the toggle).
+      expect(toggle!.className).toMatch(/sm:hidden/)
+
+      const toolbar = container.querySelector<HTMLElement>('[data-testid="toolbar"]')
+      expect(toolbar).not.toBeNull()
+      // Hidden on mobile until toggled open; always shown at sm+.
+      expect(toolbar!.className).toMatch(/(^|\s)hidden(\s|$)/)
+      expect(toolbar!.className).toMatch(/sm:flex/)
+    })
+
+    it('tapping the toggle button opens the toolbar and hides the toggle', async () => {
+      await renderToolbar()
+
+      const toggle = container.querySelector<HTMLButtonElement>('[data-testid="toolbar-toggle"]')!
+      await act(async () => { toggle.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+
+      const toolbarAfter = container.querySelector<HTMLElement>('[data-testid="toolbar"]')!
+      expect(toolbarAfter.className).not.toMatch(/(^|\s)hidden(\s|$)/)
+
+      const toggleAfter = container.querySelector('[data-testid="toolbar-toggle"]')
+      expect(toggleAfter).toBeNull()
+    })
+
+    it('the toolbar close button collapses back to the toggle button', async () => {
+      await renderToolbar()
+
+      const toggle = container.querySelector<HTMLButtonElement>('[data-testid="toolbar-toggle"]')!
+      await act(async () => { toggle.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+
+      const closeBtn = container.querySelector<HTMLButtonElement>('[data-testid="toolbar-close"]')!
+      expect(closeBtn).not.toBeNull()
+      expect(closeBtn.getAttribute('aria-label')).toBe('Close toolbar')
+      await act(async () => { closeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+
+      expect(container.querySelector('[data-testid="toolbar-toggle"]')).not.toBeNull()
+      const toolbarAfter = container.querySelector<HTMLElement>('[data-testid="toolbar"]')!
+      expect(toolbarAfter.className).toMatch(/(^|\s)hidden(\s|$)/)
     })
   })
 })

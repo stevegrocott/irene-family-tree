@@ -228,6 +228,50 @@ describe('PersonDrawer', () => {
       expect(bar.className).toContain('w-8')
       expect(bar.className).toContain('h-1')
     })
+
+    it('opens at the peek detent (~30vh) and tapping the drag handle expands it to full (72vh)', async () => {
+      await renderDrawer()
+
+      const drawer = container.querySelector('[data-testid="person-drawer"]') as HTMLElement
+      const handle = container.querySelector('[data-testid="drawer-drag-handle"]') as HTMLElement
+      expect(drawer.className).toContain('h-[30vh]')
+      expect(handle.getAttribute('aria-expanded')).toBe('false')
+
+      await act(async () => { handle.click() })
+
+      const expandedDrawer = container.querySelector('[data-testid="person-drawer"]') as HTMLElement
+      const expandedHandle = container.querySelector('[data-testid="drawer-drag-handle"]') as HTMLElement
+      expect(expandedDrawer.className).toContain('h-[72vh]')
+      expect(expandedDrawer.className).not.toContain('h-[30vh]')
+      expect(expandedHandle.getAttribute('aria-expanded')).toBe('true')
+    })
+
+    it('tapping the drag handle again collapses the full detent back to peek', async () => {
+      await renderDrawer()
+
+      const handle = () => container.querySelector('[data-testid="drawer-drag-handle"]') as HTMLElement
+      await act(async () => { handle().click() })
+      expect((container.querySelector('[data-testid="person-drawer"]') as HTMLElement).className).toContain('h-[72vh]')
+
+      await act(async () => { handle().click() })
+
+      const drawer = container.querySelector('[data-testid="person-drawer"]') as HTMLElement
+      expect(drawer.className).toContain('h-[30vh]')
+      expect(handle().getAttribute('aria-expanded')).toBe('false')
+    })
+
+    it('is keyboard-operable: Enter on the drag handle toggles the detent', async () => {
+      await renderDrawer()
+
+      const handle = container.querySelector('[data-testid="drawer-drag-handle"]') as HTMLButtonElement
+      expect(handle.tagName).toBe('BUTTON')
+
+      // A real <button> activates on Enter/Space natively; simulate the resulting click.
+      await act(async () => { handle.click() })
+
+      const drawer = container.querySelector('[data-testid="person-drawer"]') as HTMLElement
+      expect(drawer.className).toContain('h-[72vh]')
+    })
   })
 
   describe('Add parent', () => {

@@ -66,6 +66,13 @@ function isArrowKey(key: string): key is ArrowKey {
   return (ARROW_KEYS as readonly string[]).includes(key)
 }
 
+/**
+ * Comfortable inset (px, screen space) kept between a freshly-focused node and the
+ * canvas edge when arrow-key navigation pans it into view — matches the toolbar/minimap
+ * clearance so the focus ring never hugs the viewport border (docs/DESIGN_SYSTEM.md §7).
+ */
+const FOCUS_VIEWPORT_MARGIN = 32
+
 /** Default edge styling applied to all edges. */
 const defaultEdgeStyle: React.CSSProperties = { stroke: '#6366f1', strokeWidth: 1.5, opacity: 0.5 }
 
@@ -2026,7 +2033,7 @@ function FlowCanvas({
   )
   /** Id of the person node currently hovered (desktop) — a transient, non-sticky lineage focus. */
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
-  const { setViewport } = useReactFlow()
+  const { setViewport, getViewport } = useReactFlow()
   /**
    * Container-measured canvas dimensions from the ReactFlow store. These reflect
    * the actual `<ReactFlow>` element size (kept current by ReactFlow's internal
@@ -2206,6 +2213,43 @@ function FlowCanvas({
   const reactFlowWrapperRef = useRef<HTMLDivElement>(null)
 
   /**
+   * Pans the viewport by the minimal amount needed to bring `el` fully inside the canvas
+   * bounds (a `FOCUS_VIEWPORT_MARGIN` inset on every side) — the same "nearest edge" logic
+   * as `Element.scrollIntoView({ block: 'nearest' })`, hand-rolled because the ReactFlow
+   * pane isn't a natively scrollable element (docs/DESIGN_SYSTEM.md §7, AC3).
+   *
+   * Deliberately never touches zoom and never moves a node that's already fully visible,
+   * unlike `fitView`/`setCenter` which would recentre (and often rescale) on every focus
+   * move — that would fight both the tree's initial auto-fit and any pan/zoom the user has
+   * mid-gesture (AC4). When nothing needs to move, `setViewport` is not called at all.
+   */
+  const scrollFocusedNodeIntoView = useCallback((el: HTMLElement | null) => {
+    const wrapper = reactFlowWrapperRef.current
+    if (!el || !wrapper) return
+    const wrapperRect = wrapper.getBoundingClientRect()
+    const nodeRect = el.getBoundingClientRect()
+
+    let dx = 0
+    if (nodeRect.left < wrapperRect.left + FOCUS_VIEWPORT_MARGIN) {
+      dx = wrapperRect.left + FOCUS_VIEWPORT_MARGIN - nodeRect.left
+    } else if (nodeRect.right > wrapperRect.right - FOCUS_VIEWPORT_MARGIN) {
+      dx = wrapperRect.right - FOCUS_VIEWPORT_MARGIN - nodeRect.right
+    }
+
+    let dy = 0
+    if (nodeRect.top < wrapperRect.top + FOCUS_VIEWPORT_MARGIN) {
+      dy = wrapperRect.top + FOCUS_VIEWPORT_MARGIN - nodeRect.top
+    } else if (nodeRect.bottom > wrapperRect.bottom - FOCUS_VIEWPORT_MARGIN) {
+      dy = wrapperRect.bottom - FOCUS_VIEWPORT_MARGIN - nodeRect.bottom
+    }
+
+    if (dx === 0 && dy === 0) return
+
+    const current = getViewport()
+    setViewport({ x: current.x + dx, y: current.y + dy, zoom: current.zoom }, { duration: 200 })
+  }, [getViewport, setViewport])
+
+  /**
    * Resolves `↑`/`↓`/`←`/`→` against the loaded graph to move focus to a parent, child, or
    * sibling (docs/DESIGN_SYSTEM.md §7). Only acts when the key originates from a focused
    * person node (identified via the nearest `.react-flow__node` ancestor); if focus is on
@@ -2216,6 +2260,10 @@ function FlowCanvas({
    * and calls `stopPropagation` for every arrow key once a node is confirmed focused —
    * pre-empting ReactFlow's default "arrow keys move the selected node" behavior, which
    * would otherwise fire immediately after this handler returns.
+   *
+   * Once focus lands on the target node, {@link scrollFocusedNodeIntoView} nudges the
+   * viewport just enough to bring it fully on-screen (AC3), without disturbing pan/zoom
+   * otherwise.
    */
   const handleGraphKeyDown = useCallback((event: React.KeyboardEvent) => {
     if (!isArrowKey(event.key)) return
@@ -2234,7 +2282,8 @@ function FlowCanvas({
       `.react-flow__node[data-id="${CSS.escape(nextId)}"]`
     )
     nextEl?.focus()
-  }, [flowNodes, flowEdges])
+    scrollFocusedNodeIntoView(nextEl ?? null)
+  }, [flowNodes, flowEdges, scrollFocusedNodeIntoView])
 
   /**
    * Fetches tree data for the current `rootId` and `hops` depth, applies dagre

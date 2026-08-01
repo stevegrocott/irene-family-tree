@@ -40,6 +40,18 @@ export type Density = keyof typeof DENSITY_PRESETS
 
 export const DEFAULT_DENSITY: Density = 'compact'
 
+/** Viewport width (px) below which mobile density/chrome rules apply, per docs/DESIGN_SYSTEM.md §6. */
+export const MOBILE_DENSITY_BREAKPOINT_PX = 640
+
+/**
+ * Resolves the default {@link Density} for a given viewport width — `dense` below
+ * {@link MOBILE_DENSITY_BREAKPOINT_PX}, `compact` at or above it — per
+ * docs/DESIGN_SYSTEM.md §6 ("Density defaults to `compact` on desktop and `dense` on phones").
+ */
+export function getDefaultDensity(viewportWidth: number): Density {
+  return viewportWidth < MOBILE_DENSITY_BREAKPOINT_PX ? 'dense' : 'compact'
+}
+
 /**
  * Zoom thresholds driving person-node level-of-detail (docs/DESIGN_SYSTEM.md §3.2).
  * `dotMax` is the exclusive upper bound of the **dot** variant; `compactMax` is the

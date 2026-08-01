@@ -27,7 +27,7 @@ const SEX_LABEL: Record<string, string> = {
 export type PersonNodeVariant = 'dot' | 'compact' | 'full'
 
 /** `PersonData` plus the LOD variant chosen once at the canvas level and passed down to nodes. */
-export type PersonNodeData = PersonData & { variant?: PersonNodeVariant }
+export type PersonNodeData = PersonData & { lodVariant?: PersonNodeVariant }
 
 /** Falls back to `full` so callers that don't pass a variant (e.g. existing tests) keep prior behaviour. */
 const DEFAULT_VARIANT: PersonNodeVariant = 'full'
@@ -61,7 +61,7 @@ function buildAccessibleName(data: PersonData, sexLabel: string, dates: string):
 function PersonNode({ data }: NodeProps<PersonNodeData>) {
   const [photoFailed, setPhotoFailed] = useState(false)
   const handlePhotoError = useCallback(() => setPhotoFailed(true), [])
-  const variant = data.variant ?? DEFAULT_VARIANT
+  const variant = data.lodVariant ?? DEFAULT_VARIANT
   const tickColor = SEX_TICK_COLOR[data.sex] ?? 'var(--ft-border-strong)'
   const sexLabel = SEX_LABEL[data.sex] ?? 'Sex unknown'
   const borderClass = data.isRoot ? 'border-2 border-brass' : 'border border-line'

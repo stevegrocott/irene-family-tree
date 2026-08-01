@@ -31,6 +31,7 @@ jest.mock('@/lib/layout', () => ({
 }))
 jest.mock('@/lib/person', () => ({ formatLifespan: () => null }))
 jest.mock('@/constants/tree', () => ({
+  ...jest.requireActual('@/constants/tree'),
   MIN_HOPS: 1,
   DEFAULT_HOPS: 3,
   MAX_HOPS: 10,

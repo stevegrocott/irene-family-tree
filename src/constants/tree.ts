@@ -93,6 +93,20 @@ export const DRAWER_DRAG_HANDLE_CLASS = 'flex justify-center pt-2 pb-1 sm:hidden
 
 export const RESPONSIVE_BUTTON_BASE = 'flex items-center justify-center rounded-lg text-ink-3 hover:text-ink hover:bg-surface-1 transition-colors w-11 h-11 sm:w-7 sm:h-7'
 
+/**
+ * Status-row pill classes for the person drawer (docs/DESIGN_SYSTEM.md §4.1).
+ * Each variant reuses the semantic token pair already defined for that meaning
+ * elsewhere in the design system: private/living, pending, and brass/root.
+ */
+export const STATUS_PILL_BASE_CLASS = 'inline-flex items-center [font:var(--ft-label)] px-2.5 py-1 rounded-[var(--ft-r-pill)] whitespace-nowrap'
+export const STATUS_PILL_LIVING_CLASS = `${STATUS_PILL_BASE_CLASS} bg-[var(--ft-private-soft)] text-[var(--ft-private)]`
+export const STATUS_PILL_PENDING_CLASS = `${STATUS_PILL_BASE_CLASS} bg-[var(--ft-pending-soft)] text-[var(--ft-pending)]`
+export const STATUS_PILL_ROOT_CLASS = `${STATUS_PILL_BASE_CLASS} bg-[var(--ft-brass-soft)] text-[var(--ft-brass)]`
+
+/** Facts-list label/value classes (docs/DESIGN_SYSTEM.md §4.1) — rows separated by the parent's `divide-y`. */
+export const FACT_ROW_LABEL_CLASS = '[font:var(--ft-micro)] uppercase tracking-[var(--ft-micro-track)] text-ink-3 flex-shrink-0'
+export const FACT_ROW_VALUE_CLASS = '[font:var(--ft-body)] text-ink text-right min-w-0'
+
 /** Absolute-positioned top-right floating panel — see AuthButton.tsx. */
 export const FLOATING_PANEL_BASE_CLASS = 'absolute top-4 right-4 z-10 flex items-center gap-2 bg-surface border border-line rounded-[var(--ft-r-md)] shadow-[var(--ft-shadow-1)]'
 

@@ -8,6 +8,29 @@ export const MAX_HOPS = 60
 export const DEFAULT_HOPS = 60
 export const UNION_LABEL = 'Union'
 
+/** Generation band CSS custom properties (src/styles/tokens.css §3.1) — alternate a/b by parity, root at generation 0. */
+export const BAND_VARS = {
+  a: '--ft-band-a',
+  b: '--ft-band-b',
+  root: '--ft-band-root',
+  rule: '--ft-band-rule',
+} as const
+
+/**
+ * Density presets — mirrors the `[data-density]` breakpoints in src/styles/tokens.css so
+ * `applyDagreLayout`'s `ranksep`/`nodesep` stay in lockstep with the CSS-driven band height.
+ * Compact is the default per docs/DESIGN_SYSTEM.md § Density.
+ */
+export const DENSITY_PRESETS = {
+  compact: { ranksep: 74, nodesep: 30, bandHeight: 120 },
+  comfortable: { ranksep: 96, nodesep: 44, bandHeight: 144 },
+  dense: { ranksep: 54, nodesep: 18, bandHeight: 92 },
+} as const
+
+export type Density = keyof typeof DENSITY_PRESETS
+
+export const DEFAULT_DENSITY: Density = 'compact'
+
 export const EDGE_TYPES = {
   UNION: 'UNION',
   CHILD: 'CHILD',

@@ -78,6 +78,32 @@ const EDGE_RENDER_TYPE: Partial<Record<string, string>> = {
 }
 
 /**
+ * Canvas chrome treatment (docs/DESIGN_SYSTEM.md §3.6) — the minimap, controls, and zoom
+ * widget all take a solid `--ft-surface-0` fill with a 1 px `--ft-border` and `--ft-r-md`
+ * corners, replacing the translucent/blurred glass panel styling.
+ */
+const CHROME_STYLE: React.CSSProperties = {
+  background: 'var(--ft-surface-0)',
+  border: '1px solid var(--ft-border)',
+  borderRadius: 'var(--ft-r-md)',
+}
+
+/** Minimap panel size (docs/DESIGN_SYSTEM.md §3.6) — 160×120, bottom-right (component default). */
+const MINIMAP_STYLE: React.CSSProperties = {
+  ...CHROME_STYLE,
+  width: 160,
+  height: 120,
+}
+
+/**
+ * Colors each minimap node mark `--ft-edge`, promoting the current root person to
+ * `--ft-brass` so it stays identifiable at a glance (docs/DESIGN_SYSTEM.md §3.6).
+ */
+function minimapNodeColor(node: Node): string {
+  return node.type === 'person' && (node.data as PersonData).isRoot ? 'var(--ft-brass)' : 'var(--ft-edge)'
+}
+
+/**
  * Button that copies a shareable tree-viewer URL to the clipboard via
  * `navigator.clipboard.writeText`, showing a transient "Copied!" or
  * "Copy failed" label for ~2s before reverting to the resting label.
@@ -2128,11 +2154,12 @@ function FlowCanvas({
         <GenerationBands generationLevels={generationLevels} />
         <Background variant={BackgroundVariant.Dots} color="#1e2a4a" gap={28} size={1} />
         <MiniMap
-          style={{ background: '#0f172a' }}
-          nodeColor="#6366f1"
-          maskColor="rgba(0,0,0,0.6)"
+          style={MINIMAP_STYLE}
+          nodeColor={minimapNodeColor}
+          nodeStrokeWidth={2}
+          maskColor="var(--ft-overlay)"
         />
-        <Controls />
+        <Controls style={CHROME_STYLE} />
       </ReactFlow>
       {selectedPerson && (
         <PersonDrawer

@@ -35,6 +35,7 @@ import { applyDagreLayout, GenerationLevel } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import { computeLineage } from '@/lib/lineage'
+import { resolveArrowTarget, type ArrowKey } from '@/lib/keyboardNav'
 import type { TreeResponse, PersonData, UnionData, PersonDetailResponse, PersonSummary, FlowNode, FlowEdge } from '@/types/tree'
 import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS, EDGE_TYPES, EDGE_RENDER_TYPE } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
@@ -57,6 +58,13 @@ interface Person { gedcomId: string; name: string; sex: string | null; birthYear
 
 /** Map of custom node types for ReactFlow visualization. */
 const nodeTypes = { person: PersonNode, union: UnionNode }
+
+const ARROW_KEYS: readonly ArrowKey[] = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
+
+/** Narrows a raw `KeyboardEvent.key` string to {@link ArrowKey}. */
+function isArrowKey(key: string): key is ArrowKey {
+  return (ARROW_KEYS as readonly string[]).includes(key)
+}
 
 /** Default edge styling applied to all edges. */
 const defaultEdgeStyle: React.CSSProperties = { stroke: '#6366f1', strokeWidth: 1.5, opacity: 0.5 }
@@ -2071,26 +2079,32 @@ function FlowCanvas({
   const focusNodeId = selectedNodeId ?? hoveredNodeId
 
   /**
+   * `nodes`/`edges` mapped to the plain {@link FlowNode}/{@link FlowEdge} shape shared by
+   * the lineage BFS and arrow-key navigation resolution — both need only id/type/position
+   * and id/source/target/label, not the full ReactFlow `Node`/`Edge` shape.
+   */
+  const flowNodes = useMemo<FlowNode[]>(() => nodes.map(n => ({
+    id: n.id,
+    type: n.type as 'person' | 'union',
+    data: n.data as PersonData | UnionData,
+    position: n.position,
+  })), [nodes])
+  const flowEdges = useMemo<FlowEdge[]>(() => edges.map(e => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    label: (e.data as { relType?: string } | undefined)?.relType ?? '',
+  })), [edges])
+
+  /**
    * In-lineage node/edge id set for the current focus (hover or sticky selection), computed
    * in a single O(nodes + edges) pass over the already-loaded graph — no network request.
    * `null` when nothing is focused, meaning no dimming is applied.
    */
   const lineage = useMemo(() => {
     if (!focusNodeId) return null
-    const lineageNodes: FlowNode[] = nodes.map(n => ({
-      id: n.id,
-      type: n.type as 'person' | 'union',
-      data: n.data as PersonData | UnionData,
-      position: n.position,
-    }))
-    const lineageEdges: FlowEdge[] = edges.map(e => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      label: (e.data as { relType?: string } | undefined)?.relType ?? '',
-    }))
-    return computeLineage(lineageNodes, lineageEdges, focusNodeId)
-  }, [nodes, edges, focusNodeId])
+    return computeLineage(flowNodes, flowEdges, focusNodeId)
+  }, [flowNodes, flowEdges, focusNodeId])
 
   /** Nodes as rendered by ReactFlow, with off-lineage nodes dimmed via `--ft-node-dim` while a focus is active. */
   const displayNodes = useMemo(() => {
@@ -2187,6 +2201,40 @@ function FlowCanvas({
   const handleNodeMouseLeave = useCallback((_event: React.MouseEvent, node: Node) => {
     if (node.type === 'person') setHoveredNodeId(prev => (prev === node.id ? null : prev))
   }, [])
+
+  /** DOM element ReactFlow renders its `.react-flow` wrapper into — used to locate node elements by id for keyboard focus moves. */
+  const reactFlowWrapperRef = useRef<HTMLDivElement>(null)
+
+  /**
+   * Resolves `↑`/`↓`/`←`/`→` against the loaded graph to move focus to a parent, child, or
+   * sibling (docs/DESIGN_SYSTEM.md §7). Only acts when the key originates from a focused
+   * person node (identified via the nearest `.react-flow__node` ancestor); if focus is on
+   * the pane/canvas instead, the event is left untouched so panning and any other ReactFlow
+   * bindings keep working (AC4).
+   *
+   * Handled as `onKeyDownCapture` so it runs before ReactFlow's own per-node `onKeyDown`,
+   * and calls `stopPropagation` for every arrow key once a node is confirmed focused —
+   * pre-empting ReactFlow's default "arrow keys move the selected node" behavior, which
+   * would otherwise fire immediately after this handler returns.
+   */
+  const handleGraphKeyDown = useCallback((event: React.KeyboardEvent) => {
+    if (!isArrowKey(event.key)) return
+    const target = event.target as HTMLElement
+    const nodeEl = target.closest('.react-flow__node') as HTMLElement | null
+    if (!nodeEl) return
+    const currentId = nodeEl.getAttribute('data-id')
+    if (!currentId) return
+
+    event.preventDefault()
+    event.stopPropagation()
+
+    const nextId = resolveArrowTarget(flowNodes, flowEdges, currentId, event.key)
+    if (!nextId) return
+    const nextEl = reactFlowWrapperRef.current?.querySelector<HTMLElement>(
+      `.react-flow__node[data-id="${CSS.escape(nextId)}"]`
+    )
+    nextEl?.focus()
+  }, [flowNodes, flowEdges])
 
   /**
    * Fetches tree data for the current `rootId` and `hops` depth, applies dagre
@@ -2320,6 +2368,7 @@ function FlowCanvas({
         </div>
       )}
       <ReactFlow
+        ref={reactFlowWrapperRef}
         nodes={displayNodes}
         edges={displayEdges}
         nodeTypes={nodeTypes}
@@ -2329,6 +2378,7 @@ function FlowCanvas({
         minZoom={0.18}
         onNodeMouseEnter={handleNodeMouseEnter}
         onNodeMouseLeave={handleNodeMouseLeave}
+        onKeyDownCapture={handleGraphKeyDown}
       >
         <GenerationBands generationLevels={generationLevels} />
         <Background variant={BackgroundVariant.Dots} color="#1e2a4a" gap={28} size={1} />

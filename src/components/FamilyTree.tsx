@@ -157,7 +157,7 @@ export function Toolbar({
   return (
     <div
       data-testid="toolbar"
-      className="absolute bottom-4 inset-x-4 z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-auto sm:max-w-[calc(100vw-2rem)] sm:flex-nowrap sm:gap-4 sm:py-2"
+      className="absolute bottom-4 inset-x-4 z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 bg-slate-800 border border-white/20 rounded-lg px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-auto sm:max-w-[calc(100vw-2rem)] sm:flex-nowrap sm:gap-4 sm:py-2"
     >
       <span
         data-testid="toolbar-app-name"
@@ -245,7 +245,7 @@ function RelativeRow({
   return (
     <div className="flex items-center group">
       <button
-        className={`flex-1 text-left px-3 rounded-lg hover:bg-white/10 transition-colors ${small ? 'py-1.5 text-xs text-white/60 hover:text-white/80' : 'py-2 text-sm text-white/80 hover:text-white'}`}
+        className={`flex-1 text-left px-3 rounded-lg hover:bg-slate-800 transition-colors ${small ? 'py-1.5 text-xs text-white/60 hover:text-white/80' : 'py-2 text-sm text-white/80 hover:text-white'}`}
         onClick={() => onSelect(person.gedcomId)}
         onDoubleClick={() => onReroot(person.gedcomId)}
       >
@@ -258,7 +258,7 @@ function RelativeRow({
         data-testid="relative-focus"
         aria-label={`Focus tree on ${person.name || 'person'}`}
         onClick={() => onReroot(person.gedcomId)}
-        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 mr-1 rounded text-white/40 hover:text-indigo-400 hover:bg-white/10 flex-shrink-0"
+        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 mr-1 rounded text-white/40 hover:text-indigo-400 hover:bg-slate-800 flex-shrink-0"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="3" />
@@ -276,7 +276,7 @@ function RelativeRow({
 function DrawerDragHandle() {
   return (
     <div data-testid="drawer-drag-handle" className={DRAWER_DRAG_HANDLE_CLASS} aria-hidden="true">
-      <div className="h-1.5 w-10 rounded-full bg-white/20" />
+      <div className="h-1.5 w-10 rounded-full bg-slate-700" />
     </div>
   )
 }
@@ -1051,7 +1051,7 @@ export function PersonDrawer({
               type="text"
               value={editGivenName}
               onChange={e => setEditGivenName(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+              className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
             />
           </div>
           <div>
@@ -1061,7 +1061,7 @@ export function PersonDrawer({
               type="text"
               value={editFamilyName}
               onChange={e => setEditFamilyName(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+              className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
             />
           </div>
           <div>
@@ -1079,7 +1079,7 @@ export function PersonDrawer({
               ) : (
                 <span
                   aria-hidden="true"
-                  className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-[10px] text-white/40 flex-shrink-0"
+                  className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-[10px] text-white/40 flex-shrink-0"
                 >
                   No photo
                 </span>
@@ -1091,7 +1091,7 @@ export function PersonDrawer({
                 accept="image/jpeg,image/png,image/webp"
                 onChange={handlePhotoFileChange}
                 disabled={photoUploading}
-                className="text-xs text-white/70 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:bg-white/10 file:text-white/80 file:text-xs hover:file:bg-white/20 disabled:opacity-50"
+                className="text-xs text-white/70 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:bg-slate-800 file:text-white/80 file:text-xs hover:file:bg-slate-700 disabled:opacity-50"
               />
             </div>
             {photoUploading && <p className="text-xs text-slate-400 mt-1">Uploading…</p>}
@@ -1104,7 +1104,7 @@ export function PersonDrawer({
                   key={s}
                   type="button"
                   onClick={() => setEditSex(s)}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${editSex === s ? 'bg-indigo-500 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${editSex === s ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-white/60 hover:bg-slate-700'}`}
                 >
                   {s === 'M' ? 'Male' : s === 'F' ? 'Female' : 'Unknown'}
                 </button>
@@ -1118,7 +1118,7 @@ export function PersonDrawer({
               type="text"
               value={editBirthYear}
               onChange={e => setEditBirthYear(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+              className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
             />
           </div>
           {showEditBirthPlace ? (
@@ -1129,7 +1129,7 @@ export function PersonDrawer({
                 type="text"
                 value={editBirthPlace}
                 onChange={e => setEditBirthPlace(e.target.value)}
-                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+                className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
               />
             </div>
           ) : (
@@ -1145,7 +1145,7 @@ export function PersonDrawer({
                 type="text"
                 value={editDiedYear}
                 onChange={e => setEditDiedYear(e.target.value)}
-                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+                className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
               />
             </div>
           ) : (
@@ -1161,7 +1161,7 @@ export function PersonDrawer({
                 type="text"
                 value={editDeathPlace}
                 onChange={e => setEditDeathPlace(e.target.value)}
-                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+                className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
               />
             </div>
           ) : (
@@ -1177,7 +1177,7 @@ export function PersonDrawer({
                 type="text"
                 value={editOccupation}
                 onChange={e => setEditOccupation(e.target.value)}
-                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+                className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
               />
             </div>
           ) : (
@@ -1193,7 +1193,7 @@ export function PersonDrawer({
                 value={editNotes}
                 onChange={e => setEditNotes(e.target.value)}
                 rows={3}
-                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400 resize-none"
+                className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400 resize-none"
               />
             </div>
           ) : (
@@ -1229,7 +1229,7 @@ export function PersonDrawer({
                       data-testid={`your-edit-revert-${c.id}`}
                       onClick={() => handleRevertEdit(c.id)}
                       disabled={isSubmitting}
-                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-white/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-white/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Revert
                     </button>
@@ -1245,7 +1245,7 @@ export function PersonDrawer({
             <button
               data-testid="person-drawer-cancel"
               onClick={handleCancelEdit}
-              className="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
+              className="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium transition-colors"
             >
               Cancel
             </button>
@@ -1253,7 +1253,7 @@ export function PersonDrawer({
               <button
                 onClick={handleSaveEdit}
                 disabled={photoUploading}
-                className="flex-1 py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+                className="flex-1 py-2 rounded-lg bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
               >
                 Save change
               </button>
@@ -1262,7 +1262,7 @@ export function PersonDrawer({
                 data-testid="suggest-change"
                 onClick={handleSuggestChange}
                 disabled={photoUploading}
-                className="flex-1 py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+                className="flex-1 py-2 rounded-lg bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
               >
                 Suggest this change
               </button>
@@ -1282,7 +1282,7 @@ export function PersonDrawer({
               placeholder={`Search for a ${addRelativeType}…`}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
             />
             {searchResults.length > 0 && (
               <ul className="mt-2 space-y-1">
@@ -1291,7 +1291,7 @@ export function PersonDrawer({
                     <button
                       onClick={() => handleSelectRelative(p)}
                       disabled={isSubmitting}
-                      className="w-full text-left px-3 py-2 rounded-lg text-sm text-white/80 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full text-left px-3 py-2 rounded-lg text-sm text-white/80 hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <span className="font-medium">{p.name || 'Unknown'}</span>
                       {p.birthYear && <span className="ml-2 text-xs text-slate-500">{p.birthYear}</span>}
@@ -1314,7 +1314,7 @@ export function PersonDrawer({
                   type="text"
                   value={givenName}
                   onChange={e => setGivenName(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+                  className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
                 />
               </div>
               <div>
@@ -1324,7 +1324,7 @@ export function PersonDrawer({
                   type="text"
                   value={familyName}
                   onChange={e => setFamilyName(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+                  className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
                 />
               </div>
               <div>
@@ -1334,7 +1334,7 @@ export function PersonDrawer({
                   type="text"
                   value={newBirthYear}
                   onChange={e => setNewBirthYear(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
+                  className="w-full px-3 py-1.5 rounded-lg bg-slate-800 border border-white/20 text-white text-sm placeholder-white/40 focus:outline-none focus:border-indigo-400"
                 />
               </div>
               <div>
@@ -1357,7 +1357,7 @@ export function PersonDrawer({
             <button
               onClick={handleCreateAndLink}
               disabled={isSubmitting}
-              className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-2 rounded-lg bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Save change
             </button>
@@ -1403,7 +1403,7 @@ export function PersonDrawer({
           <CopyLinkButton
             getUrl={getShareUrl}
             testId="person-drawer-copy-link"
-            className="px-2 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors mr-1 text-[10px] whitespace-nowrap"
+            className="px-2 h-7 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-slate-800 transition-colors mr-1 text-[10px] whitespace-nowrap"
           />
         )}
         <button
@@ -1492,7 +1492,7 @@ export function PersonDrawer({
                             title="Remove parent"
                             onClick={() => setPendingRemoveParentId(removableChange.id)}
                             disabled={isSubmitting}
-                            className="w-6 h-6 flex items-center justify-center rounded-lg text-white/40 hover:text-red-400 hover:bg-white/10 transition-colors text-sm leading-none flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-6 h-6 flex items-center justify-center rounded-lg text-white/40 hover:text-red-400 hover:bg-slate-800 transition-colors text-sm leading-none flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             ×
                           </button>
@@ -1516,7 +1516,7 @@ export function PersonDrawer({
                               aria-label="Cancel remove parent"
                               onClick={() => setPendingRemoveParentId(null)}
                               disabled={isSubmitting}
-                              className="px-2 h-6 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 transition-colors text-xs leading-none disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="px-2 h-6 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-white/80 transition-colors text-xs leading-none disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               No
                             </button>
@@ -1572,7 +1572,7 @@ export function PersonDrawer({
                               title="Remove marriage"
                               onClick={() => handleRemoveMarriage(removableChange.id)}
                               disabled={isSubmitting}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg text-white/40 hover:text-red-400 hover:bg-white/10 transition-colors text-sm leading-none flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-6 h-6 flex items-center justify-center rounded-lg text-white/40 hover:text-red-400 hover:bg-slate-800 transition-colors text-sm leading-none flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               ×
                             </button>
@@ -1630,7 +1630,7 @@ export function PersonDrawer({
         <button
           data-testid="person-drawer-reroot"
           onClick={() => { onReroot(person.gedcomId); onClose() }}
-          className="w-full py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors uppercase tracking-wide"
+          className="w-full py-2 rounded-lg bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors uppercase tracking-wide"
         >
           FOCUS TREE ON {(person.name || 'PERSON').toUpperCase()}
         </button>
@@ -1641,7 +1641,7 @@ export function PersonDrawer({
               onClick={handleDeletePerson}
               disabled={isSubmitting || hasForeignConnections}
               aria-label={`Delete ${person.name || 'person'}`}
-              className="w-full py-2 rounded-xl bg-red-500/80 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-500/80"
+              className="w-full py-2 rounded-lg bg-red-500/80 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-500/80"
             >
               Delete this person
             </button>
@@ -2004,7 +2004,7 @@ export default function FamilyTree() {
   if (personsError) {
     return (
       <div className="relative w-full h-dvh bg-[#050a18] flex items-center justify-center">
-        <div className="bg-white/10 backdrop-blur-md border border-red-400/30 rounded-2xl p-6 max-w-sm text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+        <div className="bg-slate-800 border border-red-400/30 rounded-lg p-6 max-w-sm text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
           <p className="text-red-300 text-sm">{personsError}</p>
         </div>
       </div>

@@ -80,7 +80,7 @@ export default async function AdminPage() {
           <a
             href="/api/admin/export"
             download
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-indigo-500/80 hover:bg-indigo-500 text-white shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--ft-r-md)] text-sm font-medium bg-indigo-500/80 hover:bg-indigo-500 text-white shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-colors"
           >
             Download GEDCOM
           </a>

@@ -9,6 +9,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import PersonNode from './PersonNode'
 import type { PersonData } from '@/types/tree'
+import { getPersonLodVariant, LOD_ZOOM_THRESHOLDS } from '@/constants/tree'
 
 jest.mock('reactflow', () => ({
   Handle: () => null,
@@ -97,5 +98,55 @@ describe('PersonNode avatar', () => {
     })
     expect(el.querySelector('[data-testid="person-node-photo"]')).toBeNull()
     expect(el.textContent).toContain('IT')
+  })
+})
+
+describe('getPersonLodVariant boundaries', () => {
+  it('resolves to "dot" just below the dotMax threshold (0.45)', () => {
+    expect(getPersonLodVariant(LOD_ZOOM_THRESHOLDS.dotMax - 0.01)).toBe('dot')
+  })
+
+  it('resolves the dotMax threshold itself (0.45) to "compact", not "dot"', () => {
+    expect(getPersonLodVariant(LOD_ZOOM_THRESHOLDS.dotMax)).toBe('compact')
+  })
+
+  it('resolves values between the thresholds to "compact"', () => {
+    expect(getPersonLodVariant(0.6)).toBe('compact')
+  })
+
+  it('resolves the compactMax threshold itself (0.85) to "compact", not "full"', () => {
+    expect(getPersonLodVariant(LOD_ZOOM_THRESHOLDS.compactMax)).toBe('compact')
+  })
+
+  it('resolves just above the compactMax threshold (0.85) to "full"', () => {
+    expect(getPersonLodVariant(LOD_ZOOM_THRESHOLDS.compactMax + 0.01)).toBe('full')
+  })
+
+  it('is deterministic and single-valued at each boundary across repeated calls', () => {
+    const calls = Array.from({ length: 5 }, () => getPersonLodVariant(LOD_ZOOM_THRESHOLDS.dotMax))
+    expect(new Set(calls).size).toBe(1)
+    expect(calls[0]).toBe('compact')
+  })
+})
+
+describe('PersonNode lodVariant wiring', () => {
+  it('renders the dot markup when data.lodVariant is "dot"', () => {
+    const el = render({ lodVariant: 'dot' })
+    expect(el.querySelector('[data-testid="person-node-dot"]')).not.toBeNull()
+  })
+
+  it('renders the compact markup when data.lodVariant is "compact"', () => {
+    const el = render({ lodVariant: 'compact' })
+    expect(el.querySelector('[data-testid="person-node-compact"]')).not.toBeNull()
+  })
+
+  it('renders the full markup when data.lodVariant is "full"', () => {
+    const el = render({ lodVariant: 'full' })
+    expect(el.querySelector('[data-testid="person-node-full"]')).not.toBeNull()
+  })
+
+  it('falls back to the full markup when data.lodVariant is absent', () => {
+    const el = render()
+    expect(el.querySelector('[data-testid="person-node-full"]')).not.toBeNull()
   })
 })

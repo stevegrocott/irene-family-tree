@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import { Handle, Position, type NodeProps } from 'reactflow'
 import type { PersonData } from '@/types/tree'
 
@@ -21,20 +21,47 @@ const SEX_LABEL: Record<string, string> = {
 }
 
 /**
+ * Level-of-detail variant selected by canvas zoom, per `docs/DESIGN_SYSTEM.md` §3.2:
+ * `dot` below 0.45, `compact` between 0.45 and 0.85, `full` above 0.85.
+ */
+export type PersonNodeVariant = 'dot' | 'compact' | 'full'
+
+/** `PersonData` plus the LOD variant chosen once at the canvas level and passed down to nodes. */
+export type PersonNodeData = PersonData & { lodVariant?: PersonNodeVariant }
+
+/** Falls back to `full` so callers that don't pass a variant (e.g. existing tests) keep prior behaviour. */
+const DEFAULT_VARIANT: PersonNodeVariant = 'full'
+
+/**
+ * Composes a single accessible-name string carrying name, sex, and dates so
+ * colour (the sex tick) is never the only carrier of information (§7), and so
+ * the `dot` variant — which renders no visible text — still exposes a full
+ * accessible name via `aria-label`/`title`.
+ */
+function buildAccessibleName(data: PersonData, sexLabel: string, dates: string): string {
+  return [data.name || 'Unknown', sexLabel, dates].filter(Boolean).join(', ')
+}
+
+/**
  * PersonNode renders a single person card within the React Flow canvas.
  *
- * Sex is encoded as a 3 px tick on the leading edge (backed by a
- * screen-reader label, never colour alone) and, when the person is the
- * current root, a brass border highlight. Invisible top/bottom handles allow
- * React Flow to connect edges while keeping the UI clean.
+ * Renders one of three level-of-detail variants selected by canvas zoom
+ * (`dot`, `compact`, `full`) so a zoomed-out canvas of hundreds of nodes
+ * reads as shape rather than illegible text. Sex is encoded as a tick on the
+ * leading edge (backed by an accessible name, never colour alone) and, when
+ * the person is the current root, a brass border highlight. Invisible
+ * top/bottom handles allow React Flow to connect edges while keeping the UI
+ * clean. Wrapped in `memo` so a continuous zoom gesture only re-renders nodes
+ * when the discrete variant actually changes, not on every frame.
  *
  * @component
- * @param {NodeProps<PersonData>} props - React Flow node props carrying PersonData
- * @returns {React.ReactElement} Styled person card with name, birth/death years, and connection handles
+ * @param {NodeProps<PersonNodeData>} props - React Flow node props carrying PersonData plus the LOD variant
+ * @returns {React.ReactElement} Styled person card sized for the active LOD variant
  */
-export default function PersonNode({ data }: NodeProps<PersonData>) {
+function PersonNode({ data }: NodeProps<PersonNodeData>) {
   const [photoFailed, setPhotoFailed] = useState(false)
   const handlePhotoError = useCallback(() => setPhotoFailed(true), [])
+  const variant = data.lodVariant ?? DEFAULT_VARIANT
   const tickColor = SEX_TICK_COLOR[data.sex] ?? 'var(--ft-border-strong)'
   const sexLabel = SEX_LABEL[data.sex] ?? 'Sex unknown'
   const borderClass = data.isRoot ? 'border-2 border-brass' : 'border border-line'
@@ -64,8 +91,51 @@ export default function PersonNode({ data }: NodeProps<PersonData>) {
         ? 'bg-emerald-900/40'
         : 'bg-surface-2'
 
+  const accessibleName = buildAccessibleName(data, sexLabel, dates)
+
+  if (variant === 'dot') {
+    return (
+      <div
+        data-testid="person-node-dot"
+        aria-label={accessibleName}
+        title={accessibleName}
+        className={`relative rounded-[3px] w-[10px] h-[10px] ${borderClass} cursor-pointer`}
+        style={{ backgroundColor: tickColor }}
+      >
+        <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
+        <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
+      </div>
+    )
+  }
+
+  if (variant === 'compact') {
+    return (
+      <div
+        data-testid="person-node-compact"
+        aria-label={accessibleName}
+        title={accessibleName}
+        className={`relative flex items-center bg-surface ${borderClass} rounded-node px-4 h-10 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer`}
+      >
+        <div
+          aria-hidden="true"
+          className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[3px]"
+          style={{ backgroundColor: tickColor }}
+        />
+        <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
+        <div className="font-serif font-semibold text-ink text-sm tracking-wide overflow-hidden whitespace-nowrap text-ellipsis">
+          {data.name || 'Unknown'}
+          {data.birthYear && <span className="text-ink-3 font-normal"> · b. {data.birthYear}</span>}
+        </div>
+        <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
+      </div>
+    )
+  }
+
   return (
     <div
+      data-testid="person-node-full"
+      aria-label={accessibleName}
+      title={accessibleName}
       className={`relative bg-surface ${borderClass} rounded-node px-4 py-3 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer`}
     >
       <div
@@ -100,3 +170,5 @@ export default function PersonNode({ data }: NodeProps<PersonData>) {
     </div>
   )
 }
+
+export default memo(PersonNode)

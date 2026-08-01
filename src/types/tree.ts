@@ -4,6 +4,8 @@
  * ReactFlow node/edge shapes returned by the tree API.
  */
 
+import type { PersonLodVariant } from '@/constants/tree'
+
 /**
  * Data payload attached to a person node in the ReactFlow graph.
  */
@@ -42,6 +44,8 @@ export interface PersonData {
   living?: boolean
   /** URL of the person's profile photo, or `null`/absent if none is set. */
   photoUrl?: string | null
+  /** Zoom-driven level-of-detail variant (docs/DESIGN_SYSTEM.md §3.2), or absent before the canvas has computed one. */
+  lodVariant?: PersonLodVariant
 }
 
 /**

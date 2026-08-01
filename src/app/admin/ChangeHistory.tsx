@@ -19,6 +19,59 @@ import {
 /** HTTP status code indicating a conflict (used for revert conflicts) */
 const HTTP_CONFLICT_STATUS = 409
 
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Name',
+  sex: 'Sex',
+  birthYear: 'Birth year',
+  birthDate: 'Birth date',
+  birthPlace: 'Birth place',
+  deathYear: 'Death year',
+  deathDate: 'Death date',
+  deathPlace: 'Death place',
+  occupation: 'Occupation',
+  notes: 'Notes',
+}
+
+function FieldDiff({
+  field,
+  prev,
+  next,
+}: {
+  field: string
+  prev: unknown
+  next: unknown
+}) {
+  const label = FIELD_LABELS[field] ?? field
+  const prevStr = prev != null && prev !== '' ? String(prev) : '(none)'
+  const nextStr = next != null && next !== '' ? String(next) : '(none)'
+  const hasPrev = prev != null && prev !== ''
+  const hasNext = next != null && next !== ''
+  return (
+    <div className="grid grid-cols-2 gap-3 text-xs">
+      <div>
+        <span className="text-ink-3 uppercase tracking-wide text-[10px] font-semibold">
+          {label} before
+        </span>
+        <p
+          className={`font-mono mt-0.5 break-words rounded-[var(--ft-r-sm)] px-1.5 py-0.5 bg-[var(--ft-declined-soft)] text-ink-3 line-through ${hasPrev ? '' : 'italic no-underline'}`}
+        >
+          {prevStr}
+        </p>
+      </div>
+      <div>
+        <span className="text-ink-3 uppercase tracking-wide text-[10px] font-semibold">
+          {label} after
+        </span>
+        <p
+          className={`font-mono mt-0.5 break-words rounded-[var(--ft-r-sm)] px-1.5 py-0.5 bg-[var(--ft-approved-soft)] text-ink ${hasNext ? '' : 'italic'}`}
+        >
+          {nextStr}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 /**
  * Displays a paginated list of changes with the ability to revert them.
  *
@@ -168,6 +221,17 @@ export function ChangeHistory() {
         const isReverted = revertedIds.has(c.id)
         const isReverting = !!reverting[c.id]
 
+        const changedFields: string[] = []
+        if (c.newValue) {
+          for (const key of Object.keys(c.newValue)) {
+            const prev = c.previousValue?.[key]
+            const next = c.newValue[key]
+            if (String(prev ?? '') !== String(next ?? '')) {
+              changedFields.push(key)
+            }
+          }
+        }
+
         return (
           <div
             key={c.id}
@@ -184,16 +248,33 @@ export function ChangeHistory() {
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className={ADMIN_STATUS_PILL_CLASS}>
+                <span className={`shrink-0 ${ADMIN_STATUS_PILL_CLASS}`}>
                   {c.changeType.replace(/_/g, ' ')}
                 </span>
-                {isReverted && (
-                  <span className="text-xs px-2.5 py-1 rounded-full bg-surface-2 text-ink-3">
-                    Reverted
-                  </span>
-                )}
+                <span
+                  className={`text-xs px-2.5 py-1 rounded-full ${
+                    isReverted
+                      ? 'bg-[var(--ft-declined-soft)] text-[var(--ft-declined)]'
+                      : 'bg-[var(--ft-approved-soft)] text-[var(--ft-approved)]'
+                  }`}
+                >
+                  {isReverted ? 'Reverted' : 'Live'}
+                </span>
               </div>
             </div>
+
+            {changedFields.length > 0 && (
+              <div className="space-y-3 mb-4 border-t border-line pt-3">
+                {changedFields.map(field => (
+                  <FieldDiff
+                    key={field}
+                    field={field}
+                    prev={c.previousValue?.[field]}
+                    next={c.newValue[field]}
+                  />
+                ))}
+              </div>
+            )}
 
             {revertErrors[c.id] && (
               <p className={`${ADMIN_ERROR_TEXT_CLASS} mb-3`}>{revertErrors[c.id]}</p>

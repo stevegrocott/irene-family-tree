@@ -31,11 +31,11 @@ import PersonNode from '@/components/PersonNode'
 import UnionNode from '@/components/UnionNode'
 import SearchBar from '@/components/SearchBar'
 import ConfirmDialog from '@/components/ConfirmDialog'
-import { applyDagreLayout } from '@/lib/layout'
+import { applyDagreLayout, GenerationLevel } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -1716,44 +1716,31 @@ function generationLabel(generation: number): string {
  * to the viewport's left edge while the canvas pans, without needing real CSS `position:
  * sticky` against a scroll container that doesn't exist here.
  *
- * @param nodes - Current laid-out ReactFlow nodes (person nodes carry `data.generation`)
+ * @param generationLevels - Clustered generation y-levels from `applyDagreLayout`, already
+ * sorted ascending by y — reused as-is so bands can never drift from the rows they highlight.
  */
-function GenerationBands({ nodes }: { nodes: Node[] }) {
+function GenerationBands({ generationLevels }: { generationLevels: GenerationLevel[] }) {
   const [, translateY, zoom] = useStore(selectTransform)
 
   const bands = useMemo(() => {
-    const rowsByGeneration = new Map<number, { sum: number; count: number }>()
-    for (const n of nodes) {
-      if (n.type !== 'person') continue
-      const generation = (n.data as PersonData).generation
-      if (typeof generation !== 'number') continue
-      const row = rowsByGeneration.get(generation) ?? { sum: 0, count: 0 }
-      row.sum += n.position.y
-      row.count += 1
-      rowsByGeneration.set(generation, row)
-    }
-    if (rowsByGeneration.size === 0) return []
+    if (generationLevels.length === 0) return []
 
-    const rows = [...rowsByGeneration.entries()]
-      .map(([generation, { sum, count }]) => ({ generation, center: sum / count }))
-      .sort((a, b) => a.center - b.center)
-
-    // Each band spans the midpoints between its row's center and its neighbors' centers,
+    // Each band spans the midpoints between its row's y-level and its neighbors',
     // so adjacent bands tile the canvas with no gaps or overlaps. A single-row tree has no
     // neighbor to derive a gap from — fall back to a fixed height so the band still shows.
     const FALLBACK_ROW_GAP = 140
-    return rows.map((row, i) => {
-      const prevGap = i > 0 ? row.center - rows[i - 1].center : undefined
-      const nextGap = i < rows.length - 1 ? rows[i + 1].center - row.center : undefined
+    return generationLevels.map((row, i) => {
+      const prevGap = i > 0 ? row.y - generationLevels[i - 1].y : undefined
+      const nextGap = i < generationLevels.length - 1 ? generationLevels[i + 1].y - row.y : undefined
       const gapAbove = prevGap ?? nextGap ?? FALLBACK_ROW_GAP
       const gapBelow = nextGap ?? prevGap ?? FALLBACK_ROW_GAP
       return {
         generation: row.generation,
-        top: row.center - gapAbove / 2,
+        top: row.y - gapAbove / 2,
         height: gapAbove / 2 + gapBelow / 2,
       }
     })
-  }, [nodes])
+  }, [generationLevels])
 
   if (bands.length === 0) return null
 
@@ -1775,9 +1762,9 @@ function GenerationBands({ nodes }: { nodes: Node[] }) {
             top: translateY + band.top * zoom,
             height: band.height * zoom,
             background: band.generation === 0
-              ? 'var(--ft-band-root)'
-              : band.generation % 2 === 0 ? 'var(--ft-band-a)' : 'var(--ft-band-b)',
-            borderBottom: '1px solid var(--ft-band-rule)',
+              ? `var(${BAND_VARS.root})`
+              : band.generation % 2 === 0 ? `var(${BAND_VARS.a})` : `var(${BAND_VARS.b})`,
+            borderBottom: `1px solid var(${BAND_VARS.rule})`,
             pointerEvents: 'none',
           }}
         >
@@ -1824,6 +1811,7 @@ function FlowCanvas({
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [treeBounds, setTreeBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+  const [generationLevels, setGenerationLevels] = useState<GenerationLevel[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [truncated, setTruncated] = useState(false)
@@ -1948,6 +1936,7 @@ function FlowCanvas({
       ))
       setEdges(laid.edges)
       setTreeBounds(laid.bounds)
+      setGenerationLevels(laid.generationLevels)
       setTruncated(data.truncated === true)
       setTotalNodes(typeof data.totalNodes === 'number' ? data.totalNodes : undefined)
     } catch (err) {
@@ -2034,7 +2023,7 @@ function FlowCanvas({
         proOptions={{ hideAttribution: true }}
         onNodeClick={handleNodeClick}
       >
-        <GenerationBands nodes={nodes} />
+        <GenerationBands generationLevels={generationLevels} />
         <Background variant={BackgroundVariant.Dots} color="#1e2a4a" gap={28} size={1} />
         <MiniMap
           style={{ background: '#0f172a' }}

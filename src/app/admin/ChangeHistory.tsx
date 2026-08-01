@@ -136,7 +136,7 @@ export function ChangeHistory() {
   if (loading) {
     return (
       <div data-testid="change-history" className="flex items-center justify-center py-20">
-        <span className="w-6 h-6 border-2 border-line border-t-ink rounded-full animate-spin" />
+        <span className={SPINNER_CLASS} />
       </div>
     )
   }

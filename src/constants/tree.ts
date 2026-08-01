@@ -69,9 +69,20 @@ export const EDGE_TYPES = {
   CHILD: 'CHILD',
 } as const
 
+/** Per-label edge stroke styling, tokenized per docs/DESIGN_SYSTEM.md §3.4. */
 export const EDGE_STYLES: Record<string, React.CSSProperties> = {
-  [EDGE_TYPES.UNION]: { stroke: '#6366f1', strokeWidth: 1.5, opacity: 0.6 },
-  [EDGE_TYPES.CHILD]: { stroke: '#a78bfa', strokeWidth: 1, opacity: 0.45 },
+  [EDGE_TYPES.UNION]: { stroke: 'var(--ft-edge-union)', strokeWidth: 1.5 },
+  [EDGE_TYPES.CHILD]: { stroke: 'var(--ft-edge)', strokeWidth: 1 },
+}
+
+/**
+ * ReactFlow edge `type` per relationship label (docs/DESIGN_SYSTEM.md §3.4) — descent
+ * (`CHILD`, union→person) edges render as orthogonal `step` paths so the graph reads as a
+ * pedigree chart at density. Union (person→union) edges are left unmapped so they keep the
+ * `smoothstep` default from `defaultEdgeOptions`.
+ */
+export const EDGE_RENDER_TYPE: Partial<Record<string, string>> = {
+  [EDGE_TYPES.CHILD]: 'step',
 }
 
 export const SEX_AVATAR_BG: Record<string, string> = {

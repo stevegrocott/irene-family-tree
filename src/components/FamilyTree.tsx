@@ -36,7 +36,7 @@ import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import { computeLineage } from '@/lib/lineage'
 import type { TreeResponse, PersonData, UnionData, PersonDetailResponse, PersonSummary, FlowNode, FlowEdge } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS, EDGE_TYPES, EDGE_RENDER_TYPE } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -65,6 +65,32 @@ const defaultEdgeStyle: React.CSSProperties = { stroke: '#6366f1', strokeWidth: 
 const defaultEdgeOptions = {
   type: 'smoothstep',
   animated: false,
+}
+
+/**
+ * Canvas chrome treatment (docs/DESIGN_SYSTEM.md §3.6) — the minimap, controls, and zoom
+ * widget all take a solid `--ft-surface-0` fill with a 1 px `--ft-border` and `--ft-r-md`
+ * corners, replacing the translucent/blurred glass panel styling.
+ */
+const CHROME_STYLE: React.CSSProperties = {
+  background: 'var(--ft-surface-0)',
+  border: '1px solid var(--ft-border)',
+  borderRadius: 'var(--ft-r-md)',
+}
+
+/** Minimap panel size (docs/DESIGN_SYSTEM.md §3.6) — 160×120, bottom-right (component default). */
+const MINIMAP_STYLE: React.CSSProperties = {
+  ...CHROME_STYLE,
+  width: 160,
+  height: 120,
+}
+
+/**
+ * Colors each minimap node mark `--ft-edge`, promoting the current root person to
+ * `--ft-brass` so it stays identifiable at a glance (docs/DESIGN_SYSTEM.md §3.6).
+ */
+function minimapNodeColor(node: Node): string {
+  return node.type === 'person' && (node.data as PersonData).isRoot ? 'var(--ft-brass)' : 'var(--ft-edge)'
 }
 
 /**
@@ -2194,6 +2220,7 @@ function FlowCanvas({
         id: e.id,
         source: e.source,
         target: e.target,
+        type: EDGE_RENDER_TYPE[e.label],
         style: EDGE_STYLES[e.label] ?? defaultEdgeStyle,
         data: { relType: e.label },
       }))
@@ -2306,11 +2333,12 @@ function FlowCanvas({
         <GenerationBands generationLevels={generationLevels} />
         <Background variant={BackgroundVariant.Dots} color="#1e2a4a" gap={28} size={1} />
         <MiniMap
-          style={{ background: '#0f172a' }}
-          nodeColor="#6366f1"
-          maskColor="rgba(0,0,0,0.6)"
+          style={MINIMAP_STYLE}
+          nodeColor={minimapNodeColor}
+          nodeStrokeWidth={2}
+          maskColor="var(--ft-overlay)"
         />
-        <Controls />
+        <Controls style={CHROME_STYLE} />
       </ReactFlow>
       {selectedPerson && (
         <PersonDrawer

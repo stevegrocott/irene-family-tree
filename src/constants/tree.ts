@@ -40,6 +40,30 @@ export type Density = keyof typeof DENSITY_PRESETS
 
 export const DEFAULT_DENSITY: Density = 'compact'
 
+/**
+ * Zoom thresholds driving person-node level-of-detail (docs/DESIGN_SYSTEM.md §3.2).
+ * `dotMax` is the exclusive upper bound of the **dot** variant; `compactMax` is the
+ * inclusive upper bound of the **compact** variant. Anything above `compactMax` is **full**.
+ */
+export const LOD_ZOOM_THRESHOLDS = {
+  dotMax: 0.45,
+  compactMax: 0.85,
+} as const
+
+/** Person-node level-of-detail variant, selected by zoom per docs/DESIGN_SYSTEM.md §3.2. */
+export type PersonLodVariant = 'dot' | 'compact' | 'full'
+
+/**
+ * Maps a ReactFlow zoom level (`s.transform[2]`) to a discrete {@link PersonLodVariant}.
+ * Boundary values resolve to a single variant each (`< dotMax` → dot, `> compactMax` → full,
+ * otherwise compact) so nodes never flicker between two variants at exactly 0.45 or 0.85.
+ */
+export function getPersonLodVariant(zoom: number): PersonLodVariant {
+  if (zoom < LOD_ZOOM_THRESHOLDS.dotMax) return 'dot'
+  if (zoom > LOD_ZOOM_THRESHOLDS.compactMax) return 'full'
+  return 'compact'
+}
+
 export const EDGE_TYPES = {
   UNION: 'UNION',
   CHILD: 'CHILD',

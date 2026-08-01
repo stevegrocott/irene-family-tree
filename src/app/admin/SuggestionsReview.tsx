@@ -2,6 +2,19 @@
 
 import { useState } from 'react'
 import type { Change } from './types'
+import {
+  ADMIN_CARD_CLASS,
+  ADMIN_CARD_META_CLASS,
+  ADMIN_CARD_TITLE_CLASS,
+  ADMIN_EMPTY_ICON_CLASS,
+  ADMIN_EMPTY_ICON_WRAP_CLASS,
+  ADMIN_EMPTY_STATE_CLASS,
+  ADMIN_ERROR_TEXT_CLASS,
+  ADMIN_SECONDARY_BUTTON_CLASS,
+  ADMIN_STATUS_PILL_CLASS,
+  BUTTON_SPINNER_WRAP_CLASS,
+  SPINNER_CLASS,
+} from '@/constants/tree'
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'Name',
@@ -81,9 +94,9 @@ export function SuggestionsReview({ initialSuggestions }: { initialSuggestions: 
 
   if (suggestions.length === 0) {
     return (
-      <div data-testid="suggestions-review" className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mb-4">
-          <svg className="w-8 h-8 text-ink-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div data-testid="suggestions-review" className={ADMIN_EMPTY_STATE_CLASS}>
+        <div className={ADMIN_EMPTY_ICON_WRAP_CLASS}>
+          <svg className={ADMIN_EMPTY_ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
@@ -113,17 +126,17 @@ export function SuggestionsReview({ initialSuggestions }: { initialSuggestions: 
         return (
           <div
             key={s.id}
-            className="bg-surface border border-line rounded-panel p-5 shadow-[var(--ft-shadow-1)]"
+            className={ADMIN_CARD_CLASS}
           >
             <div className="flex items-start justify-between gap-4 mb-3">
               <div>
-                <p className="font-serif text-[17px] font-semibold leading-tight text-ink">{s.personName || s.targetId}</p>
-                <p className="text-ink-3 text-xs mt-0.5">
+                <p className={ADMIN_CARD_TITLE_CLASS}>{s.personName || s.targetId}</p>
+                <p className={ADMIN_CARD_META_CLASS}>
                   Proposed by{' '}
                   <span className="text-ink-2">{s.authorName || s.authorEmail}</span>
                 </p>
               </div>
-              <span className="shrink-0 text-xs px-2.5 py-1 rounded-full bg-[var(--ft-pending-soft)] text-[var(--ft-pending)]">
+              <span className={`shrink-0 ${ADMIN_STATUS_PILL_CLASS}`}>
                 {s.changeType.replace(/_/g, ' ')}
               </span>
             </div>
@@ -142,7 +155,7 @@ export function SuggestionsReview({ initialSuggestions }: { initialSuggestions: 
             )}
 
             {errors[s.id] && (
-              <p className="text-[var(--ft-declined)] text-xs mb-3">{errors[s.id]}</p>
+              <p className={`${ADMIN_ERROR_TEXT_CLASS} mb-3`}>{errors[s.id]}</p>
             )}
 
             <div className="flex gap-3">
@@ -152,7 +165,7 @@ export function SuggestionsReview({ initialSuggestions }: { initialSuggestions: 
                 className="flex-1 py-2 rounded-[var(--ft-r-md)] bg-accent hover:bg-[var(--ft-accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed text-[var(--ft-text-on-accent)] text-sm font-medium transition-colors"
               >
                 {isApproving ? (
-                  <span className="flex items-center justify-center gap-2">
+                  <span className={BUTTON_SPINNER_WRAP_CLASS}>
                     <span className="w-4 h-4 border-2 border-current/40 border-t-current rounded-full animate-spin" />
                     Approving…
                   </span>
@@ -161,11 +174,11 @@ export function SuggestionsReview({ initialSuggestions }: { initialSuggestions: 
               <button
                 onClick={() => handleAction(s.id, 'decline')}
                 disabled={isPending}
-                className="flex-1 py-2 rounded-[var(--ft-r-md)] bg-surface hover:bg-surface-1 disabled:opacity-40 disabled:cursor-not-allowed text-ink text-sm font-medium border border-line transition-colors"
+                className={`flex-1 ${ADMIN_SECONDARY_BUTTON_CLASS}`}
               >
                 {isDeclining ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 border-2 border-line border-t-ink rounded-full animate-spin" />
+                  <span className={BUTTON_SPINNER_WRAP_CLASS}>
+                    <span className={SPINNER_CLASS} />
                     Declining…
                   </span>
                 ) : 'Decline'}

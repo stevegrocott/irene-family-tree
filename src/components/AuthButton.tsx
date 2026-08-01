@@ -1,6 +1,7 @@
 'use client'
 
 import { signIn, signOut, useSession } from 'next-auth/react'
+import { FLOATING_PANEL_BASE_CLASS } from '@/constants/tree'
 
 /**
  * AuthButton
@@ -18,7 +19,7 @@ export default function AuthButton() {
       <div
         data-testid="auth-button"
         aria-busy="true"
-        className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-surface border border-line rounded-[var(--ft-r-md)] px-3 py-1.5 shadow-[var(--ft-shadow-1)]"
+        className={`${FLOATING_PANEL_BASE_CLASS} px-3 py-1.5`}
       >
         <span className="text-xs text-ink-3 select-none">Loading…</span>
       </div>
@@ -33,7 +34,7 @@ export default function AuthButton() {
     return (
       <div
         data-testid="auth-button"
-        className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-surface border border-line rounded-[var(--ft-r-md)] px-2 py-1 shadow-[var(--ft-shadow-1)]"
+        className={`${FLOATING_PANEL_BASE_CLASS} px-2 py-1`}
       >
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -72,7 +73,7 @@ export default function AuthButton() {
     <button
       data-testid="auth-button"
       onClick={() => signIn('google')}
-      className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-surface border border-line rounded-[var(--ft-r-md)] px-4 py-2 shadow-[var(--ft-shadow-1)] text-xs text-ink-2 hover:text-ink hover:bg-surface-1 transition-colors"
+      className={`${FLOATING_PANEL_BASE_CLASS} px-4 py-2 text-xs text-ink-2 hover:text-ink hover:bg-surface-1 transition-colors`}
     >
       Sign in
     </button>

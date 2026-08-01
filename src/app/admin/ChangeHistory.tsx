@@ -2,6 +2,19 @@
 
 import { useState, useEffect } from 'react'
 import type { Change } from './types'
+import {
+  ADMIN_CARD_CLASS,
+  ADMIN_CARD_META_CLASS,
+  ADMIN_CARD_TITLE_CLASS,
+  ADMIN_EMPTY_ICON_CLASS,
+  ADMIN_EMPTY_ICON_WRAP_CLASS,
+  ADMIN_EMPTY_STATE_CLASS,
+  ADMIN_ERROR_TEXT_CLASS,
+  ADMIN_SECONDARY_BUTTON_CLASS,
+  ADMIN_STATUS_PILL_CLASS,
+  BUTTON_SPINNER_WRAP_CLASS,
+  SPINNER_CLASS,
+} from '@/constants/tree'
 
 /** HTTP status code indicating a conflict (used for revert conflicts) */
 const HTTP_CONFLICT_STATUS = 409
@@ -130,7 +143,7 @@ export function ChangeHistory() {
 
   if (fetchError) {
     return (
-      <div data-testid="change-history" className="flex flex-col items-center justify-center py-20 text-center">
+      <div data-testid="change-history" className={ADMIN_EMPTY_STATE_CLASS}>
         <p className="text-[var(--ft-declined)] text-sm">{fetchError}</p>
       </div>
     )
@@ -138,9 +151,9 @@ export function ChangeHistory() {
 
   if (changes.length === 0) {
     return (
-      <div data-testid="change-history" className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mb-4">
-          <svg className="w-8 h-8 text-ink-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div data-testid="change-history" className={ADMIN_EMPTY_STATE_CLASS}>
+        <div className={ADMIN_EMPTY_ICON_WRAP_CLASS}>
+          <svg className={ADMIN_EMPTY_ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
@@ -158,12 +171,12 @@ export function ChangeHistory() {
         return (
           <div
             key={c.id}
-            className={`bg-surface border border-line rounded-panel p-5 shadow-[var(--ft-shadow-1)] ${isReverted ? 'opacity-50' : ''}`}
+            className={`${ADMIN_CARD_CLASS} ${isReverted ? 'opacity-50' : ''}`}
           >
             <div className="flex items-start justify-between gap-4 mb-3">
               <div>
-                <p className="font-serif text-[17px] font-semibold leading-tight text-ink">{c.personName || c.targetId}</p>
-                <p className="text-ink-3 text-xs mt-0.5">
+                <p className={ADMIN_CARD_TITLE_CLASS}>{c.personName || c.targetId}</p>
+                <p className={ADMIN_CARD_META_CLASS}>
                   By <span className="text-ink-2">{c.authorName || c.authorEmail}</span>
                   {c.appliedAt && (
                     <> &middot; <span className="font-mono">{new Date(c.appliedAt).toLocaleDateString()}</span></>
@@ -171,7 +184,7 @@ export function ChangeHistory() {
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs px-2.5 py-1 rounded-full bg-[var(--ft-pending-soft)] text-[var(--ft-pending)]">
+                <span className={ADMIN_STATUS_PILL_CLASS}>
                   {c.changeType.replace(/_/g, ' ')}
                 </span>
                 {isReverted && (
@@ -183,18 +196,18 @@ export function ChangeHistory() {
             </div>
 
             {revertErrors[c.id] && (
-              <p className="text-[var(--ft-declined)] text-xs mb-3">{revertErrors[c.id]}</p>
+              <p className={`${ADMIN_ERROR_TEXT_CLASS} mb-3`}>{revertErrors[c.id]}</p>
             )}
 
             <button
               type="button"
               onClick={() => handleRevert(c.id)}
               disabled={isReverted || isReverting}
-              className="w-full py-2 rounded-[var(--ft-r-md)] bg-surface hover:bg-surface-1 disabled:opacity-40 disabled:cursor-not-allowed text-ink text-sm font-medium border border-line transition-colors"
+              className={`w-full ${ADMIN_SECONDARY_BUTTON_CLASS}`}
             >
               {isReverting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="w-4 h-4 border-2 border-line border-t-ink rounded-full animate-spin" />
+                <span className={BUTTON_SPINNER_WRAP_CLASS}>
+                  <span className={SPINNER_CLASS} />
                   Reverting…
                 </span>
               ) : isReverted ? 'Reverted' : 'Revert'}
@@ -204,7 +217,7 @@ export function ChangeHistory() {
       })}
 
       {loadMoreError && (
-        <p className="text-[var(--ft-declined)] text-xs text-center">{loadMoreError}</p>
+        <p className={`${ADMIN_ERROR_TEXT_CLASS} text-center`}>{loadMoreError}</p>
       )}
 
       {hasMore && (
@@ -212,11 +225,11 @@ export function ChangeHistory() {
           type="button"
           onClick={handleLoadMore}
           disabled={loadingMore}
-          className="w-full py-2 rounded-[var(--ft-r-md)] bg-surface hover:bg-surface-1 disabled:opacity-40 disabled:cursor-not-allowed text-ink text-sm font-medium border border-line transition-colors"
+          className={`w-full ${ADMIN_SECONDARY_BUTTON_CLASS}`}
         >
           {loadingMore ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="w-4 h-4 border-2 border-line border-t-ink rounded-full animate-spin" />
+            <span className={BUTTON_SPINNER_WRAP_CLASS}>
+              <span className={SPINNER_CLASS} />
               Loading…
             </span>
           ) : 'Load more'}

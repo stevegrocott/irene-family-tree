@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { DIALOG_BUTTON_BASE_CLASS } from '@/constants/tree'
 
 /**
  * Themed in-app replacement for `window.confirm()`. Renders nothing when
@@ -67,7 +68,7 @@ export default function ConfirmDialog({
             ref={cancelButtonRef}
             data-testid="confirm-dialog-cancel"
             onClick={onCancel}
-            className="h-11 sm:h-9 px-4 rounded-[var(--ft-r-md)] bg-surface border border-line text-ink [font:var(--ft-body-strong)] transition-colors hover:bg-surface-1 hover:border-line focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]"
+            className={`${DIALOG_BUTTON_BASE_CLASS} bg-surface border border-line text-ink hover:bg-surface-1 hover:border-line`}
           >
             {cancelLabel}
           </button>
@@ -75,7 +76,7 @@ export default function ConfirmDialog({
             type="button"
             data-testid="confirm-dialog-confirm"
             onClick={onConfirm}
-            className="h-11 sm:h-9 px-4 rounded-[var(--ft-r-md)] bg-declined text-[var(--ft-text-on-accent)] [font:var(--ft-body-strong)] transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]"
+            className={`${DIALOG_BUTTON_BASE_CLASS} bg-declined text-[var(--ft-text-on-accent)] hover:brightness-95`}
           >
             {confirmLabel}
           </button>

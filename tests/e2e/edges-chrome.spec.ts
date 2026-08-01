@@ -112,3 +112,48 @@ test.describe('edges rendering (issue #198)', () => {
     await expect(page.locator('.react-flow__edge-text')).toHaveCount(0);
   });
 });
+
+/**
+ * E2E coverage for issue #198 task 6 (design system §3.6 — minimap and
+ * controls take the solid `--ft-surface-0` chrome treatment, and the
+ * minimap marks the current root person with the `--ft-brass` accent).
+ */
+test.describe('minimap and controls chrome (issue #198)', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.removeItem('family-tree-root-id');
+    });
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+  });
+
+  test('minimap and controls panels use the solid surface chrome treatment', async ({ page }) => {
+    const toolbarViewing = page.getByTestId('toolbar-viewing');
+    await expect(toolbarViewing).toContainText('Irene', { timeout: 15_000 });
+
+    const minimapStyle = await page.locator('[data-testid="rf__minimap"]').getAttribute('style');
+    expect(minimapStyle).toContain('var(--ft-surface-0)');
+    expect(minimapStyle).toContain('var(--ft-border)');
+    expect(minimapStyle).toContain('var(--ft-r-md)');
+
+    const controlsStyle = await page.locator('[data-testid="rf__controls"]').getAttribute('style');
+    expect(controlsStyle).toContain('var(--ft-surface-0)');
+    expect(controlsStyle).toContain('var(--ft-border)');
+    expect(controlsStyle).toContain('var(--ft-r-md)');
+  });
+
+  test('minimap marks exactly the root person node with the brass accent color', async ({ page }) => {
+    const toolbarViewing = page.getByTestId('toolbar-viewing');
+    await expect(toolbarViewing).toContainText('Irene', { timeout: 15_000 });
+
+    const minimapNodes = page.locator('.react-flow__minimap-node');
+    const nodeCount = await minimapNodes.count();
+    expect(nodeCount).toBeGreaterThan(1);
+
+    const fills = await minimapNodes.evaluateAll((nodes) => nodes.map((n) => n.getAttribute('fill')));
+    const rootFills = fills.filter((fill) => fill === 'var(--ft-brass)');
+    const otherFills = fills.filter((fill) => fill === 'var(--ft-edge)');
+
+    expect(rootFills).toHaveLength(1);
+    expect(otherFills).toHaveLength(nodeCount - 1);
+  });
+});

@@ -45,16 +45,6 @@ export const EDGE_TYPES = {
   CHILD: 'CHILD',
 } as const
 
-/**
- * ReactFlow `type` per edge label, per docs/DESIGN_SYSTEM.md §3.4 — descent edges route as
- * orthogonal `step` paths (union → child) so the graph reads as a pedigree chart rather than
- * the bezier default; union ties (person → union node) share the same routing.
- */
-export const EDGE_RENDER_TYPES: Record<string, string> = {
-  [EDGE_TYPES.UNION]: 'step',
-  [EDGE_TYPES.CHILD]: 'step',
-}
-
 /** Per-label edge stroke styling, tokenized per docs/DESIGN_SYSTEM.md §3.4. */
 export const EDGE_STYLES: Record<string, React.CSSProperties> = {
   [EDGE_TYPES.UNION]: { stroke: 'var(--ft-edge-union)', strokeWidth: 1.5 },

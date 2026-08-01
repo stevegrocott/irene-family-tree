@@ -27,13 +27,16 @@ export default function UnionNode({ data, marriageYear: propYear, marriagePlace:
 
   return (
     <div
-      className="group relative w-3 h-3 rounded-full bg-amber-400/60 border border-white/40 shadow-[0_0_10px_rgba(255,255,255,0.5)]"
+      className="group relative w-1.5 h-1.5 rounded-full bg-brass"
       title={tooltip || undefined}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
       {tooltip && (
-        <span className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full left-1/2 -translate-x-1/2 mb-1 whitespace-nowrap rounded bg-black/75 px-2 py-0.5 text-xs text-white pointer-events-none">
+        <span
+          className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full left-1/2 -translate-x-1/2 mb-1 whitespace-nowrap rounded-md border border-line bg-surface text-ink px-2 py-0.5 pointer-events-none"
+          style={{ font: 'var(--ft-mono)', boxShadow: 'var(--ft-shadow-2)' }}
+        >
           {tooltip}
         </span>
       )}

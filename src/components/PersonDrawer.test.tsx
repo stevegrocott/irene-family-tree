@@ -201,6 +201,35 @@ describe('PersonDrawer', () => {
     })
   })
 
+  describe('Sticky bottom actions bar and mobile drag handle', () => {
+    it('renders the actions bar pinned to the bottom with a top border and --ft-surface-1 background', async () => {
+      await renderDrawer()
+
+      const actions = container.querySelector('[data-testid="person-drawer-actions"]') as HTMLElement
+      expect(actions).not.toBeNull()
+      expect(actions.className).toContain('sticky')
+      expect(actions.className).toContain('bottom-0')
+      expect(actions.className).toContain('border-t')
+      expect(actions.className).toContain('bg-surface-1')
+
+      // Re-root and delete live inside the actions bar, not the scrollable body.
+      expect(actions.querySelector('[data-testid="person-drawer-reroot"]')).not.toBeNull()
+    })
+
+    it('renders a 32×4 px mobile drag handle, hidden on desktop', async () => {
+      await renderDrawer()
+
+      const handleWrap = container.querySelector('[data-testid="drawer-drag-handle"]') as HTMLElement
+      expect(handleWrap).not.toBeNull()
+      expect(handleWrap.className).toContain('sm:hidden')
+
+      const bar = handleWrap.firstElementChild as HTMLElement
+      expect(bar).not.toBeNull()
+      expect(bar.className).toContain('w-8')
+      expect(bar.className).toContain('h-1')
+    })
+  })
+
   describe('Add parent', () => {
     const searchResult = [
       { gedcomId: '@I9@', name: 'Candidate Parent', sex: 'M', birthYear: null, deathYear: null },

@@ -36,7 +36,7 @@ import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import { computeLineage } from '@/lib/lineage'
 import type { TreeResponse, PersonData, UnionData, PersonDetailResponse, PersonSummary, FlowNode, FlowEdge } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -263,7 +263,7 @@ function RelativeRow({
 function DrawerDragHandle() {
   return (
     <div data-testid="drawer-drag-handle" className={DRAWER_DRAG_HANDLE_CLASS} aria-hidden="true">
-      <div className="h-1.5 w-10 rounded-full bg-slate-700" />
+      <div className={DRAWER_DRAG_HANDLE_BAR_CLASS} />
     </div>
   )
 }
@@ -1794,8 +1794,8 @@ export function PersonDrawer({
         </div>
       </div>
 
-      {/* Footer – re-root action + unauthenticated CTA */}
-      <div className="px-5 py-4 border-t border-white/10 space-y-2">
+      {/* Actions — sticky bottom bar: re-root, delete, unauthenticated CTA (docs/DESIGN_SYSTEM.md §4.1 point 6) */}
+      <div data-testid="person-drawer-actions" className={DRAWER_ACTIONS_CLASS}>
         <button
           data-testid="person-drawer-reroot"
           onClick={() => { onReroot(person.gedcomId); onClose() }}

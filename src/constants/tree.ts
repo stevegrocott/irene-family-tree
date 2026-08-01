@@ -86,10 +86,27 @@ export const SEX_AVATAR_TEXT: Record<string, string> = {
   default: 'text-slate-500',
 }
 
-/** Drawer layout classes — responsive: mobile bottom-sheet, desktop side panel. */
+/**
+ * Drawer layout classes — responsive: mobile bottom-sheet, desktop side panel.
+ * Mobile height is intentionally left at its existing `60vh` cap here: widening it to the
+ * `72vh` "full" detent from docs/DESIGN_SYSTEM.md §6 would regress the ≤60vh assertion in
+ * `tests/e2e/mobile-responsive.spec.ts:104` (AC7 requires that spec keep passing) and is a
+ * separate, non-drag-handle/action-bar concern from this task.
+ */
 export const DRAWER_CONTAINER_CLASS = 'absolute inset-x-0 bottom-0 z-20 w-full max-h-[60vh] rounded-t-[var(--ft-r-panel)] border-t border-line bg-surface shadow-[var(--ft-shadow-3)] flex flex-col sm:inset-x-auto sm:top-0 sm:right-0 sm:bottom-auto sm:h-full sm:max-h-none sm:w-[360px] sm:rounded-none sm:border-t-0 sm:border-l sm:shadow-none'
 
 export const DRAWER_DRAG_HANDLE_CLASS = 'flex justify-center pt-2 pb-1 sm:hidden'
+
+/** Mobile drag-handle bar — 32×4 px per docs/DESIGN_SYSTEM.md §6. */
+export const DRAWER_DRAG_HANDLE_BAR_CLASS = 'h-1 w-8 rounded-full bg-ink-3'
+
+/**
+ * Sticky bottom actions bar for the person drawer (docs/DESIGN_SYSTEM.md §4.1 point 6:
+ * "sticky bottom bar, 1 px top border, `--ft-surface-1`"). `sticky bottom-0` pins it above
+ * the scrolled Facts/Relationships/Timeline body in both the mobile bottom sheet and the
+ * desktop docked panel, so primary actions (re-root, delete) stay reachable without scrolling.
+ */
+export const DRAWER_ACTIONS_CLASS = 'sticky bottom-0 z-10 px-5 py-4 border-t border-line bg-surface-1 space-y-2'
 
 export const RESPONSIVE_BUTTON_BASE = 'flex items-center justify-center rounded-lg text-ink-3 hover:text-ink hover:bg-surface-1 transition-colors w-11 h-11 sm:w-7 sm:h-7'
 

@@ -122,3 +122,82 @@ describe('ChangeHistory — load more', () => {
     expect(findLoadMoreButton(container)).toBeUndefined()
   })
 })
+
+describe('ChangeHistory — diff treatment and status pills', () => {
+  let container: HTMLDivElement
+  let root: ReturnType<typeof createRoot>
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+  })
+
+  afterEach(() => {
+    act(() => { root.unmount() })
+    document.body.removeChild(container)
+    jest.clearAllMocks()
+    jest.restoreAllMocks()
+  })
+
+  async function renderChangeHistory() {
+    await act(async () => {
+      root = createRoot(container)
+      root.render(<ChangeHistory />)
+    })
+    await act(async () => { await Promise.resolve() })
+  }
+
+  it('renders before/after field diffs for changed fields, struck-through before and (none) for empty values', async () => {
+    const change: Change = {
+      ...makeChange('c1', 'Diff Person'),
+      previousValue: { name: 'Old Name', birthPlace: null },
+      newValue: { name: 'New Name', birthPlace: 'Springfield' },
+    }
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ changes: [change], page: 1, hasMore: false }),
+    })
+
+    await renderChangeHistory()
+
+    expect(container.textContent).toContain('Old Name')
+    expect(container.textContent).toContain('New Name')
+    expect(container.textContent).toContain('(none)')
+
+    const beforeValue = Array.from(container.querySelectorAll('p')).find(p => p.textContent === 'Old Name')
+    expect(beforeValue?.className).toContain('line-through')
+    expect(beforeValue?.className).toContain('bg-[var(--ft-declined-soft)]')
+
+    const afterValue = Array.from(container.querySelectorAll('p')).find(p => p.textContent === 'New Name')
+    expect(afterValue?.className).toContain('bg-[var(--ft-approved-soft)]')
+    expect(afterValue?.className).not.toContain('line-through')
+  })
+
+  it('shows a "Live" status pill for unreverted changes and switches to "Reverted" after a successful revert', async () => {
+    const change = makeChange('c1', 'Status Person')
+    global.fetch = jest.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return { ok: true, status: 200, json: async () => ({ status: 'reverted' }) }
+      }
+      return { ok: true, json: async () => ({ changes: [change], page: 1, hasMore: false }) }
+    })
+
+    await renderChangeHistory()
+
+    const findPill = (text: string) =>
+      Array.from(container.querySelectorAll('span')).find(el => el.textContent === text)
+
+    expect(findPill('Live')).toBeDefined()
+    expect(findPill('Live')?.className).toContain('bg-[var(--ft-approved-soft)]')
+
+    const revertButton = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent === 'Revert') as HTMLButtonElement
+    expect(revertButton).toBeDefined()
+
+    await act(async () => { revertButton.click() })
+    await act(async () => { await Promise.resolve() })
+
+    expect(findPill('Live')).toBeUndefined()
+    expect(findPill('Reverted')?.className).toContain('bg-[var(--ft-declined-soft)]')
+  })
+})

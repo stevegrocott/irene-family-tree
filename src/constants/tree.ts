@@ -16,6 +16,15 @@ export const BAND_VARS = {
   rule: '--ft-band-rule',
 } as const
 
+/** Lineage-focus CSS custom properties (src/styles/tokens.css §Graph-specific) — dim opacity and promoted edge color applied on hover/selection per docs/DESIGN_SYSTEM.md §3.3. */
+export const LINEAGE_VARS = {
+  dim: '--ft-node-dim',
+  edgeStrong: '--ft-edge-strong',
+} as const
+
+/** Transition duration (ms) for the lineage-focus dim/undim, per docs/DESIGN_SYSTEM.md §3.3. */
+export const LINEAGE_DIM_TRANSITION_MS = 180
+
 /**
  * Density presets — mirrors the `[data-density]` breakpoints in src/styles/tokens.css so
  * `applyDagreLayout`'s `ranksep`/`nodesep` stay in lockstep with the CSS-driven band height.

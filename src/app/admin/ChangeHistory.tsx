@@ -123,7 +123,7 @@ export function ChangeHistory() {
   if (loading) {
     return (
       <div data-testid="change-history" className="flex items-center justify-center py-20">
-        <span className="w-6 h-6 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+        <span className="w-6 h-6 border-2 border-line border-t-ink rounded-full animate-spin" />
       </div>
     )
   }
@@ -131,7 +131,7 @@ export function ChangeHistory() {
   if (fetchError) {
     return (
       <div data-testid="change-history" className="flex flex-col items-center justify-center py-20 text-center">
-        <p className="text-red-400 text-sm">{fetchError}</p>
+        <p className="text-[var(--ft-declined)] text-sm">{fetchError}</p>
       </div>
     )
   }
@@ -139,12 +139,12 @@ export function ChangeHistory() {
   if (changes.length === 0) {
     return (
       <div data-testid="change-history" className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-4">
-          <svg className="w-8 h-8 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mb-4">
+          <svg className="w-8 h-8 text-ink-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <p className="text-white/60 text-sm">No change history to display.</p>
+        <p className="text-ink-2 text-sm">No change history to display.</p>
       </div>
     )
   }
@@ -158,24 +158,24 @@ export function ChangeHistory() {
         return (
           <div
             key={c.id}
-            className={`bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.4)] ${isReverted ? 'opacity-50' : ''}`}
+            className={`bg-surface border border-line rounded-panel p-5 shadow-[var(--ft-shadow-1)] ${isReverted ? 'opacity-50' : ''}`}
           >
             <div className="flex items-start justify-between gap-4 mb-3">
               <div>
-                <p className="text-white font-semibold text-base">{c.personName || c.targetId}</p>
-                <p className="text-white/50 text-xs mt-0.5">
-                  By <span className="text-white/70">{c.authorName || c.authorEmail}</span>
+                <p className="font-serif text-[17px] font-semibold leading-tight text-ink">{c.personName || c.targetId}</p>
+                <p className="text-ink-3 text-xs mt-0.5">
+                  By <span className="text-ink-2">{c.authorName || c.authorEmail}</span>
                   {c.appliedAt && (
-                    <> &middot; {new Date(c.appliedAt).toLocaleDateString()}</>
+                    <> &middot; <span className="font-mono">{new Date(c.appliedAt).toLocaleDateString()}</span></>
                   )}
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                <span className="text-xs px-2.5 py-1 rounded-full bg-[var(--ft-pending-soft)] text-[var(--ft-pending)]">
                   {c.changeType.replace(/_/g, ' ')}
                 </span>
                 {isReverted && (
-                  <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-white/40 border border-white/20">
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-surface-2 text-ink-3">
                     Reverted
                   </span>
                 )}
@@ -183,18 +183,18 @@ export function ChangeHistory() {
             </div>
 
             {revertErrors[c.id] && (
-              <p className="text-red-400 text-xs mb-3">{revertErrors[c.id]}</p>
+              <p className="text-[var(--ft-declined)] text-xs mb-3">{revertErrors[c.id]}</p>
             )}
 
             <button
               type="button"
               onClick={() => handleRevert(c.id)}
               disabled={isReverted || isReverting}
-              className="w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium border border-white/20 transition-colors"
+              className="w-full py-2 rounded-[var(--ft-r-md)] bg-surface hover:bg-surface-1 disabled:opacity-40 disabled:cursor-not-allowed text-ink text-sm font-medium border border-line transition-colors"
             >
               {isReverting ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  <span className="w-4 h-4 border-2 border-line border-t-ink rounded-full animate-spin" />
                   Reverting…
                 </span>
               ) : isReverted ? 'Reverted' : 'Revert'}
@@ -204,7 +204,7 @@ export function ChangeHistory() {
       })}
 
       {loadMoreError && (
-        <p className="text-red-400 text-xs text-center">{loadMoreError}</p>
+        <p className="text-[var(--ft-declined)] text-xs text-center">{loadMoreError}</p>
       )}
 
       {hasMore && (
@@ -212,11 +212,11 @@ export function ChangeHistory() {
           type="button"
           onClick={handleLoadMore}
           disabled={loadingMore}
-          className="w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium border border-white/20 transition-colors"
+          className="w-full py-2 rounded-[var(--ft-r-md)] bg-surface hover:bg-surface-1 disabled:opacity-40 disabled:cursor-not-allowed text-ink text-sm font-medium border border-line transition-colors"
         >
           {loadingMore ? (
             <span className="flex items-center justify-center gap-2">
-              <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              <span className="w-4 h-4 border-2 border-line border-t-ink rounded-full animate-spin" />
               Loading…
             </span>
           ) : 'Load more'}

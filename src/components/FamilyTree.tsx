@@ -1674,6 +1674,30 @@ export function PersonDrawer({
   )
 }
 
+/** Unicode minus sign (U+2212), used instead of a hyphen for negative generation numbers. */
+const GENERATION_MINUS = '−'
+
+/**
+ * Human-readable name for a signed generation offset, e.g. -2 -> "GRANDPARENTS",
+ * 1 -> "CHILDREN", 0 -> "ROOT". Steps beyond great-grandparent/grandchild (|generation| > 3)
+ * repeat the "GREAT-" prefix rather than hard-coding a finite list, so deep trees (per the
+ * issue's "band count grows with hop depth" risk) still get a sensible label.
+ */
+function generationName(generation: number): string {
+  if (generation === 0) return 'ROOT'
+  const steps = Math.abs(generation)
+  const greatPrefix = steps > 2 ? 'GREAT-'.repeat(steps - 2) : ''
+  return generation < 0
+    ? steps === 1 ? 'PARENTS' : `${greatPrefix}GRANDPARENTS`
+    : steps === 1 ? 'CHILDREN' : `${greatPrefix}GRANDCHILDREN`
+}
+
+/** Eyebrow label for a generation band's sticky gutter tag, e.g. "GEN −2 · GRANDPARENTS". */
+function generationLabel(generation: number): string {
+  const signed = generation < 0 ? `${GENERATION_MINUS}${Math.abs(generation)}` : `${generation}`
+  return `GEN ${signed} · ${generationName(generation)}`
+}
+
 /**
  * Renders one full-width horizontal band per generation rank behind the canvas edges and
  * nodes — see docs/DESIGN_SYSTEM.md §3.1. Band boundaries come from the y-positions dagre
@@ -1685,6 +1709,12 @@ export function PersonDrawer({
  * `<Background>` uses. That placement also keeps it painted behind `.react-flow__renderer`
  * (edges + nodes) without any explicit z-index, and it is entirely `pointer-events: none`
  * so it never intercepts clicks or drags.
+ *
+ * Each band also carries a left gutter label (eyebrow type, `--ft-text-3`, gold `--ft-brass`
+ * for generation 0). The label lives inside the band's own full-width container, which is
+ * never translated horizontally (only `translateY`/`zoom` are applied) — so it stays pinned
+ * to the viewport's left edge while the canvas pans, without needing real CSS `position:
+ * sticky` against a scroll container that doesn't exist here.
  *
  * @param nodes - Current laid-out ReactFlow nodes (person nodes carry `data.generation`)
  */
@@ -1750,7 +1780,20 @@ function GenerationBands({ nodes }: { nodes: Node[] }) {
             borderBottom: '1px solid var(--ft-band-rule)',
             pointerEvents: 'none',
           }}
-        />
+        >
+          <span
+            data-testid="generation-band-label"
+            data-generation={band.generation}
+            className="absolute left-3 top-2 whitespace-nowrap uppercase"
+            style={{
+              font: 'var(--ft-micro)',
+              letterSpacing: 'var(--ft-micro-track)',
+              color: band.generation === 0 ? 'var(--ft-brass)' : 'var(--ft-text-3)',
+            }}
+          >
+            {generationLabel(band.generation)}
+          </span>
+        </div>
       ))}
     </div>
   )

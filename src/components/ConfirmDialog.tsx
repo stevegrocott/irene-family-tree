@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { DIALOG_BUTTON_BASE_CLASS } from '@/constants/tree'
 
 /**
  * Themed in-app replacement for `window.confirm()`. Renders nothing when
@@ -44,7 +45,7 @@ export default function ConfirmDialog({
   return (
     <div
       data-testid="confirm-dialog-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ft-overlay)] backdrop-blur-[2px] px-4"
       onClick={onCancel}
     >
       <div
@@ -53,10 +54,12 @@ export default function ConfirmDialog({
         aria-modal="true"
         aria-label={title ?? 'Confirm'}
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-sm rounded-2xl bg-[#0a1628]/95 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] p-5 space-y-4"
+        className="w-full max-w-[420px] rounded-panel bg-surface border border-line shadow-[var(--ft-shadow-3)] p-6 space-y-4"
       >
-        {title && <h2 className="text-white font-semibold text-base">{title}</h2>}
-        <p data-testid="confirm-dialog-message" className="text-slate-300 text-sm">
+        {title && (
+          <h2 className="text-ink [font:var(--ft-title)]">{title}</h2>
+        )}
+        <p data-testid="confirm-dialog-message" className="text-ink-2 [font:var(--ft-body)]">
           {message}
         </p>
         <div className="flex gap-2 justify-end">
@@ -65,7 +68,7 @@ export default function ConfirmDialog({
             ref={cancelButtonRef}
             data-testid="confirm-dialog-cancel"
             onClick={onCancel}
-            className="min-h-11 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
+            className={`${DIALOG_BUTTON_BASE_CLASS} bg-surface border border-line text-ink hover:bg-surface-1 hover:border-line`}
           >
             {cancelLabel}
           </button>
@@ -73,7 +76,7 @@ export default function ConfirmDialog({
             type="button"
             data-testid="confirm-dialog-confirm"
             onClick={onConfirm}
-            className="min-h-11 px-4 rounded-xl bg-red-500/80 hover:bg-red-500 text-white text-sm font-medium transition-colors"
+            className={`${DIALOG_BUTTON_BASE_CLASS} bg-declined text-[var(--ft-text-on-accent)] hover:brightness-95`}
           >
             {confirmLabel}
           </button>

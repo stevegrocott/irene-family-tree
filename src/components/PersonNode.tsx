@@ -3,14 +3,30 @@
 import { useCallback, useState } from 'react'
 import { Handle, Position, type NodeProps } from 'reactflow'
 import type { PersonData } from '@/types/tree'
-import { SEX_GLOW } from '@/constants/tree'
+
+/**
+ * Sex tick colours per `docs/DESIGN_SYSTEM.md` §3.2 — the only tints
+ * permitted outside the semantic colour set. Falls back to the neutral
+ * `--ft-border-strong` token when sex is unknown.
+ */
+const SEX_TICK_COLOR: Record<string, string> = {
+  M: '#4A7DB5',
+  F: '#A85F86',
+}
+
+/** Screen-reader label so sex is never carried by colour alone (§7). */
+const SEX_LABEL: Record<string, string> = {
+  M: 'Male',
+  F: 'Female',
+}
 
 /**
  * PersonNode renders a single person card within the React Flow canvas.
  *
- * Applies a sex-based glow shadow and, when the person is the current root,
- * an amber ring highlight. Invisible top/bottom handles allow React Flow to
- * connect edges while keeping the UI clean.
+ * Sex is encoded as a 3 px tick on the leading edge (backed by a
+ * screen-reader label, never colour alone) and, when the person is the
+ * current root, a brass border highlight. Invisible top/bottom handles allow
+ * React Flow to connect edges while keeping the UI clean.
  *
  * @component
  * @param {NodeProps<PersonData>} props - React Flow node props carrying PersonData
@@ -19,10 +35,9 @@ import { SEX_GLOW } from '@/constants/tree'
 export default function PersonNode({ data }: NodeProps<PersonData>) {
   const [photoFailed, setPhotoFailed] = useState(false)
   const handlePhotoError = useCallback(() => setPhotoFailed(true), [])
-  const glow = SEX_GLOW[data.sex] ?? 'shadow-[0_0_20px_rgba(148,163,184,0.3)]'
-  const rootRing = data.isRoot
-    ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-transparent shadow-[0_0_28px_rgba(251,191,36,0.6)]'
-    : ''
+  const tickColor = SEX_TICK_COLOR[data.sex] ?? 'var(--ft-border-strong)'
+  const sexLabel = SEX_LABEL[data.sex] ?? 'Sex unknown'
+  const borderClass = data.isRoot ? 'border-2 border-brass' : 'border border-line'
 
   const dates = data.living
     ? 'Living'
@@ -47,12 +62,17 @@ export default function PersonNode({ data }: NodeProps<PersonData>) {
       ? 'bg-indigo-900/40'
       : (data.generation ?? 0) > 0
         ? 'bg-emerald-900/40'
-        : 'bg-white/10'
+        : 'bg-surface-2'
 
   return (
     <div
-      className={`bg-white/10 backdrop-blur-md border border-white/20 rounded-xl px-4 py-3 w-[240px] overflow-hidden ${glow} ${rootRing} hover:bg-white/15 hover:scale-[1.03] transition-all duration-200 cursor-pointer`}
+      className={`relative bg-surface ${borderClass} rounded-node px-4 py-3 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer`}
     >
+      <div
+        aria-hidden="true"
+        className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[3px]"
+        style={{ backgroundColor: tickColor }}
+      />
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <div className="flex items-center gap-2">
         {data.photoUrl && !photoFailed ? (
@@ -66,15 +86,16 @@ export default function PersonNode({ data }: NodeProps<PersonData>) {
             className="w-8 h-8 rounded-full object-cover shrink-0"
           />
         ) : (
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${avatarBg}`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-ink shrink-0 ${avatarBg}`}>
             {initials}
           </div>
         )}
         <div>
-          <div className="font-semibold text-white text-sm tracking-wide overflow-hidden whitespace-nowrap text-ellipsis" title={data.name ?? ''}>{data.name || <span className="text-slate-500 italic">Unknown</span>}</div>
-          {dates && <div className="text-slate-400 text-xs mt-1">{dates}</div>}
+          <div className="font-serif font-semibold text-ink text-sm tracking-wide overflow-hidden whitespace-nowrap text-ellipsis" title={data.name ?? ''}>{data.name || <span className="text-ink-3 italic">Unknown</span>}</div>
+          {dates && <div className="text-ink-3 text-xs mt-1" style={{ font: 'var(--ft-mono)' }}>{dates}</div>}
         </div>
       </div>
+      <span className="sr-only">{sexLabel}</span>
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>
   )

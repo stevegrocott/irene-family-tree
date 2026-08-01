@@ -1,8 +1,7 @@
 /**
  * @fileoverview `/stats` page — a public, read-only overview of aggregate family
  * statistics (totals, trends, and superlatives) fetched from `GET /api/stats`.
- * Styled to match the dark glassmorphism theme used by the floating `Toolbar`
- * on the tree viewer (`bg-white/10 backdrop-blur-md border border-white/20`).
+ * Styled with the same solid design-system surface tokens used by the tree viewer.
  */
 
 'use client'
@@ -18,7 +17,7 @@ interface BarItem {
   value: number
 }
 
-/** Glassmorphism stat card matching the floating Toolbar's styling. */
+/** Stat card using the shared solid surface treatment. */
 function StatCard({
   label,
   value,
@@ -33,11 +32,11 @@ function StatCard({
   return (
     <div
       data-testid={testId}
-      className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-5 py-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+      className="bg-surface border border-line rounded-panel px-5 py-4 shadow-[var(--ft-shadow-1)]"
     >
-      <p className="text-xs text-white/50 uppercase tracking-wide font-medium">{label}</p>
-      <p className="text-2xl text-white font-semibold mt-1 truncate">{value}</p>
-      {hint && <p className="text-xs text-white/40 mt-1 truncate">{hint}</p>}
+      <p className="text-xs text-ink-3 uppercase tracking-wide font-medium">{label}</p>
+      <p className="text-2xl text-ink font-semibold mt-1 truncate">{value}</p>
+      {hint && <p className="text-xs text-ink-3 mt-1 truncate">{hint}</p>}
     </div>
   )
 }
@@ -50,7 +49,7 @@ function BarChart({ items, testId }: { items: BarItem[]; testId: string }) {
   if (items.length === 0) {
     return (
       <div data-testid={testId}>
-        <p className="text-white/40 text-sm">No data available</p>
+        <p className="text-ink-3 text-sm">No data available</p>
       </div>
     )
   }
@@ -61,16 +60,16 @@ function BarChart({ items, testId }: { items: BarItem[]; testId: string }) {
     <div data-testid={testId} className="space-y-2">
       {items.map(item => (
         <div key={item.label} data-testid={`${testId}-bar`} className="flex items-center gap-3">
-          <span className="w-32 shrink-0 text-xs text-white/70 truncate" title={item.label}>
+          <span className="w-32 shrink-0 text-xs text-ink-2 truncate" title={item.label}>
             {item.label}
           </span>
-          <div className="flex-1 h-3.5 bg-white/5 rounded-full overflow-hidden">
+          <div className="flex-1 h-3.5 bg-surface-2 rounded-full overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 rounded-full"
               style={{ width: `${max > 0 ? (item.value / max) * 100 : 0}%` }}
             />
           </div>
-          <span className="w-8 shrink-0 text-xs text-white/50 text-right">{item.value}</span>
+          <span className="w-8 shrink-0 text-xs text-ink-3 text-right">{item.value}</span>
         </div>
       ))}
     </div>
@@ -83,7 +82,7 @@ function BackLink() {
     <Link
       href="/"
       data-testid="stats-back-link"
-      className="text-xs text-white/60 hover:text-white select-none transition-colors inline-flex items-center gap-1"
+      className="text-xs text-ink-3 hover:text-ink select-none transition-colors inline-flex items-center gap-1"
     >
       ← Back to tree
     </Link>
@@ -101,8 +100,8 @@ function ChartSection({
   items: BarItem[]
 }) {
   return (
-    <section className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-      <h2 className="text-white text-sm font-semibold mb-4">{title}</h2>
+    <section className="bg-surface border border-line rounded-panel p-5 shadow-[var(--ft-shadow-1)]">
+      <h2 className="text-ink text-sm font-semibold mb-4">{title}</h2>
       <BarChart testId={testId} items={items} />
     </section>
   )
@@ -145,10 +144,10 @@ export default function StatsPage() {
     return (
       <main
         data-testid="stats-loading"
-        className="min-h-screen w-full bg-[#050a18] flex items-center justify-center"
+        className="min-h-screen w-full bg-canvas flex items-center justify-center"
       >
-        <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-6 py-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-          <p className="text-white/70 text-sm">Loading statistics…</p>
+        <div className="bg-surface border border-line rounded-panel px-6 py-4 shadow-[var(--ft-shadow-1)]">
+          <p className="text-ink-2 text-sm">Loading statistics…</p>
         </div>
       </main>
     )
@@ -158,10 +157,10 @@ export default function StatsPage() {
     return (
       <main
         data-testid="stats-error"
-        className="min-h-screen w-full bg-[#050a18] flex flex-col items-center justify-center gap-4 px-4"
+        className="min-h-screen w-full bg-canvas flex flex-col items-center justify-center gap-4 px-4"
       >
-        <div className="bg-white/10 backdrop-blur-md border border-red-400/30 rounded-2xl p-6 max-w-sm text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-          <p className="text-red-300 text-sm">{error ?? 'Could not load family statistics.'}</p>
+        <div className="bg-surface border border-[var(--ft-declined)]/30 rounded-panel p-6 max-w-sm text-center shadow-[var(--ft-shadow-1)]">
+          <p className="text-[var(--ft-declined)] text-sm">{error ?? 'Could not load family statistics.'}</p>
         </div>
         <BackLink />
       </main>
@@ -169,10 +168,10 @@ export default function StatsPage() {
   }
 
   return (
-    <main data-testid="stats-page" className="min-h-screen w-full bg-[#050a18] px-4 py-8 sm:px-8">
+    <main data-testid="stats-page" className="min-h-screen w-full bg-canvas px-4 py-8 sm:px-8">
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="flex items-center justify-between">
-          <h1 className="text-white text-xl font-semibold tracking-wide">Family Statistics</h1>
+          <h1 className="text-ink text-xl font-semibold tracking-wide">Family Statistics</h1>
           <BackLink />
         </div>
 

@@ -17,8 +17,8 @@ const PANEL_IDS: Record<Tab, string> = {
   duplicates: 'panel-duplicates',
 }
 
-const TAB_ACTIVE = 'px-4 py-2 rounded-xl text-sm font-medium bg-white/10 backdrop-blur-md border border-white/20 text-white shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-colors'
-const TAB_INACTIVE = 'px-4 py-2 rounded-xl text-sm font-medium bg-transparent border border-transparent text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors'
+const TAB_ACTIVE = 'px-4 py-2 rounded-panel text-sm font-medium bg-surface-2 border border-line text-ink shadow-[var(--ft-shadow-1)] transition-colors'
+const TAB_INACTIVE = 'px-4 py-2 rounded-panel text-sm font-medium bg-transparent border border-transparent text-ink-3 hover:text-ink-2 hover:bg-surface-1 transition-colors'
 
 /**
  * Accessible tab container for the admin page.

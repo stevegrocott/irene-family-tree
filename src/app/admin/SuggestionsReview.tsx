@@ -2,6 +2,19 @@
 
 import { useState } from 'react'
 import type { Change } from './types'
+import {
+  ADMIN_CARD_CLASS,
+  ADMIN_CARD_META_CLASS,
+  ADMIN_CARD_TITLE_CLASS,
+  ADMIN_EMPTY_ICON_CLASS,
+  ADMIN_EMPTY_ICON_WRAP_CLASS,
+  ADMIN_EMPTY_STATE_CLASS,
+  ADMIN_ERROR_TEXT_CLASS,
+  ADMIN_SECONDARY_BUTTON_CLASS,
+  ADMIN_STATUS_PILL_CLASS,
+  BUTTON_SPINNER_WRAP_CLASS,
+  SPINNER_CLASS,
+} from '@/constants/tree'
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'Name',
@@ -28,19 +41,29 @@ function FieldDiff({
   const label = FIELD_LABELS[field] ?? field
   const prevStr = prev != null && prev !== '' ? String(prev) : '(none)'
   const nextStr = next != null && next !== '' ? String(next) : '(none)'
+  const hasPrev = prev != null && prev !== ''
+  const hasNext = next != null && next !== ''
   return (
     <div className="grid grid-cols-2 gap-3 text-xs">
       <div>
-        <span className="text-white/40 uppercase tracking-wide text-[10px] font-medium">
+        <span className="text-ink-3 uppercase tracking-wide text-[10px] font-semibold">
           {label} before
         </span>
-        <p className="text-white/60 mt-0.5 break-words">{prevStr}</p>
+        <p
+          className={`font-mono mt-0.5 break-words rounded-[var(--ft-r-sm)] px-1.5 py-0.5 bg-[var(--ft-declined-soft)] text-ink-3 line-through ${hasPrev ? '' : 'italic no-underline'}`}
+        >
+          {prevStr}
+        </p>
       </div>
       <div>
-        <span className="text-white/40 uppercase tracking-wide text-[10px] font-medium">
+        <span className="text-ink-3 uppercase tracking-wide text-[10px] font-semibold">
           {label} after
         </span>
-        <p className="text-white mt-0.5 break-words">{nextStr}</p>
+        <p
+          className={`font-mono mt-0.5 break-words rounded-[var(--ft-r-sm)] px-1.5 py-0.5 bg-[var(--ft-approved-soft)] text-ink ${hasNext ? '' : 'italic'}`}
+        >
+          {nextStr}
+        </p>
       </div>
     </div>
   )
@@ -71,13 +94,13 @@ export function SuggestionsReview({ initialSuggestions }: { initialSuggestions: 
 
   if (suggestions.length === 0) {
     return (
-      <div data-testid="suggestions-review" className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-4">
-          <svg className="w-8 h-8 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div data-testid="suggestions-review" className={ADMIN_EMPTY_STATE_CLASS}>
+        <div className={ADMIN_EMPTY_ICON_WRAP_CLASS}>
+          <svg className={ADMIN_EMPTY_ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <p className="text-white/60 text-sm">No pending suggestions to review.</p>
+        <p className="text-ink-2 text-sm">No pending suggestions to review.</p>
       </div>
     )
   }
@@ -103,23 +126,23 @@ export function SuggestionsReview({ initialSuggestions }: { initialSuggestions: 
         return (
           <div
             key={s.id}
-            className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+            className={ADMIN_CARD_CLASS}
           >
             <div className="flex items-start justify-between gap-4 mb-3">
               <div>
-                <p className="text-white font-semibold text-base">{s.personName || s.targetId}</p>
-                <p className="text-white/50 text-xs mt-0.5">
+                <p className={ADMIN_CARD_TITLE_CLASS}>{s.personName || s.targetId}</p>
+                <p className={ADMIN_CARD_META_CLASS}>
                   Proposed by{' '}
-                  <span className="text-white/70">{s.authorName || s.authorEmail}</span>
+                  <span className="text-ink-2">{s.authorName || s.authorEmail}</span>
                 </p>
               </div>
-              <span className="shrink-0 text-xs px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              <span className={`shrink-0 ${ADMIN_STATUS_PILL_CLASS}`}>
                 {s.changeType.replace(/_/g, ' ')}
               </span>
             </div>
 
             {changedFields.length > 0 && (
-              <div className="space-y-3 mb-4 border-t border-white/10 pt-3">
+              <div className="space-y-3 mb-4 border-t border-line pt-3">
                 {changedFields.map(field => (
                   <FieldDiff
                     key={field}
@@ -132,18 +155,18 @@ export function SuggestionsReview({ initialSuggestions }: { initialSuggestions: 
             )}
 
             {errors[s.id] && (
-              <p className="text-red-400 text-xs mb-3">{errors[s.id]}</p>
+              <p className={`${ADMIN_ERROR_TEXT_CLASS} mb-3`}>{errors[s.id]}</p>
             )}
 
             <div className="flex gap-3">
               <button
                 onClick={() => handleAction(s.id, 'approve')}
                 disabled={isPending}
-                className="flex-1 py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+                className="flex-1 py-2 rounded-[var(--ft-r-md)] bg-accent hover:bg-[var(--ft-accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed text-[var(--ft-text-on-accent)] text-sm font-medium transition-colors"
               >
                 {isApproving ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  <span className={BUTTON_SPINNER_WRAP_CLASS}>
+                    <span className="w-4 h-4 border-2 border-current/40 border-t-current rounded-full animate-spin" />
                     Approving…
                   </span>
                 ) : 'Approve'}
@@ -151,11 +174,11 @@ export function SuggestionsReview({ initialSuggestions }: { initialSuggestions: 
               <button
                 onClick={() => handleAction(s.id, 'decline')}
                 disabled={isPending}
-                className="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium border border-white/20 transition-colors"
+                className={`flex-1 ${ADMIN_SECONDARY_BUTTON_CLASS}`}
               >
                 {isDeclining ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  <span className={BUTTON_SPINNER_WRAP_CLASS}>
+                    <span className={SPINNER_CLASS} />
                     Declining…
                   </span>
                 ) : 'Decline'}

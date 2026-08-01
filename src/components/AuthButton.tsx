@@ -1,13 +1,15 @@
 'use client'
 
 import { signIn, signOut, useSession } from 'next-auth/react'
+import { FLOATING_PANEL_BASE_CLASS } from '@/constants/tree'
 
 /**
  * AuthButton
  *
  * Absolute-positioned control (top-right) that shows either a "Sign in" button
  * or, when authenticated, an avatar pill with the user's name and a "Sign out"
- * action. Styling mirrors the dark glass toolbar used elsewhere in the canvas.
+ * action. Styling follows the solid surface/border/shadow treatment used
+ * elsewhere in the canvas — see docs/DESIGN_SYSTEM.md §4.4.
  */
 export default function AuthButton() {
   const { data: session, status } = useSession()
@@ -17,9 +19,9 @@ export default function AuthButton() {
       <div
         data-testid="auth-button"
         aria-busy="true"
-        className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-3 py-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+        className={`${FLOATING_PANEL_BASE_CLASS} px-3 py-1.5`}
       >
-        <span className="text-xs text-white/60 select-none">Loading…</span>
+        <span className="text-xs text-ink-3 select-none">Loading…</span>
       </div>
     )
   }
@@ -32,7 +34,7 @@ export default function AuthButton() {
     return (
       <div
         data-testid="auth-button"
-        className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-2 py-1 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+        className={`${FLOATING_PANEL_BASE_CLASS} px-2 py-1`}
       >
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -40,26 +42,26 @@ export default function AuthButton() {
             src={image}
             alt=""
             aria-hidden="true"
-            className="w-6 h-6 rounded-full object-cover border border-white/20"
+            className="w-6 h-6 rounded-full object-cover border border-line"
           />
         ) : (
           <span
             aria-hidden="true"
-            className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-xs text-white font-medium"
+            className="w-6 h-6 rounded-full bg-surface-2 border border-line flex items-center justify-center text-xs text-ink font-medium"
           >
             {initial}
           </span>
         )}
         <span
           data-testid="auth-button-name"
-          className="text-xs text-white font-medium select-none max-w-[10rem] truncate"
+          className="text-xs text-ink font-medium select-none max-w-[10rem] truncate"
         >
           {name}
         </span>
         <button
           data-testid="auth-button-signout"
           onClick={() => signOut()}
-          className="text-xs text-white/60 hover:text-white px-2 py-1 rounded-lg hover:bg-white/10 transition-colors"
+          className="text-xs text-ink-3 hover:text-ink px-2 py-1 rounded-[var(--ft-r-sm)] hover:bg-surface-1 transition-colors"
         >
           Sign out
         </button>
@@ -71,7 +73,7 @@ export default function AuthButton() {
     <button
       data-testid="auth-button"
       onClick={() => signIn('google')}
-      className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.4)] text-xs text-white/80 hover:text-white hover:bg-white/15 transition-colors"
+      className={`${FLOATING_PANEL_BASE_CLASS} px-4 py-2 text-xs text-ink-2 hover:text-ink hover:bg-surface-1 transition-colors`}
     >
       Sign in
     </button>

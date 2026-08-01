@@ -38,7 +38,7 @@ export function AdminTabs({
   suggestionsSlot,
   historySlot,
   duplicatesSlot,
-  suggestionsCount = 0,
+  suggestionsCount,
 }: {
   suggestionsSlot: ReactNode
   historySlot: ReactNode
@@ -60,9 +60,11 @@ export function AdminTabs({
           className={activeTab === TABS.SUGGESTIONS ? TAB_ACTIVE : TAB_INACTIVE}
         >
           Pending Suggestions
-          <span className={COUNT_BADGE_CLASS} data-testid="suggestions-count-badge">
-            {suggestionsCount}
-          </span>
+          {suggestionsCount !== undefined && (
+            <span className={COUNT_BADGE_CLASS} data-testid="suggestions-count-badge">
+              {suggestionsCount}
+            </span>
+          )}
         </button>
         <button
           type="button"

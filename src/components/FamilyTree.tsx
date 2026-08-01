@@ -296,7 +296,7 @@ function FactRow({
   return (
     <div data-testid={testId} className="flex items-baseline justify-between gap-4 py-[var(--ft-row-gap)]">
       <span className={FACT_ROW_LABEL_CLASS}>{label}</span>
-      <span className={`${FACT_ROW_VALUE_CLASS} ${mono ? 'font-mono' : ''} ${wrap ? 'whitespace-pre-wrap' : 'truncate'}`}>
+      <span className={`${FACT_ROW_VALUE_CLASS} ${mono ? '!font-mono' : ''} ${wrap ? 'whitespace-pre-wrap' : 'truncate'}`}>
         {value}
       </span>
     </div>

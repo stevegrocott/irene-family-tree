@@ -36,7 +36,7 @@ import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import { computeLineage } from '@/lib/lineage'
 import type { TreeResponse, PersonData, UnionData, PersonDetailResponse, PersonSummary, FlowNode, FlowEdge } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_TYPES, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -65,6 +65,16 @@ const defaultEdgeStyle: React.CSSProperties = { stroke: '#6366f1', strokeWidth: 
 const defaultEdgeOptions = {
   type: 'smoothstep',
   animated: false,
+}
+
+/**
+ * ReactFlow edge `type` per relationship label (docs/DESIGN_SYSTEM.md §3.4) — descent
+ * (`CHILD`, union→person) edges render as orthogonal `step` paths so the graph reads as a
+ * pedigree chart at density. Union (person→union) edges are left unmapped so they keep the
+ * `smoothstep` default from `defaultEdgeOptions`.
+ */
+const EDGE_RENDER_TYPE: Partial<Record<string, string>> = {
+  [EDGE_TYPES.CHILD]: 'step',
 }
 
 /**
@@ -2006,6 +2016,7 @@ function FlowCanvas({
         id: e.id,
         source: e.source,
         target: e.target,
+        type: EDGE_RENDER_TYPE[e.label],
         style: EDGE_STYLES[e.label] ?? defaultEdgeStyle,
         data: { relType: e.label },
       }))

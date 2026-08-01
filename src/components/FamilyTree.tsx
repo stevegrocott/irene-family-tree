@@ -34,8 +34,9 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { applyDagreLayout, GenerationLevel } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
-import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS } from '@/constants/tree'
+import { computeLineage } from '@/lib/lineage'
+import type { TreeResponse, PersonData, UnionData, PersonDetailResponse, PersonSummary, FlowNode, FlowEdge } from '@/types/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -1822,6 +1823,8 @@ function FlowCanvas({
   const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(() =>
     initialUrlState.person ? personStub(initialUrlState.person) : null
   )
+  /** Id of the person node currently hovered (desktop) — a transient, non-sticky lineage focus. */
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null)
   const { setViewport } = useReactFlow()
   /**
    * Container-measured canvas dimensions from the ReactFlow store. These reflect
@@ -1840,6 +1843,75 @@ function FlowCanvas({
     const rootNode = nodes.find(n => n.type === 'person' && (n.data as PersonData).gedcomId === rootId)
     return rootNode ? (rootNode.data as PersonData).name ?? '' : ''
   }, [nodes, rootId])
+
+  /** ReactFlow node id of the selected (drawer-open) person — the sticky lineage focus, if any. */
+  const selectedNodeId = useMemo(() => {
+    if (!selectedPerson) return null
+    return nodes.find(n => n.type === 'person' && (n.data as PersonData).gedcomId === selectedPerson.gedcomId)?.id ?? null
+  }, [nodes, selectedPerson])
+
+  /**
+   * The lineage focus node id: an active selection is sticky and always wins over hover
+   * (per docs/DESIGN_SYSTEM.md §3.3), so hover is only consulted when nothing is selected.
+   */
+  const focusNodeId = selectedNodeId ?? hoveredNodeId
+
+  /**
+   * In-lineage node/edge id set for the current focus (hover or sticky selection), computed
+   * in a single O(nodes + edges) pass over the already-loaded graph — no network request.
+   * `null` when nothing is focused, meaning no dimming is applied.
+   */
+  const lineage = useMemo(() => {
+    if (!focusNodeId) return null
+    const lineageNodes: FlowNode[] = nodes.map(n => ({
+      id: n.id,
+      type: n.type as 'person' | 'union',
+      data: n.data as PersonData | UnionData,
+      position: n.position,
+    }))
+    const lineageEdges: FlowEdge[] = edges.map(e => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      label: (e.data as { relType?: string } | undefined)?.relType ?? '',
+    }))
+    return computeLineage(lineageNodes, lineageEdges, focusNodeId)
+  }, [nodes, edges, focusNodeId])
+
+  /** Nodes as rendered by ReactFlow, with off-lineage nodes dimmed via `--ft-node-dim` while a focus is active. */
+  const displayNodes = useMemo(() => {
+    return nodes.map(n => {
+      const dimmed = !!lineage && !lineage.nodeIds.has(n.id)
+      return {
+        ...n,
+        style: {
+          ...n.style,
+          opacity: dimmed ? `var(${LINEAGE_VARS.dim})` : 1,
+          transition: `opacity ${LINEAGE_DIM_TRANSITION_MS}ms ease`,
+        },
+      }
+    })
+  }, [nodes, lineage])
+
+  /**
+   * Edges as rendered by ReactFlow: off-lineage edges dim via `--ft-node-dim` and in-lineage
+   * edges promote their stroke to `--ft-edge-strong`, while a focus is active.
+   */
+  const displayEdges = useMemo(() => {
+    return edges.map(e => {
+      const inLineage = !!lineage && lineage.edgeIds.has(e.id)
+      const dimmed = !!lineage && !inLineage
+      return {
+        ...e,
+        style: {
+          ...e.style,
+          opacity: dimmed ? `var(${LINEAGE_VARS.dim})` : e.style?.opacity,
+          stroke: inLineage ? `var(${LINEAGE_VARS.edgeStrong})` : e.style?.stroke,
+          transition: `opacity ${LINEAGE_DIM_TRANSITION_MS}ms ease, stroke ${LINEAGE_DIM_TRANSITION_MS}ms ease`,
+        },
+      }
+    })
+  }, [edges, lineage])
 
   /** Updates `selectedPerson`, marking the viewer state as user-touched so URL sync activates. */
   const selectPerson = useCallback((person: PersonData | null) => {
@@ -1889,6 +1961,19 @@ function FlowCanvas({
     }
   }, [selectPerson])
 
+  /** Sets the transient (non-sticky) lineage focus when the pointer enters a person node. */
+  const handleNodeMouseEnter = useCallback((_event: React.MouseEvent, node: Node) => {
+    if (node.type === 'person') setHoveredNodeId(node.id)
+  }, [])
+
+  /**
+   * Clears the transient lineage focus when the pointer leaves a person node — only if that
+   * node is still the current hover, so a fast enter-into-the-next-node never clobbers it.
+   */
+  const handleNodeMouseLeave = useCallback((_event: React.MouseEvent, node: Node) => {
+    if (node.type === 'person') setHoveredNodeId(prev => (prev === node.id ? null : prev))
+  }, [])
+
   /**
    * Fetches tree data for the current `rootId` and `hops` depth, applies dagre
    * layout, and updates the node/edge state. Aborts any in-flight request first.
@@ -1900,6 +1985,10 @@ function FlowCanvas({
     try {
       setLoading(true)
       setError(null)
+      // A fresh load replaces `nodes` wholesale, so a stale hover id from the previous
+      // tree (e.g. after re-rooting) would otherwise resolve to an empty lineage set —
+      // dimming everything — until the pointer happens to re-enter a node.
+      setHoveredNodeId(null)
       const res = await fetch(`/api/tree/${rootId}?hops=${hops}`, { signal: abortRef.current.signal })
       if (!res.ok) throw new Error(`Failed to fetch tree: ${res.status}`)
       const data: TreeResponse = await res.json()
@@ -2016,12 +2105,14 @@ function FlowCanvas({
         </div>
       )}
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={displayNodes}
+        edges={displayEdges}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         proOptions={{ hideAttribution: true }}
         onNodeClick={handleNodeClick}
+        onNodeMouseEnter={handleNodeMouseEnter}
+        onNodeMouseLeave={handleNodeMouseLeave}
       >
         <GenerationBands generationLevels={generationLevels} />
         <Background variant={BackgroundVariant.Dots} color="#1e2a4a" gap={28} size={1} />

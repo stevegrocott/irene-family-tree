@@ -139,6 +139,15 @@ test.describe('minimap and controls chrome (issue #198)', () => {
     expect(controlsStyle).toContain('var(--ft-surface-0)');
     expect(controlsStyle).toContain('var(--ft-border)');
     expect(controlsStyle).toContain('var(--ft-r-md)');
+
+    // Assert the rendered/computed style too — a stale `!important` rule in globals.css
+    // can win over the inline style above and leave the panel translucent/blurred.
+    const controlsComputed = await page.locator('[data-testid="rf__controls"]').evaluate((el) => {
+      const style = getComputedStyle(el);
+      return { backdropFilter: style.backdropFilter, backgroundColor: style.backgroundColor };
+    });
+    expect(controlsComputed.backdropFilter).toBe('none');
+    expect(controlsComputed.backgroundColor).not.toBe('rgba(255, 255, 255, 0.08)');
   });
 
   test('minimap marks exactly the root person node with the brass accent color', async ({ page }) => {

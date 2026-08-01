@@ -86,3 +86,47 @@ describe('AdminTabs — Duplicates tab', () => {
     expect(historyPanel?.hasAttribute('hidden')).toBe(true)
   })
 })
+
+describe('AdminTabs — suggestions count badge', () => {
+  let container: HTMLDivElement
+  let root: ReturnType<typeof createRoot>
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+  })
+
+  afterEach(() => {
+    act(() => { root.unmount() })
+    document.body.removeChild(container)
+  })
+
+  function renderWithCount(suggestionsCount?: number) {
+    return act(async () => {
+      root = createRoot(container)
+      root.render(
+        <AdminTabs
+          suggestionsSlot={<div>Suggestions Content</div>}
+          historySlot={<div>History Content</div>}
+          duplicatesSlot={<div>Duplicates Content</div>}
+          suggestionsCount={suggestionsCount}
+        />
+      )
+    })
+  }
+
+  it('renders the given suggestionsCount in the badge', async () => {
+    await renderWithCount(7)
+
+    const badge = container.querySelector('[data-testid="suggestions-count-badge"]')
+    expect(badge).not.toBeNull()
+    expect(badge?.textContent?.trim()).toBe('7')
+  })
+
+  it('defaults the badge to 0 when suggestionsCount is not provided', async () => {
+    await renderWithCount(undefined)
+
+    const badge = container.querySelector('[data-testid="suggestions-count-badge"]')
+    expect(badge?.textContent?.trim()).toBe('0')
+  })
+})

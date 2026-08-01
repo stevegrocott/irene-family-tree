@@ -89,6 +89,7 @@ export default async function AdminPage() {
           suggestionsSlot={<SuggestionsReview initialSuggestions={suggestions} />}
           historySlot={<ChangeHistory />}
           duplicatesSlot={<p className="text-white/60 text-sm">Duplicate detection is coming soon.</p>}
+          suggestionsCount={suggestions.length}
         />
       </div>
     </main>

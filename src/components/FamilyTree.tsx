@@ -36,7 +36,7 @@ import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import { computeLineage } from '@/lib/lineage'
 import type { TreeResponse, PersonData, UnionData, PersonDetailResponse, PersonSummary, FlowNode, FlowEdge } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS, EDGE_TYPES, EDGE_RENDER_TYPE } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, getDrawerContainerClass, DEFAULT_DRAWER_DETENT, type DrawerDetent, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS, EDGE_TYPES, EDGE_RENDER_TYPE } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -345,12 +345,22 @@ function RelativeRow({
   )
 }
 
-/** Mobile drag handle affordance for bottom-sheet drawers. */
-function DrawerDragHandle() {
+/**
+ * Mobile drag handle affordance for bottom-sheet drawers. Also the tap target that
+ * toggles between the `peek` (~30vh) and `full` (72vh) detents (docs/DESIGN_SYSTEM.md §6).
+ */
+function DrawerDragHandle({ detent, onToggle }: { detent: DrawerDetent; onToggle: () => void }) {
   return (
-    <div data-testid="drawer-drag-handle" className={DRAWER_DRAG_HANDLE_CLASS} aria-hidden="true">
+    <button
+      type="button"
+      data-testid="drawer-drag-handle"
+      onClick={onToggle}
+      aria-label={detent === 'full' ? 'Collapse drawer' : 'Expand drawer'}
+      aria-expanded={detent === 'full'}
+      className={DRAWER_DRAG_HANDLE_CLASS}
+    >
       <div className={DRAWER_DRAG_HANDLE_BAR_CLASS} />
-    </div>
+    </button>
   )
 }
 
@@ -501,16 +511,30 @@ function TimelineEntry({ event, onSelect }: { event: TimelineEvent; onSelect: (i
  * @param {Object} props - Component props
  * @param {string} props.title - Title to display in the header
  * @param {Function} props.onBack - Called when user clicks the back button
+ * @param {DrawerDetent} props.detent - Current mobile bottom-sheet detent ('peek' or 'full')
+ * @param {Function} props.onToggleDetent - Called when the drag handle is tapped to toggle the detent
  * @param {React.ReactNode} props.children - Content to render below the header
  * @returns {React.ReactElement} Rendered drawer sub-view container
  */
-function DrawerSubView({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
+function DrawerSubView({
+  title,
+  onBack,
+  detent,
+  onToggleDetent,
+  children,
+}: {
+  title: string
+  onBack: () => void
+  detent: DrawerDetent
+  onToggleDetent: () => void
+  children: React.ReactNode
+}) {
   return (
     <div
       data-testid="drawer-sub-view"
-      className={DRAWER_CONTAINER_CLASS}
+      className={getDrawerContainerClass(detent)}
     >
-      <DrawerDragHandle />
+      <DrawerDragHandle detent={detent} onToggle={onToggleDetent} />
       <div className="flex items-center gap-2 px-5 py-4 border-b border-white/10">
         <button
           onClick={onBack}
@@ -583,6 +607,16 @@ export function PersonDrawer({
 
   const dates = formatLifespan(person)
   const rootLabel = rootName || 'root'
+  // Mobile bottom-sheet detent (docs/DESIGN_SYSTEM.md §6): opens at `peek`, tapping the
+  // drag handle toggles to `full`. Reset per person below so re-opening the drawer for a
+  // different person always starts collapsed.
+  const [detent, setDetent] = useState<DrawerDetent>(DEFAULT_DRAWER_DETENT)
+  const toggleDetent = useCallback(() => {
+    setDetent(prev => (prev === 'peek' ? 'full' : 'peek'))
+  }, [])
+  useEffect(() => {
+    setDetent(DEFAULT_DRAWER_DETENT)
+  }, [person.gedcomId])
   const [detail, setDetail] = useState<PersonDetailResponse | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailVersion, setDetailVersion] = useState(0)
@@ -1219,7 +1253,7 @@ export function PersonDrawer({
   let content: React.ReactNode
   if (mode === 'edit') {
     content = (
-      <DrawerSubView title={`Edit ${person.name || 'person'}`} onBack={() => setMode('view')}>
+      <DrawerSubView title={`Edit ${person.name || 'person'}`} onBack={() => setMode('view')} detent={detent} onToggleDetent={toggleDetent}>
         <div
           data-testid="person-drawer-edit-form"
           className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
@@ -1453,7 +1487,7 @@ export function PersonDrawer({
     )
   } else if (mode === 'add-relative') {
     content = (
-      <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => setMode('view')}>
+      <DrawerSubView title={`Add a ${addRelativeType} for ${person.name || 'person'}`} onBack={() => setMode('view')} detent={detent} onToggleDetent={toggleDetent}>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           <div>
             <input
@@ -1549,9 +1583,9 @@ export function PersonDrawer({
     content = (
     <div
       data-testid="person-drawer"
-      className={DRAWER_CONTAINER_CLASS}
+      className={getDrawerContainerClass(detent)}
     >
-      <DrawerDragHandle />
+      <DrawerDragHandle detent={detent} onToggle={toggleDetent} />
       {/* Header — avatar, name, lifespan, close (docs/DESIGN_SYSTEM.md §4.1) */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-line">
         <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">

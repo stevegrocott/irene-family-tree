@@ -1,0 +1,217 @@
+/* ============================================================
+   Irene Family Tree — Design Tokens
+   Single source of truth. Import once, before Tailwind theme.
+   Light is the default; dark is opt-in via [data-theme="dark"].
+   ============================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* ---- Neutrals / surfaces ------------------------------- */
+  --ft-canvas:        #F2F4F1;  /* graph background (the paper) */
+  --ft-surface-0:     #FFFFFF;  /* cards, nodes, panels        */
+  --ft-surface-1:     #FAFBF9;  /* subtle raised / list rows   */
+  --ft-surface-2:     #EAEEE8;  /* wells, inactive fills       */
+  --ft-surface-3:     #DEE3DA;  /* pressed / track             */
+  --ft-border:        #D6DCD3;  /* hairline, 1px               */
+  --ft-border-strong: #B5BFB1;  /* emphasis divider, focus ring base */
+  --ft-overlay:       rgba(16, 22, 20, 0.42); /* modal scrim   */
+
+  /* ---- Text ---------------------------------------------- */
+  --ft-text-1: #14181A;  /* primary   */
+  --ft-text-2: #4C5652;  /* secondary */
+  --ft-text-3: #79837E;  /* tertiary / meta */
+  --ft-text-on-accent: #FFFFFF;
+
+  /* ---- Accent (oxide teal) — interaction, links, primary --- */
+  --ft-accent:       #0F6E66;
+  --ft-accent-hover: #0B5A54;
+  --ft-accent-press: #084945;
+  --ft-accent-soft:  #DCEDEA;  /* tinted fill / selected row   */
+  --ft-accent-line:  #6FB3AB;  /* 1px accent hairline          */
+
+  /* ---- Brass — root person, unions, "you are here" -------- */
+  --ft-brass:      #A9761A;
+  --ft-brass-soft: #F5E8CD;
+  --ft-brass-line: #D9AE5E;
+
+  /* ---- Semantic ------------------------------------------ */
+  --ft-pending:       #6A4BE0;  /* suggested edit awaiting review */
+  --ft-pending-soft:  #E9E4FD;
+  --ft-approved:      #2C7A55;
+  --ft-approved-soft: #DCEFE4;
+  --ft-declined:      #AE4029;
+  --ft-declined-soft: #F8E2DC;
+  --ft-private:       #6E7A75;  /* living / redacted            */
+  --ft-private-soft:  #E7EBE7;
+
+  /* ---- Graph-specific ------------------------------------ */
+  --ft-band-a:      transparent;              /* odd generation band  */
+  --ft-band-b:      rgba(20, 32, 28, 0.030);  /* even generation band */
+  --ft-band-root:   rgba(169, 118, 26, 0.055);/* generation 0 band    */
+  --ft-band-rule:   rgba(20, 32, 28, 0.07);   /* 1px band separator   */
+  --ft-edge:        #A9B4AE;                  /* descent line         */
+  --ft-edge-strong: #5C6A64;                  /* lineage-focus line   */
+  --ft-edge-union:  var(--ft-brass-line);     /* union / marriage tie */
+  --ft-node-dim:    0.22;                     /* opacity when off-lineage */
+
+  /* ---- Elevation (neutral, no colour cast) ---------------- */
+  --ft-shadow-1: 0 1px 2px rgba(18, 26, 23, 0.06);
+  --ft-shadow-2: 0 2px 4px rgba(18, 26, 23, 0.06), 0 6px 16px rgba(18, 26, 23, 0.07);
+  --ft-shadow-3: 0 8px 24px rgba(18, 26, 23, 0.12), 0 2px 6px rgba(18, 26, 23, 0.08);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ft-canvas:        #0E1214;
+  --ft-surface-0:     #171D20;
+  --ft-surface-1:     #1D2428;
+  --ft-surface-2:     #252E33;
+  --ft-surface-3:     #2F393E;
+  --ft-border:        #2F383D;
+  --ft-border-strong: #47535A;
+  --ft-overlay:       rgba(0, 0, 0, 0.62);
+
+  --ft-text-1: #E8EEEB;
+  --ft-text-2: #A2AEA9;
+  --ft-text-3: #74807B;
+  --ft-text-on-accent: #04211F;
+
+  --ft-accent:       #3FBFAE;
+  --ft-accent-hover: #5AD1C0;
+  --ft-accent-press: #2FA695;
+  --ft-accent-soft:  #10312E;
+  --ft-accent-line:  #2C7E74;
+
+  --ft-brass:      #D9A441;
+  --ft-brass-soft: #33280F;
+  --ft-brass-line: #8A6A28;
+
+  --ft-pending:       #A895FF;
+  --ft-pending-soft:  #241E3D;
+  --ft-approved:      #56B888;
+  --ft-approved-soft: #12281D;
+  --ft-declined:      #E0785D;
+  --ft-declined-soft: #331812;
+  --ft-private:       #8A958F;
+  --ft-private-soft:  #212927;
+
+  --ft-band-a:      transparent;
+  --ft-band-b:      rgba(255, 255, 255, 0.028);
+  --ft-band-root:   rgba(217, 164, 65, 0.06);
+  --ft-band-rule:   rgba(255, 255, 255, 0.06);
+  --ft-edge:        #46545A;
+  --ft-edge-strong: #93A29C;
+  --ft-edge-union:  var(--ft-brass-line);
+  --ft-node-dim:    0.20;
+
+  --ft-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --ft-shadow-2: 0 2px 4px rgba(0, 0, 0, 0.36), 0 6px 16px rgba(0, 0, 0, 0.40);
+  --ft-shadow-3: 0 8px 24px rgba(0, 0, 0, 0.50), 0 2px 6px rgba(0, 0, 0, 0.40);
+}
+
+/* ============================================================
+   Typography
+   Geist Sans (already installed) for UI. A serif carries every
+   PERSON NAME — that single decision is the product's identity.
+   Geist Mono for dates, GEDCOM ids, and diffs.
+   ============================================================ */
+:root {
+  --ft-font-sans:  var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --ft-font-serif: var(--font-source-serif), "Source Serif 4", Georgia, serif;
+  --ft-font-mono:  var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+
+  /* size / line-height / weight / tracking */
+  --ft-display:    700 28px/1.15 var(--ft-font-serif);
+  --ft-title:      600 20px/1.25 var(--ft-font-serif);
+  --ft-name-lg:    600 17px/1.25 var(--ft-font-serif);
+  --ft-name:       600 15px/1.3  var(--ft-font-serif);
+  --ft-name-sm:    600 13px/1.3  var(--ft-font-serif);
+  --ft-body:       400 14px/1.5  var(--ft-font-sans);
+  --ft-body-strong:600 14px/1.5  var(--ft-font-sans);
+  --ft-label:      500 13px/1.4  var(--ft-font-sans);
+  --ft-micro:      600 11px/1.35 var(--ft-font-sans);   /* + uppercase, 0.08em */
+  --ft-mono:       400 12px/1.4  var(--ft-font-mono);
+  --ft-micro-track: 0.08em;
+}
+
+/* ============================================================
+   Space · radius · motion
+   ============================================================ */
+:root {
+  --ft-s1: 4px;  --ft-s2: 8px;  --ft-s3: 12px; --ft-s4: 16px;
+  --ft-s5: 20px; --ft-s6: 24px; --ft-s7: 32px; --ft-s8: 48px;
+
+  --ft-r-sm:    3px;   /* chips, ticks            */
+  --ft-r-md:    5px;   /* buttons, inputs         */
+  --ft-r-node:  6px;   /* person node             */
+  --ft-r-panel: 8px;   /* drawer, card, dialog    */
+  --ft-r-pill:  999px; /* status pills only       */
+
+  --ft-ease: cubic-bezier(0.2, 0, 0, 1);
+  --ft-dur-color: 120ms;
+  --ft-dur-move:  180ms;
+  --ft-dur-panel: 240ms;
+
+  --ft-tap: 44px;  /* minimum touch target */
+  --ft-focus: 0 0 0 2px var(--ft-canvas), 0 0 0 4px var(--ft-accent);
+}
+
+/* ============================================================
+   Density — set data-density on the graph container.
+   Feed the node/rank values straight into dagre.
+   ============================================================ */
+:root,
+[data-density="compact"] {            /* DEFAULT */
+  --ft-node-w: 220px; --ft-node-h: 72px;
+  --ft-node-pad: 10px 12px; --ft-avatar: 30px;
+  --ft-ranksep: 74px; --ft-nodesep: 30px;
+  --ft-band-h: 120px; --ft-panel-pad: 16px; --ft-row-gap: 8px;
+}
+[data-density="comfortable"] {
+  --ft-node-w: 264px; --ft-node-h: 88px;
+  --ft-node-pad: 14px 16px; --ft-avatar: 36px;
+  --ft-ranksep: 96px; --ft-nodesep: 44px;
+  --ft-band-h: 144px; --ft-panel-pad: 20px; --ft-row-gap: 12px;
+}
+[data-density="dense"] {
+  --ft-node-w: 176px; --ft-node-h: 56px;
+  --ft-node-pad: 7px 10px; --ft-avatar: 24px;
+  --ft-ranksep: 54px; --ft-nodesep: 18px;
+  --ft-band-h: 92px; --ft-panel-pad: 12px; --ft-row-gap: 6px;
+}
+
+/* ============================================================
+   Tailwind v4 bridge — paste into globals.css after @import.
+   ------------------------------------------------------------
+   @theme inline {
+     --color-canvas:    var(--ft-canvas);
+     --color-surface:   var(--ft-surface-0);
+     --color-surface-1: var(--ft-surface-1);
+     --color-surface-2: var(--ft-surface-2);
+     --color-line:      var(--ft-border);
+     --color-ink:       var(--ft-text-1);
+     --color-ink-2:     var(--ft-text-2);
+     --color-ink-3:     var(--ft-text-3);
+     --color-accent:    var(--ft-accent);
+     --color-brass:     var(--ft-brass);
+     --color-pending:   var(--ft-pending);
+     --color-approved:  var(--ft-approved);
+     --color-declined:  var(--ft-declined);
+     --radius-node:     var(--ft-r-node);
+     --radius-panel:    var(--ft-r-panel);
+     --font-serif:      var(--ft-font-serif);
+   }
+   Then: bg-surface, text-ink-2, border-line, rounded-panel, font-serif.
+   ============================================================ */
+
+/* ============================================================
+   Reduced motion
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

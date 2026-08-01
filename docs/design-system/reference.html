@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="page">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="design-system/tokens.css">
+<style>
+  :root {
+    --font-geist-sans: "Geist";
+    --font-geist-mono: "Geist Mono";
+    --font-source-serif: "Source Serif 4";
+  }
+  body { margin: 0; background: #F2F4F1; }
+  a { color: var(--ft-accent); text-decoration: none; }
+  a:hover { color: var(--ft-accent-hover); text-decoration: underline; }
+  * { box-sizing: border-box; }
+</style>
+</helmet>
+
+<div data-theme="{{ theme }}" data-density="compact" style="background: var(--ft-canvas); color: var(--ft-text-1); font: var(--ft-body); min-height: 100vh; padding: 0 0 96px;">
+
+  <div style="position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 16px; padding: 12px 40px; background: var(--ft-surface-0); border-bottom: 1px solid var(--ft-border);">
+    <div style="font: var(--ft-name); color: var(--ft-text-1);">Irene Family Tree</div>
+    <div style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Design System v1</div>
+    <div style="flex: 1;"></div>
+    <div style="display: flex; gap: 4px; padding: 3px; background: var(--ft-surface-2); border-radius: var(--ft-r-md);">
+      <button onClick="{{ setLight }}" style="font: var(--ft-label); padding: 6px 14px; border: 0; border-radius: 3px; cursor: pointer; background: {{ lightBg }}; color: {{ lightFg }};">Light</button>
+      <button onClick="{{ setDark }}" style="font: var(--ft-label); padding: 6px 14px; border: 0; border-radius: 3px; cursor: pointer; background: {{ darkBg }}; color: {{ darkFg }};">Dark</button>
+    </div>
+    <button onClick="{{ toggleDim }}" style="font: var(--ft-label); padding: 7px 14px; border: 1px solid var(--ft-border); border-radius: var(--ft-r-md); cursor: pointer; background: var(--ft-surface-0); color: var(--ft-text-2);">Lineage focus: {{ dimLabel }}</button>
+  </div>
+
+  <div style="max-width: 1180px; margin: 0 auto; padding: 0 40px; display: flex; flex-direction: column; gap: 64px;">
+
+    <header style="padding-top: 56px; display: flex; flex-direction: column; gap: 16px; max-width: 760px;">
+      <div style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-brass);">Reference implementation</div>
+      <h1 style="font: var(--ft-display); margin: 0; color: var(--ft-text-1);">A quieter graph, a warmer record</h1>
+      <p style="font: var(--ft-body); font-size: 16px; line-height: 1.6; color: var(--ft-text-2); margin: 0; text-wrap: pretty;">The viewer's problem was never decoration — it was that nothing on screen told you where a generation began, and every node shouted at the same volume. This system kills the glass, bands the generations, ties node detail to zoom, and lets colour mean exactly one thing at a time. Person names are set in a serif; every date, id and diff in mono. That contrast is the identity.</p>
+      <div style="display: flex; gap: 24px; padding-top: 8px; font: var(--ft-mono); color: var(--ft-text-3);">
+        <span>design-system/tokens.css</span>
+        <span>design-system/DESIGN_SYSTEM.md</span>
+      </div>
+    </header>
+
+    <section style="display: flex; flex-direction: column; gap: 24px;">
+      <div style="display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--ft-border); padding-bottom: 10px;">
+        <span style="font: var(--ft-mono); color: var(--ft-brass);">01</span>
+        <h2 style="font: var(--ft-title); margin: 0;">Colour</h2>
+        <span style="font: var(--ft-label); color: var(--ft-text-3);">Teal is interaction. Brass is lineage. Everything else is a state.</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 32px;">
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Surfaces</div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; border: 1px solid var(--ft-border); background: var(--ft-canvas);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">canvas</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; border: 1px solid var(--ft-border); background: var(--ft-surface-0);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">surface-0</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; border: 1px solid var(--ft-border); background: var(--ft-surface-1);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">surface-1</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; border: 1px solid var(--ft-border); background: var(--ft-surface-2);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">surface-2</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; border: 1px solid var(--ft-border); background: var(--ft-surface-3);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">surface-3</span></div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Accent &amp; brass</div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; background: var(--ft-accent);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">accent</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; background: var(--ft-accent-hover);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">accent-hover</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; border: 1px solid var(--ft-border); background: var(--ft-accent-soft);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">accent-soft</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; background: var(--ft-brass);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">brass</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; border: 1px solid var(--ft-border); background: var(--ft-brass-soft);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">brass-soft</span></div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">State</div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; background: var(--ft-pending);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">pending</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; background: var(--ft-approved);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">approved</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; background: var(--ft-declined);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">declined</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; background: var(--ft-private);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">private</span></div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Graph</div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; border: 1px solid var(--ft-border); background: var(--ft-band-b);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">band-b</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; border: 1px solid var(--ft-border); background: var(--ft-band-root);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">band-root</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; background: var(--ft-edge);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">edge</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; background: var(--ft-edge-union);"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">edge-union</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="width: 40px; height: 28px; border-radius: 3px; background: #4A7DB5;"></span><span style="font: var(--ft-mono); color: var(--ft-text-2);">tick M / F</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 24px;">
+      <div style="display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--ft-border); padding-bottom: 10px;">
+        <span style="font: var(--ft-mono); color: var(--ft-brass);">02</span>
+        <h2 style="font: var(--ft-title); margin: 0;">Type</h2>
+        <span style="font: var(--ft-label); color: var(--ft-text-3);">Serif for people. Mono for facts. Sans for the machinery.</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 200px 1fr; gap: 18px 32px; align-items: baseline;">
+        <span style="font: var(--ft-mono); color: var(--ft-text-3);">--ft-display</span>
+        <span style="font: var(--ft-display);">Irene Mabel Grocott</span>
+        <span style="font: var(--ft-mono); color: var(--ft-text-3);">--ft-title</span>
+        <span style="font: var(--ft-title);">Pending suggestions</span>
+        <span style="font: var(--ft-mono); color: var(--ft-text-3);">--ft-name-lg</span>
+        <span style="font: var(--ft-name-lg);">Albert Edward Grocott</span>
+        <span style="font: var(--ft-mono); color: var(--ft-text-3);">--ft-name</span>
+        <span style="font: var(--ft-name);">Florence May Hurst</span>
+        <span style="font: var(--ft-mono); color: var(--ft-text-3);">--ft-body</span>
+        <span style="font: var(--ft-body); color: var(--ft-text-2);">Suggested edits are held for review before they change the record.</span>
+        <span style="font: var(--ft-mono); color: var(--ft-text-3);">--ft-label</span>
+        <span style="font: var(--ft-label); color: var(--ft-text-2);">Make this person the root</span>
+        <span style="font: var(--ft-mono); color: var(--ft-text-3);">--ft-micro</span>
+        <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Gen −2 · Great-grandparents</span>
+        <span style="font: var(--ft-mono); color: var(--ft-text-3);">--ft-mono</span>
+        <span style="font: var(--ft-mono); color: var(--ft-text-2);">b. 1901 – d. 1974 · @I85@</span>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 24px;">
+      <div style="display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--ft-border); padding-bottom: 10px;">
+        <span style="font: var(--ft-mono); color: var(--ft-brass);">03</span>
+        <h2 style="font: var(--ft-title); margin: 0;">Graph canvas</h2>
+        <span style="font: var(--ft-label); color: var(--ft-text-3);">Generation bands, orthogonal descent, lineage focus.</span>
+      </div>
+
+      <div style="position: relative; width: 100%; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--ft-border); border-radius: var(--ft-r-panel); background: var(--ft-canvas);">
+        <div style="position: relative; width: 980px; height: 360px;">
+
+          <div style="position: absolute; inset: 0 0 240px 0; background: var(--ft-band-b); border-bottom: 1px solid var(--ft-band-rule);"></div>
+          <div style="position: absolute; inset: 120px 0 120px 0; background: var(--ft-band-root); border-bottom: 1px solid var(--ft-band-rule);"></div>
+          <div style="position: absolute; inset: 240px 0 0 0; background: var(--ft-band-b);"></div>
+
+          <div style="position: absolute; left: 16px; top: 14px; font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Gen −1 · Parents</div>
+          <div style="position: absolute; left: 16px; top: 134px; font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-brass);">Gen 0 · Root</div>
+          <div style="position: absolute; left: 16px; top: 254px; font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Gen +1 · Children</div>
+
+          <svg width="980" height="360" viewBox="0 0 980 360" style="position: absolute; inset: 0; pointer-events: none;">
+            <g fill="none" stroke="var(--ft-edge-union)" stroke-width="1.5">
+              <path d="M440,92 V104 H570"></path>
+              <path d="M700,92 V104 H570"></path>
+              <path d="M590,212 V224 H720"></path>
+              <path d="M850,212 V224 H720"></path>
+            </g>
+            <g fill="none" stroke="var(--ft-edge)" stroke-width="1">
+              <path d="M570,109 V130 H330 V148"></path>
+              <path d="M570,109 V130 H850 V148"></path>
+              <path d="M720,229 V250 H600 V268"></path>
+              <path d="M720,229 V250 H860 V268"></path>
+            </g>
+            <path d="M570,109 V130 H590 V148" fill="none" stroke="var(--ft-edge-strong)" stroke-width="1.5"></path>
+            <circle cx="570" cy="104" r="5" fill="var(--ft-brass)"></circle>
+            <circle cx="720" cy="224" r="5" fill="var(--ft-brass)"></circle>
+          </svg>
+
+          <div style="position: absolute; left: 330px; top: 28px; width: 220px; height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-node); box-shadow: var(--ft-shadow-1); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #4A7DB5;"></span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: var(--ft-surface-2); color: var(--ft-text-3); font: var(--ft-micro); display: flex; align-items: center; justify-content: center; flex: none;">AG</span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font: var(--ft-name); color: var(--ft-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Albert Grocott</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-3);">b. 1901 – d. 1974</span>
+            </span>
+          </div>
+
+          <div style="position: absolute; left: 590px; top: 28px; width: 220px; height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-node); box-shadow: var(--ft-shadow-1); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #A85F86;"></span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: var(--ft-surface-2); color: var(--ft-text-3); font: var(--ft-micro); display: flex; align-items: center; justify-content: center; flex: none;">FH</span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font: var(--ft-name); color: var(--ft-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Florence Hurst</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-3);">b. 1904 – d. 1988</span>
+            </span>
+          </div>
+
+          <div style="position: absolute; left: 220px; top: 148px; width: 220px; height: 64px; opacity: {{ dimOpacity }}; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-node); box-shadow: var(--ft-shadow-1); overflow: hidden; transition: opacity var(--ft-dur-move) var(--ft-ease);">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #4A7DB5;"></span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: var(--ft-surface-2); color: var(--ft-text-3); font: var(--ft-micro); display: flex; align-items: center; justify-content: center; flex: none;">RG</span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font: var(--ft-name); color: var(--ft-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Ronald Grocott</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-3);">b. 1930 – d. 2001</span>
+            </span>
+          </div>
+
+          <div style="position: absolute; left: 480px; top: 148px; width: 220px; height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: var(--ft-surface-0); border: 2px solid var(--ft-brass); border-radius: var(--ft-r-node); box-shadow: var(--ft-shadow-2); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #A85F86;"></span>
+            <span style="position: absolute; right: 8px; top: 6px; font: var(--ft-micro); letter-spacing: var(--ft-micro-track); color: var(--ft-brass);">ROOT</span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: var(--ft-brass-soft); color: var(--ft-brass); font: var(--ft-micro); display: flex; align-items: center; justify-content: center; flex: none;">IG</span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font: var(--ft-name); color: var(--ft-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Irene Grocott</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-3);">b. 1933 – d. 2019</span>
+            </span>
+          </div>
+
+          <div style="position: absolute; left: 740px; top: 148px; width: 220px; height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-node); box-shadow: var(--ft-shadow-1); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #4A7DB5;"></span>
+            <span style="position: absolute; right: 8px; top: 8px; width: 6px; height: 6px; border-radius: 999px; background: var(--ft-pending);" title="1 suggested edit awaiting review"></span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: var(--ft-surface-2); color: var(--ft-text-3); font: var(--ft-micro); display: flex; align-items: center; justify-content: center; flex: none;">JW</span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font: var(--ft-name); color: var(--ft-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">James Wheeler</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-3);">b. 1929 – d. 2004</span>
+            </span>
+          </div>
+
+          <div style="position: absolute; left: 490px; top: 268px; width: 220px; height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: var(--ft-accent-soft); border: 2px solid var(--ft-accent); border-radius: var(--ft-r-node); box-shadow: var(--ft-shadow-2); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #A85F86;"></span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: var(--ft-surface-0); color: var(--ft-accent); font: var(--ft-micro); display: flex; align-items: center; justify-content: center; flex: none;">SW</span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font: var(--ft-name); color: var(--ft-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Susan Wheeler</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-2);">Living</span>
+            </span>
+          </div>
+
+          <div style="position: absolute; left: 750px; top: 268px; width: 220px; height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: var(--ft-private-soft); border: 1px solid var(--ft-border); border-radius: var(--ft-r-node); box-shadow: var(--ft-shadow-1); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--ft-border-strong);"></span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: var(--ft-surface-2); color: var(--ft-text-3); font: var(--ft-micro); display: flex; align-items: center; justify-content: center; flex: none;">?</span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font: var(--ft-name); font-style: italic; color: var(--ft-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Unknown</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-3);">Living</span>
+            </span>
+          </div>
+
+          <div style="position: absolute; right: 16px; bottom: 16px; width: 160px; height: 96px; background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-md); box-shadow: var(--ft-shadow-2); overflow: hidden;">
+            <span style="position: absolute; left: 10px; top: 10px; font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Overview</span>
+            <span style="position: absolute; left: 28px; top: 40px; width: 18px; height: 3px; background: var(--ft-edge);"></span>
+            <span style="position: absolute; left: 56px; top: 40px; width: 18px; height: 3px; background: var(--ft-edge);"></span>
+            <span style="position: absolute; left: 42px; top: 58px; width: 18px; height: 3px; background: var(--ft-brass);"></span>
+            <span style="position: absolute; left: 70px; top: 58px; width: 18px; height: 3px; background: var(--ft-edge);"></span>
+            <span style="position: absolute; left: 98px; top: 58px; width: 18px; height: 3px; background: var(--ft-edge);"></span>
+            <span style="position: absolute; left: 56px; top: 76px; width: 18px; height: 3px; background: var(--ft-edge);"></span>
+            <span style="position: absolute; left: 84px; top: 76px; width: 18px; height: 3px; background: var(--ft-edge);"></span>
+            <span style="position: absolute; left: 36px; top: 50px; width: 66px; height: 34px; border: 1px solid var(--ft-accent); border-radius: 2px;"></span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px;">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font: var(--ft-body-strong);">Bands, not glows</div>
+          <p style="font: var(--ft-body); color: var(--ft-text-2); margin: 0; text-wrap: pretty;">One tinted band per generation rank, a hairline between, a sticky gutter label at the left. Generation 0 takes the brass tint. Reuse the y-levels <code style="font: var(--ft-mono);">generationsFromLayout</code> already clusters.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font: var(--ft-body-strong);">Detail follows zoom</div>
+          <p style="font: var(--ft-body); color: var(--ft-text-2); margin: 0; text-wrap: pretty;">Below 0.45 a node is a coloured dot; to 0.85 it is name plus year; above that it is the full card. At overview zoom you read shape, not text you can't read anyway.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font: var(--ft-body-strong);">Lineage focus</div>
+          <p style="font: var(--ft-body); color: var(--ft-text-2); margin: 0; text-wrap: pretty;">Hover or select a person and everything off their direct line drops to 22 % opacity. One BFS over the loaded graph — and the single largest legibility win available.</p>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 24px;">
+      <div style="display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--ft-border); padding-bottom: 10px;">
+        <span style="font: var(--ft-mono); color: var(--ft-brass);">04</span>
+        <h2 style="font: var(--ft-title); margin: 0;">Node detail levels &amp; density</h2>
+      </div>
+
+      <div style="display: flex; align-items: flex-end; gap: 40px; flex-wrap: wrap; padding: 28px; background: var(--ft-surface-1); border: 1px solid var(--ft-border); border-radius: var(--ft-r-panel);">
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Dot · zoom &lt; 0.45</span>
+          <span style="width: 12px; height: 12px; border-radius: 3px; background: #4A7DB5;"></span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Compact · 0.45–0.85</span>
+          <span style="position: relative; width: 176px; height: 40px; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 0 10px 0 13px; background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-node); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #4A7DB5;"></span>
+            <span style="font: var(--ft-name-sm); color: var(--ft-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Albert Grocott</span>
+            <span style="font: var(--ft-mono); font-size: 11px; color: var(--ft-text-3);">1901</span>
+          </span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Full · zoom &gt; 0.85</span>
+          <span style="position: relative; width: 220px; height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-node); box-shadow: var(--ft-shadow-1); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #4A7DB5;"></span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: var(--ft-surface-2); color: var(--ft-text-3); font: var(--ft-micro); display: flex; align-items: center; justify-content: center; flex: none;">AG</span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font: var(--ft-name); color: var(--ft-text-1);">Albert Grocott</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-3);">b. 1901 – d. 1974</span>
+            </span>
+          </span>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+        <div data-density="comfortable" style="display: flex; flex-direction: column; gap: 12px; padding: 20px; background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-panel);">
+          <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Comfortable</span>
+          <span style="position: relative; width: var(--ft-node-w); height: var(--ft-node-h); display: flex; align-items: center; gap: 10px; padding: var(--ft-node-pad); padding-left: 15px; background: var(--ft-surface-1); border: 1px solid var(--ft-border); border-radius: var(--ft-r-node); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #A85F86;"></span>
+            <span style="width: var(--ft-avatar); height: var(--ft-avatar); border-radius: 999px; background: var(--ft-surface-2); color: var(--ft-text-3); font: var(--ft-micro); display: flex; align-items: center; justify-content: center; flex: none;">IG</span>
+            <span style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font: var(--ft-name); color: var(--ft-text-1);">Irene Grocott</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-3);">b. 1933 – d. 2019</span>
+            </span>
+          </span>
+          <span style="font: var(--ft-mono); color: var(--ft-text-3);">264×88 · rank 96 · node 44</span>
+        </div>
+        <div data-density="compact" style="display: flex; flex-direction: column; gap: 12px; padding: 20px; background: var(--ft-surface-0); border: 1px solid var(--ft-accent); border-radius: var(--ft-r-panel);">
+          <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-accent);">Compact · default</span>
+          <span style="position: relative; width: var(--ft-node-w); height: var(--ft-node-h); display: flex; align-items: center; gap: 10px; padding: var(--ft-node-pad); padding-left: 15px; background: var(--ft-surface-1); border: 1px solid var(--ft-border); border-radius: var(--ft-r-node); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #A85F86;"></span>
+            <span style="width: var(--ft-avatar); height: var(--ft-avatar); border-radius: 999px; background: var(--ft-surface-2); color: var(--ft-text-3); font: var(--ft-micro); display: flex; align-items: center; justify-content: center; flex: none;">IG</span>
+            <span style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font: var(--ft-name); color: var(--ft-text-1);">Irene Grocott</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-3);">b. 1933 – d. 2019</span>
+            </span>
+          </span>
+          <span style="font: var(--ft-mono); color: var(--ft-text-3);">220×72 · rank 74 · node 30</span>
+        </div>
+        <div data-density="dense" style="display: flex; flex-direction: column; gap: 12px; padding: 20px; background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-panel);">
+          <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Dense · mobile</span>
+          <span style="position: relative; width: var(--ft-node-w); height: var(--ft-node-h); display: flex; align-items: center; gap: 8px; padding: var(--ft-node-pad); padding-left: 13px; background: var(--ft-surface-1); border: 1px solid var(--ft-border); border-radius: var(--ft-r-node); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #A85F86;"></span>
+            <span style="width: var(--ft-avatar); height: var(--ft-avatar); border-radius: 999px; background: var(--ft-surface-2); color: var(--ft-text-3); font-size: 9px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex: none;">IG</span>
+            <span style="display: flex; flex-direction: column; min-width: 0;">
+              <span style="font: var(--ft-name-sm); color: var(--ft-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Irene Grocott</span>
+              <span style="font: var(--ft-mono); font-size: 11px; color: var(--ft-text-3);">1933–2019</span>
+            </span>
+          </span>
+          <span style="font: var(--ft-mono); color: var(--ft-text-3);">176×56 · rank 54 · node 18</span>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 24px;">
+      <div style="display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--ft-border); padding-bottom: 10px;">
+        <span style="font: var(--ft-mono); color: var(--ft-brass);">05</span>
+        <h2 style="font: var(--ft-title); margin: 0;">Panels</h2>
+        <span style="font: var(--ft-label); color: var(--ft-text-3);">Docked, solid, sectioned by rules.</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 360px 1fr; gap: 32px; align-items: start;">
+
+        <div style="display: flex; flex-direction: column; background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-panel); overflow: hidden;">
+          <div style="display: flex; align-items: flex-start; gap: 12px; padding: 16px;">
+            <span style="width: 48px; height: 48px; border-radius: 999px; background: var(--ft-brass-soft); color: var(--ft-brass); font: var(--ft-name); display: flex; align-items: center; justify-content: center; flex: none;">IG</span>
+            <span style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0;">
+              <span style="font: var(--ft-name-lg); color: var(--ft-text-1);">Irene Mabel Grocott</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-3);">1933 – 2019 · @I85@</span>
+            </span>
+            <span style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--ft-r-md); color: var(--ft-text-3); font-size: 16px; cursor: pointer; flex: none;">×</span>
+          </div>
+          <div style="display: flex; gap: 6px; padding: 0 16px 14px;">
+            <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; padding: 3px 9px; border-radius: var(--ft-r-pill); background: var(--ft-brass-soft); color: var(--ft-brass);">Root</span>
+            <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; padding: 3px 9px; border-radius: var(--ft-r-pill); background: var(--ft-pending-soft); color: var(--ft-pending);">2 pending</span>
+          </div>
+
+          <div style="border-top: 1px solid var(--ft-border); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;">
+            <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Facts</span>
+            <span style="display: flex; justify-content: space-between; gap: 16px;"><span style="font: var(--ft-label); color: var(--ft-text-3);">Born</span><span style="font: var(--ft-mono); color: var(--ft-text-1);">14 Mar 1933</span></span>
+            <span style="display: flex; justify-content: space-between; gap: 16px;"><span style="font: var(--ft-label); color: var(--ft-text-3);">Birth place</span><span style="font: var(--ft-body); color: var(--ft-text-1);">Ballarat, VIC</span></span>
+            <span style="display: flex; justify-content: space-between; gap: 16px;"><span style="font: var(--ft-label); color: var(--ft-text-3);">Died</span><span style="font: var(--ft-mono); color: var(--ft-text-1);">2 Aug 2019</span></span>
+            <span style="display: flex; justify-content: space-between; gap: 16px;"><span style="font: var(--ft-label); color: var(--ft-text-3);">Occupation</span><span style="font: var(--ft-label); color: var(--ft-accent); cursor: pointer;">+ Add occupation</span></span>
+          </div>
+
+          <div style="border-top: 1px solid var(--ft-border); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;">
+            <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Parents</span>
+            <span style="display: flex; align-items: center; gap: 10px; padding: 7px 8px; margin: 0 -8px; border-radius: var(--ft-r-md); background: var(--ft-surface-1); cursor: pointer;">
+              <span style="width: 3px; height: 20px; border-radius: 3px; background: #4A7DB5;"></span>
+              <span style="font: var(--ft-name-sm); color: var(--ft-text-1); flex: 1;">Albert Grocott</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-3);">1901</span>
+            </span>
+            <span style="display: flex; align-items: center; gap: 10px; padding: 7px 8px; margin: 0 -8px; border-radius: var(--ft-r-md); cursor: pointer;">
+              <span style="width: 3px; height: 20px; border-radius: 3px; background: #A85F86;"></span>
+              <span style="font: var(--ft-name-sm); color: var(--ft-text-1); flex: 1;">Florence Hurst</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-3);">1904</span>
+            </span>
+          </div>
+
+          <div style="border-top: 1px solid var(--ft-border); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;">
+            <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Timeline</span>
+            <span style="display: flex; gap: 12px; border-left: 1px solid var(--ft-border); padding-left: 12px;"><span style="font: var(--ft-mono); color: var(--ft-brass); flex: none;">1948</span><span style="font: var(--ft-body); color: var(--ft-text-2);">Married James Wheeler, Ballarat</span></span>
+            <span style="display: flex; gap: 12px; border-left: 1px solid var(--ft-border); padding-left: 12px;"><span style="font: var(--ft-mono); color: var(--ft-brass); flex: none;">1955</span><span style="font: var(--ft-body); color: var(--ft-text-2);">Birth of Susan Wheeler</span></span>
+          </div>
+
+          <div style="border-top: 1px solid var(--ft-border); background: var(--ft-surface-1); padding: 12px 16px; display: flex; gap: 8px;">
+            <span style="flex: 1; height: 36px; display: flex; align-items: center; justify-content: center; font: var(--ft-body-strong); background: var(--ft-accent); color: var(--ft-text-on-accent); border-radius: var(--ft-r-md); cursor: pointer;">Suggest an edit</span>
+            <span style="height: 36px; padding: 0 14px; display: flex; align-items: center; font: var(--ft-body-strong); color: var(--ft-text-2); border: 1px solid var(--ft-border); border-radius: var(--ft-r-md); cursor: pointer;">Make root</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 24px;">
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Toolbar</span>
+            <div style="display: inline-flex; align-self: flex-start; align-items: center; gap: 8px; padding: 8px; background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-md); box-shadow: var(--ft-shadow-1);">
+              <span style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; background: var(--ft-surface-1); border: 1px solid var(--ft-border); border-radius: var(--ft-r-md); font: var(--ft-body); color: var(--ft-text-3); min-width: 200px;">Search by name, place or year</span>
+              <span style="width: 1px; height: 22px; background: var(--ft-border);"></span>
+              <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Hops</span>
+              <span style="display: flex; align-items: center; border: 1px solid var(--ft-border); border-radius: var(--ft-r-md); overflow: hidden;">
+                <span style="width: 28px; height: 32px; display: flex; align-items: center; justify-content: center; color: var(--ft-text-2); cursor: pointer;">−</span>
+                <span style="width: 34px; text-align: center; font: var(--ft-mono); color: var(--ft-text-1); border-left: 1px solid var(--ft-border); border-right: 1px solid var(--ft-border); line-height: 32px;">6</span>
+                <span style="width: 28px; height: 32px; display: flex; align-items: center; justify-content: center; color: var(--ft-text-2); cursor: pointer;">+</span>
+              </span>
+              <span style="width: 1px; height: 22px; background: var(--ft-border);"></span>
+              <span style="height: 32px; padding: 0 12px; display: flex; align-items: center; font: var(--ft-label); color: var(--ft-text-2); border: 1px solid var(--ft-border); border-radius: var(--ft-r-md); cursor: pointer;">Fit view</span>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px; max-width: 320px;">
+            <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Search results</span>
+            <div style="background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-md); overflow: hidden;">
+              <div style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; background: var(--ft-accent-soft); border-left: 2px solid var(--ft-accent);">
+                <span style="width: 3px; height: 18px; border-radius: 3px; background: #A85F86;"></span>
+                <span style="font: var(--ft-name-sm); color: var(--ft-text-1); flex: 1;"><span style="background: var(--ft-brass-soft);">Gro</span>cott, Irene</span>
+                <span style="font: var(--ft-mono); color: var(--ft-text-3);">1933</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; border-top: 1px solid var(--ft-border);">
+                <span style="width: 3px; height: 18px; border-radius: 3px; background: #4A7DB5;"></span>
+                <span style="font: var(--ft-name-sm); color: var(--ft-text-1); flex: 1;"><span style="background: var(--ft-brass-soft);">Gro</span>cott, Albert</span>
+                <span style="font: var(--ft-mono); color: var(--ft-text-3);">1901</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; border-top: 1px solid var(--ft-border);">
+                <span style="width: 3px; height: 18px; border-radius: 3px; background: #4A7DB5;"></span>
+                <span style="font: var(--ft-name-sm); color: var(--ft-text-1); flex: 1;"><span style="background: var(--ft-brass-soft);">Gro</span>cott, Ronald</span>
+                <span style="font: var(--ft-mono); color: var(--ft-text-3);">1930</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px; max-width: 320px;">
+            <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Mobile sheet · peek detent</span>
+            <div style="background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-panel) var(--ft-r-panel) 0 0; box-shadow: var(--ft-shadow-3); padding: 10px 16px 16px;">
+              <div style="width: 32px; height: 4px; border-radius: 999px; background: var(--ft-surface-3); margin: 0 auto 14px;"></div>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="width: 40px; height: 40px; border-radius: 999px; background: var(--ft-brass-soft); color: var(--ft-brass); font: var(--ft-name-sm); display: flex; align-items: center; justify-content: center; flex: none;">IG</span>
+                <span style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
+                  <span style="font: var(--ft-name); color: var(--ft-text-1);">Irene Mabel Grocott</span>
+                  <span style="font: var(--ft-mono); color: var(--ft-text-3);">1933 – 2019</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 24px;">
+      <div style="display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--ft-border); padding-bottom: 10px;">
+        <span style="font: var(--ft-mono); color: var(--ft-brass);">06</span>
+        <h2 style="font: var(--ft-title); margin: 0;">Review workflow</h2>
+        <span style="font: var(--ft-label); color: var(--ft-text-3);">It changes shared family history — it should read like a document.</span>
+      </div>
+
+      <div style="display: flex; gap: 20px; border-bottom: 1px solid var(--ft-border);">
+        <span style="display: flex; align-items: center; gap: 8px; padding: 10px 2px; font: var(--ft-label); color: var(--ft-text-1); border-bottom: 2px solid var(--ft-accent); margin-bottom: -1px; cursor: pointer;">Pending suggestions <span style="font: var(--ft-micro); padding: 2px 7px; border-radius: var(--ft-r-pill); background: var(--ft-pending-soft); color: var(--ft-pending);">3</span></span>
+        <span style="padding: 10px 2px; font: var(--ft-label); color: var(--ft-text-3); cursor: pointer;">Change history</span>
+        <span style="padding: 10px 2px; font: var(--ft-label); color: var(--ft-text-3); cursor: pointer;">Duplicates</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 300px; gap: 32px; align-items: start;">
+        <div style="background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-panel); padding: 20px; box-shadow: var(--ft-shadow-1); display: flex; flex-direction: column; gap: 16px;">
+          <div style="display: flex; align-items: flex-start; gap: 16px;">
+            <div style="display: flex; flex-direction: column; gap: 3px; flex: 1;">
+              <span style="font: var(--ft-name-lg); color: var(--ft-text-1);">Albert Edward Grocott</span>
+              <span style="font: var(--ft-body); color: var(--ft-text-2);">Proposed by Margaret Wheeler · <span style="font: var(--ft-mono); color: var(--ft-text-3);">2 days ago</span></span>
+            </div>
+            <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; padding: 3px 9px; border-radius: var(--ft-r-pill); background: var(--ft-pending-soft); color: var(--ft-pending); flex: none;">Edit person</span>
+          </div>
+
+          <div style="border-top: 1px solid var(--ft-border); padding-top: 16px; display: flex; flex-direction: column; gap: 14px;">
+            <div style="display: grid; grid-template-columns: 120px 1fr 1fr; gap: 12px; align-items: center;">
+              <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Death place</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-3); text-decoration: line-through; background: var(--ft-declined-soft); padding: 4px 8px; border-radius: var(--ft-r-sm);">Ballarat</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-1); background: var(--ft-approved-soft); padding: 4px 8px; border-radius: var(--ft-r-sm);">Ballarat East, VIC</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 120px 1fr 1fr; gap: 12px; align-items: center;">
+              <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Occupation</span>
+              <span style="font: var(--ft-mono); font-style: italic; color: var(--ft-text-3);">(none)</span>
+              <span style="font: var(--ft-mono); color: var(--ft-text-1); background: var(--ft-approved-soft); padding: 4px 8px; border-radius: var(--ft-r-sm);">Railway guard</span>
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid var(--ft-border); padding-top: 16px; display: flex; gap: 10px; align-items: center;">
+            <span style="height: 36px; padding: 0 18px; display: flex; align-items: center; font: var(--ft-body-strong); background: var(--ft-accent); color: var(--ft-text-on-accent); border-radius: var(--ft-r-md); cursor: pointer;">Approve</span>
+            <span style="height: 36px; padding: 0 18px; display: flex; align-items: center; font: var(--ft-body-strong); color: var(--ft-text-1); background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-md); cursor: pointer;">Decline</span>
+            <span style="flex: 1;"></span>
+            <span style="font: var(--ft-label); color: var(--ft-accent); cursor: pointer;">View in tree →</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Status pills</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+            <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; padding: 3px 9px; border-radius: var(--ft-r-pill); background: var(--ft-pending-soft); color: var(--ft-pending);">Pending</span>
+            <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; padding: 3px 9px; border-radius: var(--ft-r-pill); background: var(--ft-approved-soft); color: var(--ft-approved);">Approved</span>
+            <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; padding: 3px 9px; border-radius: var(--ft-r-pill); background: var(--ft-declined-soft); color: var(--ft-declined);">Declined</span>
+            <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; padding: 3px 9px; border-radius: var(--ft-r-pill); background: var(--ft-private-soft); color: var(--ft-private);">Living</span>
+            <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; padding: 3px 9px; border-radius: var(--ft-r-pill); background: var(--ft-brass-soft); color: var(--ft-brass);">Root</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 24px;">
+      <div style="display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--ft-border); padding-bottom: 10px;">
+        <span style="font: var(--ft-mono); color: var(--ft-brass);">07</span>
+        <h2 style="font: var(--ft-title); margin: 0;">Controls</h2>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Buttons · 36 px desktop / 44 px mobile</span>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <span style="height: 36px; padding: 0 18px; display: flex; align-items: center; font: var(--ft-body-strong); background: var(--ft-accent); color: var(--ft-text-on-accent); border-radius: var(--ft-r-md);">Primary</span>
+            <span style="height: 36px; padding: 0 18px; display: flex; align-items: center; font: var(--ft-body-strong); color: var(--ft-text-1); border: 1px solid var(--ft-border); border-radius: var(--ft-r-md);">Secondary</span>
+            <span style="height: 36px; padding: 0 18px; display: flex; align-items: center; font: var(--ft-body-strong); color: var(--ft-text-2); border-radius: var(--ft-r-md); background: var(--ft-surface-2);">Ghost</span>
+            <span style="height: 36px; padding: 0 18px; display: flex; align-items: center; font: var(--ft-body-strong); background: var(--ft-declined); color: #fff; border-radius: var(--ft-r-md);">Delete</span>
+            <span style="height: 36px; padding: 0 18px; display: flex; align-items: center; font: var(--ft-body-strong); background: var(--ft-accent); color: var(--ft-text-on-accent); border-radius: var(--ft-r-md); opacity: 0.4;">Disabled</span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px; min-width: 280px;">
+          <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-text-3);">Inputs</span>
+          <span style="height: 40px; display: flex; align-items: center; padding: 0 12px; font: var(--ft-body); color: var(--ft-text-3); background: var(--ft-surface-0); border: 1px solid var(--ft-border); border-radius: var(--ft-r-md);">Birth place</span>
+          <span style="height: 40px; display: flex; align-items: center; padding: 0 12px; font: var(--ft-body); color: var(--ft-text-1); background: var(--ft-surface-0); border: 1px solid var(--ft-accent); border-radius: var(--ft-r-md); box-shadow: var(--ft-focus);">Ballarat East, VIC</span>
+          <span style="height: 40px; display: flex; align-items: center; padding: 0 12px; font: var(--ft-body); color: var(--ft-text-1); background: var(--ft-surface-0); border: 1px solid var(--ft-declined); border-radius: var(--ft-r-md);">18a4</span>
+          <span style="font: var(--ft-label); color: var(--ft-declined);">Year must be four digits.</span>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px;">
+      <div style="display: flex; flex-direction: column; gap: 12px; padding: 24px; border: 1px solid var(--ft-border); border-left: 3px solid var(--ft-approved); border-radius: var(--ft-r-panel); background: var(--ft-surface-0);">
+        <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-approved);">Do</span>
+        <span style="font: var(--ft-body); color: var(--ft-text-2);">Band every generation and label the gutter.</span>
+        <span style="font: var(--ft-body); color: var(--ft-text-2);">Switch node detail on zoom, not on data.</span>
+        <span style="font: var(--ft-body); color: var(--ft-text-2);">Dim everything off the hovered person's line.</span>
+        <span style="font: var(--ft-body); color: var(--ft-text-2);">Set names in the serif, facts in the mono.</span>
+        <span style="font: var(--ft-body); color: var(--ft-text-2);">Give every tap target 44 px on mobile.</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 12px; padding: 24px; border: 1px solid var(--ft-border); border-left: 3px solid var(--ft-declined); border-radius: var(--ft-r-panel); background: var(--ft-surface-0);">
+        <span style="font: var(--ft-micro); letter-spacing: var(--ft-micro-track); text-transform: uppercase; color: var(--ft-declined);">Don't</span>
+        <span style="font: var(--ft-body); color: var(--ft-text-2);">Translucent glass fills or backdrop blur on nodes and panels.</span>
+        <span style="font: var(--ft-body); color: var(--ft-text-2);">Glow shadows, or scale transforms on hover.</span>
+        <span style="font: var(--ft-body); color: var(--ft-text-2);">Colour used decoratively — sex is a 3 px tick, not a glow.</span>
+        <span style="font: var(--ft-body); color: var(--ft-text-2);">16 px radii, or hard-coded hex outside tokens.css.</span>
+        <span style="font: var(--ft-body); color: var(--ft-text-2);">Sliders for hop depth, or a graph with no minimap.</span>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:900},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light' | 'dark'&quot;,&quot;section&quot;:&quot;Theme&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;,&quot;dense&quot;],&quot;default&quot;:&quot;compact&quot;,&quot;tsType&quot;:&quot;'comfortable' | 'compact' | 'dense'&quot;,&quot;section&quot;:&quot;Graph&quot;}}">
+class Component extends DCLogic {
+  state = { theme: null, dim: true };
+
+  get theme() { return this.state.theme ?? this.props.theme ?? 'light'; }
+
+  renderVals() {
+    const t = this.theme;
+    const on = { background: 'var(--ft-surface-0)', color: 'var(--ft-text-1)' };
+    const off = { background: 'transparent', color: 'var(--ft-text-3)' };
+    const dim = this.state.dim;
+    return {
+      theme: t,
+      lightBg: t === 'light' ? on.background : off.background,
+      lightFg: t === 'light' ? on.color : off.color,
+      darkBg: t === 'dark' ? on.background : off.background,
+      darkFg: t === 'dark' ? on.color : off.color,
+      setLight: () => this.setState({ theme: 'light' }),
+      setDark: () => this.setState({ theme: 'dark' }),
+      toggleDim: () => this.setState(s => ({ dim: !s.dim })),
+      dimLabel: dim ? 'on' : 'off',
+      dimOpacity: dim ? 0.22 : 1,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

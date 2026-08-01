@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #E7E9E5; }
+  * { box-sizing: border-box; }
+  a { color: #0F6E66; text-decoration: none; }
+  a:hover { color: #0B5A54; text-decoration: underline; }
+</style>
+</helmet>
+
+<section style="padding: 48px; width: max-content; display: flex; flex-direction: column; gap: 28px; font-family: Geist, system-ui, sans-serif;">
+
+  <div style="display: flex; flex-direction: column; gap: 8px; max-width: 720px;">
+    <div style="font: 600 11px/1.3 Geist; letter-spacing: 0.08em; text-transform: uppercase; color: #79837E;">Turn 1 · Three directions</div>
+    <h1 style="font: 700 26px/1.2 'Source Serif 4', Georgia, serif; margin: 0; color: #14181A;">Same tree, three answers to density</h1>
+    <p style="font: 400 15px/1.55 Geist; color: #4C5652; margin: 0; text-wrap: pretty;">Identical graph, identical people, identical generations. What changes is how each direction tells you where a generation begins and how it keeps 400 people legible. Reference by id in chat — <a href="#1a">1a</a>, <a href="#1b">1b</a>, <a href="#1c">1c</a>.</p>
+  </div>
+
+  <div style="display: flex; width: max-content; gap: 40px; align-items: flex-start;">
+
+    <div id="1a" style="width: 1060px; flex: none; display: flex; flex-direction: column; gap: 18px; padding: 28px; background: #FFFFFF; border: 1px solid #D6DCD3; border-radius: 10px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <span style="font: 600 12px/1 Geist; letter-spacing: 0.06em; padding: 5px 9px; border-radius: 999px; background: #14181A; color: #FFFFFF;">1a</span>
+        <span style="font: 600 19px/1.2 'Source Serif 4', Georgia, serif; color: #14181A;">Archival ledger</span>
+        <span style="font: 400 13px/1.4 Geist; color: #79837E;">Built · tinted generation bands · serif names, mono facts</span>
+      </div>
+
+      <div style="position: relative; width: 100%; overflow-x: auto; overflow-y: hidden; border: 1px solid #D6DCD3; border-radius: 8px; background: #F2F4F1;">
+        <div style="position: relative; width: 980px; height: 360px;">
+          <div style="position: absolute; inset: 0 0 240px 0; background: rgba(20,32,28,0.03); border-bottom: 1px solid rgba(20,32,28,0.07);"></div>
+          <div style="position: absolute; inset: 120px 0 120px 0; background: rgba(169,118,26,0.055); border-bottom: 1px solid rgba(20,32,28,0.07);"></div>
+          <div style="position: absolute; inset: 240px 0 0 0; background: rgba(20,32,28,0.03);"></div>
+
+          <div style="position: absolute; left: 16px; top: 14px; font: 600 11px/1.3 Geist; letter-spacing: 0.08em; text-transform: uppercase; color: #79837E;">Gen −1 · Parents</div>
+          <div style="position: absolute; left: 16px; top: 134px; font: 600 11px/1.3 Geist; letter-spacing: 0.08em; text-transform: uppercase; color: #A9761A;">Gen 0 · Root</div>
+          <div style="position: absolute; left: 16px; top: 254px; font: 600 11px/1.3 Geist; letter-spacing: 0.08em; text-transform: uppercase; color: #79837E;">Gen +1 · Children</div>
+
+          <svg width="980" height="360" viewBox="0 0 980 360" style="position: absolute; inset: 0;">
+            <g fill="none" stroke="#D9AE5E" stroke-width="1.5">
+              <path d="M440,92 V104 H570"></path><path d="M700,92 V104 H570"></path>
+              <path d="M590,212 V224 H720"></path><path d="M850,212 V224 H720"></path>
+            </g>
+            <g fill="none" stroke="#A9B4AE" stroke-width="1">
+              <path d="M570,109 V130 H330 V148"></path><path d="M570,109 V130 H850 V148"></path>
+              <path d="M720,229 V250 H600 V268"></path><path d="M720,229 V250 H860 V268"></path>
+            </g>
+            <path d="M570,109 V130 H590 V148" fill="none" stroke="#5C6A64" stroke-width="1.5"></path>
+            <circle cx="570" cy="104" r="5" fill="#A9761A"></circle>
+            <circle cx="720" cy="224" r="5" fill="#A9761A"></circle>
+          </svg>
+
+          <div style="position: absolute; left: 330px; top: 28px; width: 220px; height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: #FFFFFF; border: 1px solid #D6DCD3; border-radius: 6px; box-shadow: 0 1px 2px rgba(18,26,23,0.06); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #4A7DB5;"></span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: #EAEEE8; color: #79837E; font: 600 11px/1 Geist; display: flex; align-items: center; justify-content: center; flex: none;">AG</span>
+            <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font: 600 15px/1.3 'Source Serif 4', Georgia, serif; color: #14181A;">Albert Grocott</span><span style="font: 400 12px/1.4 'Geist Mono', monospace; color: #79837E;">b. 1901 – d. 1974</span></span>
+          </div>
+          <div style="position: absolute; left: 590px; top: 28px; width: 220px; height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: #FFFFFF; border: 1px solid #D6DCD3; border-radius: 6px; box-shadow: 0 1px 2px rgba(18,26,23,0.06); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #A85F86;"></span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: #EAEEE8; color: #79837E; font: 600 11px/1 Geist; display: flex; align-items: center; justify-content: center; flex: none;">FH</span>
+            <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font: 600 15px/1.3 'Source Serif 4', Georgia, serif; color: #14181A;">Florence Hurst</span><span style="font: 400 12px/1.4 'Geist Mono', monospace; color: #79837E;">b. 1904 – d. 1988</span></span>
+          </div>
+          <div style="position: absolute; left: 220px; top: 148px; width: 220px; height: 64px; opacity: 0.22; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: #FFFFFF; border: 1px solid #D6DCD3; border-radius: 6px; overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #4A7DB5;"></span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: #EAEEE8; color: #79837E; font: 600 11px/1 Geist; display: flex; align-items: center; justify-content: center; flex: none;">RG</span>
+            <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font: 600 15px/1.3 'Source Serif 4', Georgia, serif; color: #14181A;">Ronald Grocott</span><span style="font: 400 12px/1.4 'Geist Mono', monospace; color: #79837E;">b. 1930 – d. 2001</span></span>
+          </div>
+          <div style="position: absolute; left: 480px; top: 148px; width: 220px; height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: #FFFFFF; border: 2px solid #A9761A; border-radius: 6px; box-shadow: 0 2px 4px rgba(18,26,23,0.06), 0 6px 16px rgba(18,26,23,0.07); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #A85F86;"></span>
+            <span style="position: absolute; right: 8px; top: 6px; font: 600 11px/1.3 Geist; letter-spacing: 0.08em; color: #A9761A;">ROOT</span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: #F5E8CD; color: #A9761A; font: 600 11px/1 Geist; display: flex; align-items: center; justify-content: center; flex: none;">IG</span>
+            <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font: 600 15px/1.3 'Source Serif 4', Georgia, serif; color: #14181A;">Irene Grocott</span><span style="font: 400 12px/1.4 'Geist Mono', monospace; color: #79837E;">b. 1933 – d. 2019</span></span>
+          </div>
+          <div style="position: absolute; left: 740px; top: 148px; width: 220px; height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: #FFFFFF; border: 1px solid #D6DCD3; border-radius: 6px; box-shadow: 0 1px 2px rgba(18,26,23,0.06); overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #4A7DB5;"></span>
+            <span style="position: absolute; right: 8px; top: 8px; width: 6px; height: 6px; border-radius: 999px; background: #6A4BE0;"></span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: #EAEEE8; color: #79837E; font: 600 11px/1 Geist; display: flex; align-items: center; justify-content: center; flex: none;">JW</span>
+            <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font: 600 15px/1.3 'Source Serif 4', Georgia, serif; color: #14181A;">James Wheeler</span><span style="font: 400 12px/1.4 'Geist Mono', monospace; color: #79837E;">b. 1929 – d. 2004</span></span>
+          </div>
+          <div style="position: absolute; left: 490px; top: 268px; width: 220px; height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: #DCEDEA; border: 2px solid #0F6E66; border-radius: 6px; overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #A85F86;"></span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: #FFFFFF; color: #0F6E66; font: 600 11px/1 Geist; display: flex; align-items: center; justify-content: center; flex: none;">SW</span>
+            <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font: 600 15px/1.3 'Source Serif 4', Georgia, serif; color: #14181A;">Susan Wheeler</span><span style="font: 400 12px/1.4 'Geist Mono', monospace; color: #4C5652;">Living</span></span>
+          </div>
+          <div style="position: absolute; left: 750px; top: 268px; width: 220px; height: 64px; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 15px; background: #E7EBE7; border: 1px solid #D6DCD3; border-radius: 6px; overflow: hidden;">
+            <span style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #B5BFB1;"></span>
+            <span style="width: 30px; height: 30px; border-radius: 999px; background: #EAEEE8; color: #79837E; font: 600 11px/1 Geist; display: flex; align-items: center; justify-content: center; flex: none;">?</span>
+            <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font: 600 15px/1.3 'Source Serif 4', Georgia, serif; font-style: italic; color: #79837E;">Unknown</span><span style="font: 400 12px/1.4 'Geist Mono', monospace; color: #79837E;">Living</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 300px; gap: 28px; align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <span style="font: 600 11px/1.3 Geist; letter-spacing: 0.08em; text-transform: uppercase; color: #79837E;">Reads as</span>
+          <p style="font: 400 14px/1.55 Geist; color: #4C5652; margin: 0; text-wrap: pretty;">A records office. Warm paper, hairline rules, tinted bands doing the generation work. Serif names against mono dates give it authority without ornament.</p>
+          <div style="display: flex; gap: 20px; padding-top: 4px;">
+            <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font: 600 11px/1.3 Geist; letter-spacing: 0.08em; text-transform: uppercase; color: #79837E;">Best at</span><span style="font: 400 13px/1.4 Geist; color: #14181A;">Balance · 100–400 people</span></span>
+            <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font: 600 11px/1.3 Geist; letter-spacing: 0.08em; text-transform: uppercase; color: #79837E;">Weakest at</span><span style="font: 400 13px/1.4 Geist; color: #14181A;">Emotional warmth</span></span>
+          </div>
+          <div style="display: flex; gap: 8px; padding-top: 4px;">
+            <span style="width: 26px; height: 26px; border-radius: 4px; background: #F2F4F1; border: 1px solid #D6DCD3;"></span>
+            <span style="width: 26px; height: 26px; border-radius: 4px; background: #0F6E66;"></span>
+            <span style="width: 26px; height: 26px; border-radius: 4px; background: #A9761A;"></span>
+            <span style="width: 26px; height: 26px; border-radius: 4px; background: #14181A;"></span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; background: #FFFFFF; border: 1px solid #D6DCD3; border-radius: 8px; overflow: hidden;">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 14px;">
+            <span style="width: 40px; height: 40px; border-radius: 999px; background: #F5E8CD; color: #A9761A; font: 600 13px/1 Geist; display: flex; align-items: center; justify-content: center; flex: none;">IG</span>
+            <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font: 600 17px/1.25 'Source Serif 4', Georgia, serif; color: #14181A;">Irene Mabel Grocott</span><span style="font: 400 12px/1.4 'Geist Mono', monospace; color: #79837E;">1933 – 2019 · @I85@</span></span>
+          </div>
+          <div style="border-top: 1px solid #D6DCD3; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;">
+            <span style="display: flex; justify-content: space-between;"><span style="font: 500 13px/1.4 Geist; color: #79837E;">Born</span><span style="font: 400 12px/1.4 'Geist Mono', monospace; color: #14181A;">14 Mar 1933</span></span>
+            <span style="display: flex; justify-content: space-between;"><span style="font: 500 13px/1.4 Geist; color: #79837E;">Place</span><span style="font: 400 14px/1.5 Geist; color: #14181A;">Ballarat, VIC</span></span>
+          </div>
+          <div style="border-top: 1px solid #D6DCD3; background: #FAFBF9; padding: 10px 14px; display: flex; gap: 8px;">
+            <span style="flex: 1; height: 34px; display: flex; align-items: center; justify-content: center; font: 600 14px/1 Geist; background: #0F6E66; color: #FFFFFF; border-radius: 5px;">Suggest an edit</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="1b" style="width: 1060px; flex: none; display: flex; flex-direction: column; gap: 18px; padding: 28px; background: #FFFFFF; border: 1px solid #D6DCD3; border-radius: 10px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <span style="font: 600 12px/1 Geist; letter-spacing: 0.06em; padding: 5px 9px; border-radius: 999px; background: #14181A; color: #FFFFFF;">1b</span>
+        <span style="font: 600 19px/1.2 'IBM Plex Sans', sans-serif; color: #1B2A33;">Blueprint</span>
+        <span style="font: 400 13px/1.4 Geist; color: #79837E;">Survey drawing · rules not bands · almost nothing filled</span>
+      </div>
+
+      <div style="position: relative; width: 100%; overflow-x: auto; overflow-y: hidden; border: 1px solid #C7D0D6; border-radius: 4px; background: #EEF1F3; background-image: linear-gradient(to right, rgba(27,42,51,0.045) 1px, transparent 1px), linear-gradient(to bottom, rgba(27,42,51,0.045) 1px, transparent 1px); background-size: 20px 20px;">
+        <div style="position: relative; width: 980px; height: 300px;">
+          <div style="position: absolute; left: 0; right: 0; top: 100px; height: 1px; background: rgba(27,42,51,0.22);"></div>
+          <div style="position: absolute; left: 0; right: 0; top: 200px; height: 1px; background: rgba(27,42,51,0.22);"></div>
+          <div style="position: absolute; left: 0; right: 0; top: 0; height: 1px; background: rgba(27,42,51,0.22);"></div>
+
+          <div style="position: absolute; left: 14px; top: 8px; display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 1px; background: #6D8794;"></span><span style="font: 500 10px/1.3 'IBM Plex Mono', monospace; letter-spacing: 0.1em; text-transform: uppercase; color: #6D8794;">G−1 Parents</span></div>
+          <div style="position: absolute; left: 14px; top: 108px; display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 1px; background: #0E7490;"></span><span style="font: 500 10px/1.3 'IBM Plex Mono', monospace; letter-spacing: 0.1em; text-transform: uppercase; color: #0E7490;">G 0 Root</span></div>
+          <div style="position: absolute; left: 14px; top: 208px; display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 1px; background: #6D8794;"></span><span style="font: 500 10px/1.3 'IBM Plex Mono', monospace; letter-spacing: 0.1em; text-transform: uppercase; color: #6D8794;">G+1 Children</span></div>
+
+          <svg width="980" height="300" viewBox="0 0 980 300" style="position: absolute; inset: 0;">
+            <g fill="none" stroke="#9AA9B2" stroke-width="1">
+              <path d="M440,74 V86 H570"></path><path d="M700,74 V86 H570"></path>
+              <path d="M570,91 V106 H330 V126"></path><path d="M570,91 V106 H850 V126"></path>
+              <path d="M590,174 V186 H720"></path><path d="M850,174 V186 H720"></path>
+              <path d="M720,191 V206 H610 V226"></path><path d="M720,191 V206 H830 V226"></path>
+            </g>
+            <path d="M570,91 V106 H590 V126" fill="none" stroke="#0E7490" stroke-width="1.25"></path>
+            <rect x="566" y="82" width="8" height="8" fill="none" stroke="#1B2A33" stroke-width="1"></rect>
+            <rect x="716" y="182" width="8" height="8" fill="none" stroke="#1B2A33" stroke-width="1"></rect>
+          </svg>
+
+          <div style="position: absolute; left: 340px; top: 26px; width: 200px; height: 48px; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 0 10px; background: rgba(255,255,255,0.55); border: 1px solid #8FA1AB; border-radius: 2px;">
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 5px; height: 5px; background: #35637F;"></span><span style="font: 500 13px/1.3 'IBM Plex Sans', sans-serif; color: #1B2A33;">Albert Grocott</span></span>
+            <span style="font: 400 11px/1.3 'IBM Plex Mono', monospace; color: #6D8794; padding-left: 11px;">1901–1974</span>
+          </div>
+          <div style="position: absolute; left: 600px; top: 26px; width: 200px; height: 48px; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 0 10px; background: rgba(255,255,255,0.55); border: 1px solid #8FA1AB; border-radius: 2px;">
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 5px; height: 5px; background: #8A5C77;"></span><span style="font: 500 13px/1.3 'IBM Plex Sans', sans-serif; color: #1B2A33;">Florence Hurst</span></span>
+            <span style="font: 400 11px/1.3 'IBM Plex Mono', monospace; color: #6D8794; padding-left: 11px;">1904–1988</span>
+          </div>
+          <div style="position: absolute; left: 230px; top: 126px; width: 200px; height: 48px; opacity: 0.25; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 0 10px; background: rgba(255,255,255,0.55); border: 1px solid #8FA1AB; border-radius: 2px;">
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 5px; height: 5px; background: #35637F;"></span><span style="font: 500 13px/1.3 'IBM Plex Sans', sans-serif; color: #1B2A33;">Ronald Grocott</span></span>
+            <span style="font: 400 11px/1.3 'IBM Plex Mono', monospace; color: #6D8794; padding-left: 11px;">1930–2001</span>
+          </div>
+          <div style="position: absolute; left: 490px; top: 126px; width: 200px; height: 48px; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 0 10px; background: #FFFFFF; border: 1px solid #0E7490; box-shadow: 0 0 0 3px rgba(14,116,144,0.14); border-radius: 2px;">
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 5px; height: 5px; background: #8A5C77;"></span><span style="font: 600 13px/1.3 'IBM Plex Sans', sans-serif; color: #1B2A33;">Irene Grocott</span><span style="font: 500 9px/1 'IBM Plex Mono', monospace; letter-spacing: 0.1em; color: #0E7490; margin-left: auto;">ROOT</span></span>
+            <span style="font: 400 11px/1.3 'IBM Plex Mono', monospace; color: #6D8794; padding-left: 11px;">1933–2019</span>
+          </div>
+          <div style="position: absolute; left: 750px; top: 126px; width: 200px; height: 48px; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 0 10px; background: rgba(255,255,255,0.55); border: 1px solid #8FA1AB; border-radius: 2px;">
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 5px; height: 5px; background: #35637F;"></span><span style="font: 500 13px/1.3 'IBM Plex Sans', sans-serif; color: #1B2A33;">James Wheeler</span><span style="width: 5px; height: 5px; border-radius: 999px; background: #6A4BE0; margin-left: auto;"></span></span>
+            <span style="font: 400 11px/1.3 'IBM Plex Mono', monospace; color: #6D8794; padding-left: 11px;">1929–2004</span>
+          </div>
+          <div style="position: absolute; left: 510px; top: 226px; width: 200px; height: 48px; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 0 10px; background: rgba(255,255,255,0.55); border: 1px solid #8FA1AB; border-radius: 2px;">
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 5px; height: 5px; background: #8A5C77;"></span><span style="font: 500 13px/1.3 'IBM Plex Sans', sans-serif; color: #1B2A33;">Susan Wheeler</span></span>
+            <span style="font: 400 11px/1.3 'IBM Plex Mono', monospace; color: #6D8794; padding-left: 11px;">living</span>
+          </div>
+          <div style="position: absolute; left: 730px; top: 226px; width: 200px; height: 48px; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 0 10px; background: repeating-linear-gradient(135deg, rgba(27,42,51,0.05) 0 4px, transparent 4px 8px); border: 1px dashed #A8B6BE; border-radius: 2px;">
+            <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 5px; height: 5px; background: #A8B6BE;"></span><span style="font: 400 13px/1.3 'IBM Plex Sans', sans-serif; font-style: italic; color: #6D8794;">Unknown</span></span>
+            <span style="font: 400 11px/1.3 'IBM Plex Mono', monospace; color: #93A3AC; padding-left: 11px;">living</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 300px; gap: 28px; align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <span style="font: 600 11px/1.3 Geist; letter-spacing: 0.08em; text-transform: uppercase; color: #79837E;">Reads as</span>
+          <p style="font: 400 14px/1.55 Geist; color: #4C5652; margin: 0; text-wrap: pretty;">A land survey. Generations are marked by continuous rules and ticks, not fills, so adding 400 people adds almost no ink. Unfilled nodes and one cyan accent keep the canvas quiet at any scale. Unknown people are hatched — absence is visible.</p>
+          <div style="display: flex; gap: 20px; padding-top: 4px;">
+            <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font: 600 11px/1.3 Geist; letter-spacing: 0.08em; text-transform: uppercase; color: #79837E;">Best at</span><span style="font: 400 13px/1.4 Geist; color: #14181A;">Very large trees · 400+</span></span>
+            <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font: 600 11px/1.3 Geist; letter-spacing: 0.08em; text-transform: uppercase; color: #79837E;">Weakest at</span><span style="font: 400 13px/1.4 Geist; color: #14181A;">Feeling like family</span></span>
+          </div>
+          <div style="display: flex; gap: 8px; padding-top: 4px;">
+            <span style="width: 26px; height: 26px; border-radius: 4px; background: #EEF1F3; border: 1px solid #C7D0D6;"></span>
+            <span style="width: 26px; height: 26px; border-radius: 4px; background: #0E7490;"></span>
+            <span style="width: 26px; height: 26px; border-radius: 4px; background: #6D8794;"></span>
+            <span style="width: 26px; height: 26px; border-radius: 4px; background: #1B2A33;"></span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; background: #FFFFFF; border: 1px solid #C7D0D6; border-radius: 4px; overflow: hidden;">
+          <div style="display: flex; flex-direction: column; gap: 3px; padding: 14px;">
+            <span style="font: 500 10px/1.3 'IBM Plex Mono', monospace; letter-spacing: 0.1em; text-transform: uppercase; color: #0E7490;">Record @I85@</span>
+            <span style="font: 600 17px/1.25 'IBM Plex Sans', sans-serif; color: #1B2A33;">Irene Mabel Grocott</span>
+            <span style="font: 400 12px/1.4 'IBM Plex Mono', monospace; color: #6D8794;">1933 – 2019</span>
+          </div>
+          <div style="border-top: 1px solid #DDE4E8; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;">
+            <span style="display: flex; justify-content: space-between;"><span style="font: 400 11px/1.3 'IBM Plex Mono', monospace; letter-spacing: 0.06em; text-transform: uppercase; color: #6D8794;">Born</span><span style="font: 400 12px/1.4 'IBM Plex Mono', monospace; color: #1B2A33;">1933-03-14</span></span>
+            <span style="display: flex; justify-content: space-between;"><span style="font: 400 11px/1.3 'IBM Plex Mono', monospace; letter-spacing: 0.06em; text-transform: uppercase; color: #6D8794;">Place</span><span style="font: 400 13px/1.4 'IBM Plex Sans', sans-serif; color: #1B2A33;">Ballarat, VIC</span></span>
+          </div>
+          <div style="border-top: 1px solid #DDE4E8; padding: 10px 14px; display: flex; gap: 8px;">
+            <span style="flex: 1; height: 34px; display: flex; align-items: center; justify-content: center; font: 500 13px/1 'IBM Plex Sans', sans-serif; background: #0E7490; color: #FFFFFF; border-radius: 2px;">Suggest an edit</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="1c" style="width: 1090px; flex: none; display: flex; flex-direction: column; gap: 18px; padding: 28px; background: #FFFFFF; border: 1px solid #D6DCD3; border-radius: 10px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <span style="font: 600 12px/1 Geist; letter-spacing: 0.06em; padding: 5px 9px; border-radius: 999px; background: #14181A; color: #FFFFFF;">1c</span>
+        <span style="font: 600 19px/1.2 Lora, Georgia, serif; color: #3A2B21;">Album</span>
+        <span style="font: 400 13px/1.4 Geist; color: #79837E;">Photos lead · density solved by collapsing branches</span>
+      </div>
+
+      <div style="position: relative; width: 100%; overflow-x: auto; overflow-y: hidden; border: 1px solid #E3D5C0; border-radius: 10px; background: #F6EFE4;">
+        <div style="position: relative; width: 1020px; height: 420px;">
+          <div style="position: absolute; left: 20px; top: 14px; font: 500 11px/1.3 Geist; letter-spacing: 0.1em; text-transform: uppercase; color: #A2917C;">Their parents</div>
+          <div style="position: absolute; left: 20px; top: 154px; font: 500 11px/1.3 Geist; letter-spacing: 0.1em; text-transform: uppercase; color: #A8552F;">Irene’s generation</div>
+          <div style="position: absolute; left: 20px; top: 294px; font: 500 11px/1.3 Geist; letter-spacing: 0.1em; text-transform: uppercase; color: #A2917C;">Their children</div>
+
+          <svg width="1020" height="420" viewBox="0 0 1020 420" style="position: absolute; inset: 0;">
+            <g fill="none" stroke="#D3BF9F" stroke-width="1.5">
+              <path d="M440,110 V122 H570"></path><path d="M700,110 V122 H570"></path>
+              <path d="M590,250 V262 H720"></path><path d="M850,250 V262 H720"></path>
+            </g>
+            <g fill="none" stroke="#DCCDB4" stroke-width="1.5">
+              <path d="M570,127 V148 H330 V170"></path><path d="M570,127 V148 H850 V170"></path>
+              <path d="M720,267 V288 H570 V310"></path><path d="M720,267 V288 H870 V310"></path>
+            </g>
+            <path d="M570,127 V148 H590 V170" fill="none" stroke="#A8552F" stroke-width="2"></path>
+            <circle cx="570" cy="122" r="4" fill="#A8552F"></circle>
+            <circle cx="720" cy="262" r="4" fill="#A8552F"></circle>
+          </svg>
+
+          <div style="position: absolute; left: 310px; top: 30px; width: 260px; height: 80px; display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: #FFFCF6; border: 1px solid #E3D5C0; border-radius: 8px; box-shadow: 0 1px 3px rgba(58,43,33,0.07);">
+            <span style="width: 52px; height: 52px; border-radius: 999px; background: #EADFC9; color: #A2917C; font: 500 15px/1 Lora, serif; display: flex; align-items: center; justify-content: center; flex: none;">AG</span>
+            <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font: 600 16px/1.25 Lora, Georgia, serif; color: #3A2B21;">Albert Grocott</span><span style="font: 400 13px/1.4 Geist; color: #8B7A66;">1901 – 1974</span></span>
+          </div>
+          <div style="position: absolute; left: 570px; top: 30px; width: 260px; height: 80px; display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: #FFFCF6; border: 1px solid #E3D5C0; border-radius: 8px; box-shadow: 0 1px 3px rgba(58,43,33,0.07);">
+            <span style="width: 52px; height: 52px; border-radius: 999px; background: #EADFC9; color: #A2917C; font: 500 15px/1 Lora, serif; display: flex; align-items: center; justify-content: center; flex: none;">FH</span>
+            <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font: 600 16px/1.25 Lora, Georgia, serif; color: #3A2B21;">Florence Hurst</span><span style="font: 400 13px/1.4 Geist; color: #8B7A66;">1904 – 1988</span></span>
+          </div>
+
+          <div style="position: absolute; left: 200px; top: 170px; width: 260px; height: 80px; display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #FFFCF6; border: 1px dashed #DCCDB4; border-radius: 8px;">
+            <span style="width: 40px; height: 40px; border-radius: 999px; background: #F1E7D6; color: #A2917C; font: 500 13px/1 Lora, serif; display: flex; align-items: center; justify-content: center; flex: none;">+4</span>
+            <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font: 500 14px/1.3 Geist; color: #6B5B49;">4 more siblings</span><span style="font: 400 12px/1.4 Geist; color: #A2917C;">Tap to expand</span></span>
+          </div>
+
+          <div style="position: absolute; left: 460px; top: 170px; width: 260px; height: 80px; display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: #FFFCF6; border: 2px solid #A8552F; border-radius: 8px; box-shadow: 0 3px 10px rgba(58,43,33,0.12);">
+            <span style="width: 52px; height: 52px; border-radius: 999px; background: #F3DCCF; color: #A8552F; font: 500 15px/1 Lora, serif; display: flex; align-items: center; justify-content: center; flex: none;">IG</span>
+            <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font: 600 16px/1.25 Lora, Georgia, serif; color: #3A2B21;">Irene Grocott</span><span style="font: 400 13px/1.4 Geist; color: #8B7A66;">1933 – 2019 · Ballarat</span></span>
+          </div>
+
+          <div style="position: absolute; left: 720px; top: 170px; width: 260px; height: 80px; display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: #FFFCF6; border: 1px solid #E3D5C0; border-radius: 8px; box-shadow: 0 1px 3px rgba(58,43,33,0.07);">
+            <span style="width: 52px; height: 52px; border-radius: 999px; background: #EADFC9; color: #A2917C; font: 500 15px/1 Lora, serif; display: flex; align-items: center; justify-content: center; flex: none;">JW</span>
+            <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font: 600 16px/1.25 Lora, Georgia, serif; color: #3A2B21;">James Wheeler</span><span style="font: 400 13px/1.4 Geist; color: #8B7A66;">1929 – 2004</span></span>
+            <span style="position: absolute; right: 12px; top: 12px; font: 500 10px/1 Geist; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 7px; border-radius: 999px; background: #EFE6F5; color: #6A4BE0;">Edit</span>
+          </div>
+
+          <div style="position: absolute; left: 440px; top: 310px; width: 260px; height: 80px; display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: #FFFCF6; border: 1px solid #E3D5C0; border-radius: 8px; box-shadow: 0 1px 3px rgba(58,43,33,0.07);">
+            <span style="width: 52px; height: 52px; border-radius: 999px; background: #EADFC9; color: #A2917C; font: 500 15px/1 Lora, serif; display: flex; align-items: center; justify-content: center; flex: none;">SW</span>
+            <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font: 600 16px/1.25 Lora, Georgia, serif; color: #3A2B21;">Susan Wheeler</span><span style="font: 400 13px/1.4 Geist; color: #8B7A66;">Living</span></span>
+          </div>
+          <div style="position: absolute; left: 740px; top: 310px; width: 260px; height: 80px; display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: #F3EDE1; border: 1px solid #E3D5C0; border-radius: 8px;">
+            <span style="width: 52px; height: 52px; border-radius: 999px; background: #EADFC9; color: #BCAB94; font: 500 15px/1 Lora, serif; display: flex; align-items: center; justify-content: center; flex: none;">?</span>
+            <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font: 400 16px/1.25 Lora, Georgia, serif; font-style: italic; color: #A2917C;">Unknown</span><span style="font: 400 13px/1.4 Geist; color: #A2917C;">Living</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 300px; gap: 28px; align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <span style="font: 600 11px/1.3 Geist; letter-spacing: 0.08em; text-transform: uppercase; color: #79837E;">Reads as</span>
+          <p style="font: 400 14px/1.55 Geist; color: #4C5652; margin: 0; text-wrap: pretty;">A family object rather than a database. Portraits are the primary element, generations are named in plain language instead of numbered, and density is handled by collapsing branches into a “+4 more siblings” card rather than shrinking anyone. Warmest of the three; the least efficient per pixel.</p>
+          <div style="display: flex; gap: 20px; padding-top: 4px;">
+            <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font: 600 11px/1.3 Geist; letter-spacing: 0.08em; text-transform: uppercase; color: #79837E;">Best at</span><span style="font: 400 13px/1.4 Geist; color: #14181A;">Relatives who aren’t genealogists</span></span>
+            <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font: 600 11px/1.3 Geist; letter-spacing: 0.08em; text-transform: uppercase; color: #79837E;">Weakest at</span><span style="font: 400 13px/1.4 Geist; color: #14181A;">Scanning 400 people</span></span>
+          </div>
+          <div style="display: flex; gap: 8px; padding-top: 4px;">
+            <span style="width: 26px; height: 26px; border-radius: 4px; background: #F6EFE4; border: 1px solid #E3D5C0;"></span>
+            <span style="width: 26px; height: 26px; border-radius: 4px; background: #A8552F;"></span>
+            <span style="width: 26px; height: 26px; border-radius: 4px; background: #8B7A66;"></span>
+            <span style="width: 26px; height: 26px; border-radius: 4px; background: #3A2B21;"></span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; background: #FFFCF6; border: 1px solid #E3D5C0; border-radius: 10px; overflow: hidden;">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 14px;">
+            <span style="width: 64px; height: 64px; border-radius: 999px; background: #F3DCCF; color: #A8552F; font: 500 20px/1 Lora, serif; display: flex; align-items: center; justify-content: center;">IG</span>
+            <span style="font: 600 18px/1.25 Lora, Georgia, serif; color: #3A2B21; text-align: center;">Irene Mabel Grocott</span>
+            <span style="font: 400 13px/1.4 Geist; color: #8B7A66;">1933 – 2019</span>
+          </div>
+          <div style="border-top: 1px solid #EEE3D2; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;">
+            <span style="display: flex; justify-content: space-between;"><span style="font: 400 13px/1.4 Geist; color: #A2917C;">Born</span><span style="font: 400 13px/1.4 Geist; color: #3A2B21;">14 March 1933</span></span>
+            <span style="display: flex; justify-content: space-between;"><span style="font: 400 13px/1.4 Geist; color: #A2917C;">Place</span><span style="font: 400 13px/1.4 Geist; color: #3A2B21;">Ballarat, VIC</span></span>
+          </div>
+          <div style="border-top: 1px solid #EEE3D2; padding: 12px 16px; display: flex; gap: 8px;">
+            <span style="flex: 1; height: 36px; display: flex; align-items: center; justify-content: center; font: 500 14px/1 Geist; background: #A8552F; color: #FFFCF6; border-radius: 6px;">Suggest an edit</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+</body>
+</html>

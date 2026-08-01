@@ -150,3 +150,28 @@ describe('PersonNode lodVariant wiring', () => {
     expect(el.querySelector('[data-testid="person-node-full"]')).not.toBeNull()
   })
 })
+
+describe('PersonNode keyboard accessibility (DESIGN_SYSTEM.md §7)', () => {
+  it.each([
+    ['dot', 'person-node-dot'],
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('exposes role="button" and tabIndex=0 on the %s variant', (lodVariant, testId) => {
+    const el = render({ lodVariant })
+    const node = el.querySelector(`[data-testid="${testId}"]`)
+    expect(node).not.toBeNull()
+    expect(node?.getAttribute('role')).toBe('button')
+    expect(node?.getAttribute('tabindex')).toBe('0')
+  })
+
+  it.each([
+    ['dot', 'person-node-dot'],
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('applies a visible --ft-focus ring via focus-visible on the %s variant', (lodVariant, testId) => {
+    const el = render({ lodVariant })
+    const node = el.querySelector(`[data-testid="${testId}"]`)
+    expect(node?.className).toContain('focus-visible:[box-shadow:var(--ft-focus)]')
+    expect(node?.className).toContain('focus-visible:outline-none')
+  })
+})

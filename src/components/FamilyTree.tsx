@@ -2279,7 +2279,7 @@ function FlowCanvas({
     const nextId = resolveArrowTarget(flowNodes, flowEdges, currentId, event.key)
     if (!nextId) return
     const nextEl = reactFlowWrapperRef.current?.querySelector<HTMLElement>(
-      `.react-flow__node[data-id="${CSS.escape(nextId)}"]`
+      `.react-flow__node[data-id="${CSS.escape(nextId)}"] [role="button"]`
     )
     nextEl?.focus()
     scrollFocusedNodeIntoView(nextEl ?? null)
@@ -2428,6 +2428,7 @@ function FlowCanvas({
         onNodeMouseEnter={handleNodeMouseEnter}
         onNodeMouseLeave={handleNodeMouseLeave}
         onKeyDownCapture={handleGraphKeyDown}
+        nodesFocusable={false}
       >
         <GenerationBands generationLevels={generationLevels} />
         <Background variant={BackgroundVariant.Dots} color="#1e2a4a" gap={28} size={1} />

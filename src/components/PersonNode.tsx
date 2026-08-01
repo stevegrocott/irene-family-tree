@@ -101,7 +101,7 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
         tabIndex={0}
         aria-label={accessibleName}
         title={accessibleName}
-        className={`relative rounded-[3px] w-[10px] h-[10px] ${borderClass} cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
+        className={`relative rounded-[3px] w-[10px] h-[10px] ${borderClass} cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)] max-sm:before:content-[''] max-sm:before:absolute max-sm:before:inset-[-17px]`}
         style={{ backgroundColor: tickColor }}
       >
         <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />

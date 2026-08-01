@@ -97,4 +97,61 @@ describe('SearchBar', () => {
     expect(list!.textContent).not.toContain('Alice Brown')
     expect(list!.textContent).not.toContain('Bob Green')
   })
+
+  describe('mobile collapse (AC2: below 640px search is an icon button that opens a sheet)', () => {
+    it('renders a 44px search toggle button and keeps the panel hidden below sm', () => {
+      const toggle = container.querySelector<HTMLButtonElement>('[data-testid="search-toggle"]')
+      expect(toggle).not.toBeNull()
+      expect(toggle!.getAttribute('aria-label')).toBe('Search')
+      expect(toggle!.className).toMatch(/min-h-11/)
+      expect(toggle!.className).toMatch(/min-w-11/)
+      // Hidden at sm+ (desktop keeps the panel open, not the toggle).
+      expect(toggle!.className).toMatch(/sm:hidden/)
+
+      const panel = container.querySelector<HTMLElement>('[data-testid="search-panel"]')
+      expect(panel).not.toBeNull()
+      // Hidden on mobile until toggled open; always shown at sm+.
+      expect(panel!.className).toMatch(/hidden/)
+      expect(panel!.className).toMatch(/sm:block/)
+    })
+
+    it('tapping the toggle button opens the panel and hides the toggle', () => {
+      const toggle = container.querySelector<HTMLButtonElement>('[data-testid="search-toggle"]')!
+      act(() => { toggle.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+
+      const panelAfter = container.querySelector<HTMLElement>('[data-testid="search-panel"]')!
+      expect(panelAfter.className).not.toMatch(/(^|\s)hidden(\s|$)/)
+
+      const toggleAfter = container.querySelector<HTMLButtonElement>('[data-testid="search-toggle"]')
+      expect(toggleAfter).toBeNull()
+    })
+
+    it('the panel close button collapses back to the toggle button', () => {
+      const toggle = container.querySelector<HTMLButtonElement>('[data-testid="search-toggle"]')!
+      act(() => { toggle.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+
+      const closeBtn = container.querySelector<HTMLButtonElement>('[data-testid="search-close"]')!
+      expect(closeBtn).not.toBeNull()
+      act(() => { closeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+
+      expect(container.querySelector('[data-testid="search-toggle"]')).not.toBeNull()
+      const panelAfter = container.querySelector<HTMLElement>('[data-testid="search-panel"]')!
+      expect(panelAfter.className).toMatch(/(^|\s)hidden(\s|$)/)
+    })
+
+    it('selecting a result collapses the panel back to the toggle button', async () => {
+      const toggle = container.querySelector<HTMLButtonElement>('[data-testid="search-toggle"]')!
+      act(() => { toggle.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+
+      const input = container.querySelector('input')!
+      await typeQuery(input, 'Alice')
+      const item = container.querySelector<HTMLElement>('[data-testid="search-result-item"]')!
+      act(() => { item.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+
+      expect(onSelect).toHaveBeenCalledWith('@I1@')
+      expect(container.querySelector('[data-testid="search-toggle"]')).not.toBeNull()
+      const panelAfter = container.querySelector<HTMLElement>('[data-testid="search-panel"]')!
+      expect(panelAfter.className).toMatch(/(^|\s)hidden(\s|$)/)
+    })
+  })
 })

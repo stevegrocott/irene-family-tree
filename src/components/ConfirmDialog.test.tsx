@@ -107,4 +107,56 @@ describe('ConfirmDialog', () => {
     expect(onCancel).not.toHaveBeenCalled()
     expect(onConfirm).not.toHaveBeenCalled()
   })
+
+  it('restores focus to the previously focused element after the dialog closes', () => {
+    const trigger = document.createElement('button')
+    document.body.appendChild(trigger)
+    trigger.focus()
+    expect(document.activeElement).toBe(trigger)
+
+    act(() => {
+      root = createRoot(container)
+      root.render(
+        <ConfirmDialog open={true} message="Are you sure?" onConfirm={jest.fn()} onCancel={jest.fn()} />
+      )
+    })
+    expect(document.activeElement).not.toBe(trigger)
+
+    act(() => {
+      root.render(
+        <ConfirmDialog open={false} message="Are you sure?" onConfirm={jest.fn()} onCancel={jest.fn()} />
+      )
+    })
+    expect(document.activeElement).toBe(trigger)
+
+    document.body.removeChild(trigger)
+  })
+
+  it('wraps focus from the last focusable element to the first on Tab', () => {
+    render({ open: true })
+    const cancelBtn = container.querySelector('[data-testid="confirm-dialog-cancel"]') as HTMLButtonElement
+    const confirmBtn = container.querySelector('[data-testid="confirm-dialog-confirm"]') as HTMLButtonElement
+    act(() => { confirmBtn.focus() })
+    expect(document.activeElement).toBe(confirmBtn)
+
+    act(() => {
+      const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+      document.dispatchEvent(event)
+    })
+    expect(document.activeElement).toBe(cancelBtn)
+  })
+
+  it('wraps focus from the first focusable element to the last on Shift+Tab', () => {
+    render({ open: true })
+    const cancelBtn = container.querySelector('[data-testid="confirm-dialog-cancel"]') as HTMLButtonElement
+    const confirmBtn = container.querySelector('[data-testid="confirm-dialog-confirm"]') as HTMLButtonElement
+    // The cancel button receives focus automatically when the dialog opens.
+    expect(document.activeElement).toBe(cancelBtn)
+
+    act(() => {
+      const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
+      document.dispatchEvent(event)
+    })
+    expect(document.activeElement).toBe(confirmBtn)
+  })
 })

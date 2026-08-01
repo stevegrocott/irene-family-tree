@@ -399,6 +399,7 @@ export function computeCascadeDeleteConnectionCount(
 /** ReactFlow store selectors (constant to avoid recreation on every render). */
 const selectCanvasWidth = (s: ReactFlowState) => s.width
 const selectCanvasHeight = (s: ReactFlowState) => s.height
+const selectTransform = (s: ReactFlowState) => s.transform
 
 /**
  * Side drawer panel showing details for a selected person.
@@ -1674,6 +1675,88 @@ export function PersonDrawer({
 }
 
 /**
+ * Renders one full-width horizontal band per generation rank behind the canvas edges and
+ * nodes — see docs/DESIGN_SYSTEM.md §3.1. Band boundaries come from the y-positions dagre
+ * already assigned to each person node (via `applyDagreLayout`), so bands can never drift
+ * from the rows they highlight.
+ *
+ * Rendered as a `<ReactFlow>` child (not inside the transformed `.react-flow__viewport`),
+ * so the pan/zoom `transform` is applied by hand — the same approach ReactFlow's own
+ * `<Background>` uses. That placement also keeps it painted behind `.react-flow__renderer`
+ * (edges + nodes) without any explicit z-index, and it is entirely `pointer-events: none`
+ * so it never intercepts clicks or drags.
+ *
+ * @param nodes - Current laid-out ReactFlow nodes (person nodes carry `data.generation`)
+ */
+function GenerationBands({ nodes }: { nodes: Node[] }) {
+  const [, translateY, zoom] = useStore(selectTransform)
+
+  const bands = useMemo(() => {
+    const rowsByGeneration = new Map<number, { sum: number; count: number }>()
+    for (const n of nodes) {
+      if (n.type !== 'person') continue
+      const generation = (n.data as PersonData).generation
+      if (typeof generation !== 'number') continue
+      const row = rowsByGeneration.get(generation) ?? { sum: 0, count: 0 }
+      row.sum += n.position.y
+      row.count += 1
+      rowsByGeneration.set(generation, row)
+    }
+    if (rowsByGeneration.size === 0) return []
+
+    const rows = [...rowsByGeneration.entries()]
+      .map(([generation, { sum, count }]) => ({ generation, center: sum / count }))
+      .sort((a, b) => a.center - b.center)
+
+    // Each band spans the midpoints between its row's center and its neighbors' centers,
+    // so adjacent bands tile the canvas with no gaps or overlaps. A single-row tree has no
+    // neighbor to derive a gap from — fall back to a fixed height so the band still shows.
+    const FALLBACK_ROW_GAP = 140
+    return rows.map((row, i) => {
+      const prevGap = i > 0 ? row.center - rows[i - 1].center : undefined
+      const nextGap = i < rows.length - 1 ? rows[i + 1].center - row.center : undefined
+      const gapAbove = prevGap ?? nextGap ?? FALLBACK_ROW_GAP
+      const gapBelow = nextGap ?? prevGap ?? FALLBACK_ROW_GAP
+      return {
+        generation: row.generation,
+        top: row.center - gapAbove / 2,
+        height: gapAbove / 2 + gapBelow / 2,
+      }
+    })
+  }, [nodes])
+
+  if (bands.length === 0) return null
+
+  return (
+    <div
+      className="react-flow__generation-bands"
+      style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}
+      aria-hidden="true"
+    >
+      {bands.map(band => (
+        <div
+          key={band.generation}
+          data-testid="generation-band"
+          data-generation={band.generation}
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: translateY + band.top * zoom,
+            height: band.height * zoom,
+            background: band.generation === 0
+              ? 'var(--ft-band-root)'
+              : band.generation % 2 === 0 ? 'var(--ft-band-a)' : 'var(--ft-band-b)',
+            borderBottom: '1px solid var(--ft-band-rule)',
+            pointerEvents: 'none',
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+/**
  * Main canvas for rendering the family tree using ReactFlow.
  * Fetches tree data from API, applies hierarchical layout, and handles user interactions
  * (node selection, depth adjustment, pan/zoom).
@@ -1908,6 +1991,7 @@ function FlowCanvas({
         proOptions={{ hideAttribution: true }}
         onNodeClick={handleNodeClick}
       >
+        <GenerationBands nodes={nodes} />
         <Background variant={BackgroundVariant.Dots} color="#1e2a4a" gap={28} size={1} />
         <MiniMap
           style={{ background: '#0f172a' }}

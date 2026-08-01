@@ -103,6 +103,13 @@ export const STATUS_PILL_LIVING_CLASS = `${STATUS_PILL_BASE_CLASS} bg-[var(--ft-
 export const STATUS_PILL_PENDING_CLASS = `${STATUS_PILL_BASE_CLASS} bg-[var(--ft-pending-soft)] text-[var(--ft-pending)]`
 export const STATUS_PILL_ROOT_CLASS = `${STATUS_PILL_BASE_CLASS} bg-[var(--ft-brass-soft)] text-[var(--ft-brass)]`
 
+/**
+ * Relationships-list row class (docs/DESIGN_SYSTEM.md §4.1: "each a tappable row (44 px)
+ * that re-roots the tree"). 44 px tall regardless of density or the `small` (nested-child)
+ * variant so every row clears the drawer's touch-target floor (§6).
+ */
+export const RELATIONSHIP_ROW_CLASS = 'flex w-full min-h-[44px] items-center gap-2 px-3 rounded-lg text-left transition-colors hover:bg-surface-1'
+
 /** Facts-list label/value classes (docs/DESIGN_SYSTEM.md §4.1) — rows separated by the parent's `divide-y`. */
 export const FACT_ROW_LABEL_CLASS = '[font:var(--ft-micro)] uppercase tracking-[var(--ft-micro-track)] text-ink-3 flex-shrink-0'
 export const FACT_ROW_VALUE_CLASS = '[font:var(--ft-body)] text-ink text-right min-w-0'

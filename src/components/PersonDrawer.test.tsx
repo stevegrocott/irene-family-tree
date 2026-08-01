@@ -175,30 +175,30 @@ describe('PersonDrawer', () => {
     expect(marriagesSection?.textContent).toContain('Spouse Smith')
   })
 
-  it('clicking a parent row calls onSelectPerson with the parent gedcomId', async () => {
+  it('tapping a relative row re-roots the tree on that person, not select', async () => {
+    const onReroot = jest.fn()
     const onSelectPerson = jest.fn()
 
-    await act(async () => {
-      root = createRoot(container)
-      root.render(
-        <PersonDrawer
-          person={basePerson}
-          onClose={jest.fn()}
-          onReroot={jest.fn()}
-          onSelectPerson={onSelectPerson}
-        />
-      )
-    })
-
-    await act(async () => { await Promise.resolve() })
+    await renderDrawer({ onReroot, onSelectPerson })
 
     const parentsSection = container.querySelector('[data-testid="person-drawer-parents"]')
-    const firstParentButton = parentsSection?.querySelector('button')
-    expect(firstParentButton).not.toBeNull()
+    const firstParentRow = parentsSection?.querySelector('[data-testid="relative-row"]')
+    expect(firstParentRow).not.toBeNull()
 
-    await act(async () => { firstParentButton!.click() })
+    await act(async () => { (firstParentRow as HTMLElement).click() })
 
-    expect(onSelectPerson).toHaveBeenCalledWith('@I2@')
+    expect(onReroot).toHaveBeenCalledWith('@I2@')
+    expect(onSelectPerson).not.toHaveBeenCalled()
+  })
+
+  it('renders relative rows at a 44px touch-target height', async () => {
+    await renderDrawer()
+
+    const rows = container.querySelectorAll('[data-testid="relative-row"]')
+    expect(rows.length).toBeGreaterThan(0)
+    rows.forEach(row => {
+      expect((row as HTMLElement).className).toContain('min-h-[44px]')
+    })
   })
 
   describe('Add parent', () => {

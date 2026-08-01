@@ -36,7 +36,7 @@ import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import { computeLineage } from '@/lib/lineage'
 import type { TreeResponse, PersonData, UnionData, PersonDetailResponse, PersonSummary, FlowNode, FlowEdge } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -222,54 +222,40 @@ export function Toolbar({
 }
 
 /**
- * A list row displaying a person with clickable actions to select or re-root the tree.
- * Double-click to re-root, single-click to select. Shows name and birth year.
+ * A list row displaying a person in the drawer's Relationships section
+ * (docs/DESIGN_SYSTEM.md §4.1: "each a tappable row (44 px) that re-roots
+ * the tree"). Tapping anywhere on the row re-roots the tree on that person;
+ * rows are 44 px tall to meet the drawer's touch-target floor (§6). Only
+ * rendered while the drawer is in view mode, never mid-edit.
  *
  * @param {Object} props - Component props
  * @param {PersonSummary} props.person - Person to display
- * @param {Function} props.onSelect - Called with person's gedcomId on single click
- * @param {Function} props.onReroot - Called with person's gedcomId on double click or focus button
- * @param {boolean} [props.small=false] - Render in compact styling for nested lists
+ * @param {Function} props.onReroot - Called with person's gedcomId when the row is tapped
+ * @param {boolean} [props.small=false] - Render in compact text styling for nested lists (still 44 px tall)
  * @returns {React.ReactElement} Rendered person row
  */
 function RelativeRow({
   person,
-  onSelect,
   onReroot,
   small = false,
 }: {
   person: PersonSummary
-  onSelect: (id: string) => void
   onReroot: (id: string) => void
   small?: boolean
 }) {
   return (
-    <div className="flex items-center group">
-      <button
-        className={`flex-1 text-left px-3 rounded-lg hover:bg-slate-800 transition-colors ${small ? 'py-1.5 text-xs text-white/60 hover:text-white/80' : 'py-2 text-sm text-white/80 hover:text-white'}`}
-        onClick={() => onSelect(person.gedcomId)}
-        onDoubleClick={() => onReroot(person.gedcomId)}
-      >
-        <span className="font-medium">{person.name || 'Unknown'}</span>
-        {person.birthYear && (
-          <span className={`ml-2 text-xs ${small ? 'text-slate-600' : 'text-slate-500'}`}>{person.birthYear}</span>
-        )}
-      </button>
-      <button
-        data-testid="relative-focus"
-        aria-label={`Focus tree on ${person.name || 'person'}`}
-        onClick={() => onReroot(person.gedcomId)}
-        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 mr-1 rounded text-white/40 hover:text-indigo-400 hover:bg-slate-800 flex-shrink-0"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="3" />
-          <line x1="12" y1="2" x2="12" y2="6" />
-          <line x1="12" y1="18" x2="12" y2="22" />
-          <line x1="2" y1="12" x2="6" y2="12" />
-          <line x1="18" y1="12" x2="22" y2="12" />
-        </svg>
-      </button>
-    </div>
+    <button
+      type="button"
+      data-testid="relative-row"
+      aria-label={`Focus tree on ${person.name || 'person'}`}
+      onClick={() => onReroot(person.gedcomId)}
+      className={`${RELATIONSHIP_ROW_CLASS} ${small ? 'text-xs text-white/60 hover:text-white/80' : 'text-sm text-white/80 hover:text-white'}`}
+    >
+      <span className="font-medium">{person.name || 'Unknown'}</span>
+      {person.birthYear && (
+        <span className={`text-xs ${small ? 'text-slate-600' : 'text-slate-500'}`}>{person.birthYear}</span>
+      )}
+    </button>
   )
 }
 
@@ -1664,7 +1650,7 @@ export function PersonDrawer({
                     return (
                       <li key={p.gedcomId} className="flex items-center gap-1">
                         <div className="flex-1 min-w-0">
-                          <RelativeRow person={p} onSelect={onSelectPerson} onReroot={onReroot} />
+                          <RelativeRow person={p} onReroot={onReroot} />
                         </div>
                         {removableChange && pendingRemoveParentId !== removableChange.id && (
                           <button
@@ -1725,7 +1711,7 @@ export function PersonDrawer({
                 <p className="text-slate-600 text-xs italic">None recorded</p>
               ) : (
                 <ul className="space-y-1">
-                  {detail.siblings.map(s => <li key={s.gedcomId}><RelativeRow person={s} onSelect={onSelectPerson} onReroot={onReroot} /></li>)}
+                  {detail.siblings.map(s => <li key={s.gedcomId}><RelativeRow person={s} onReroot={onReroot} /></li>)}
                 </ul>
               )}
             </section>
@@ -1744,7 +1730,7 @@ export function PersonDrawer({
                       <li key={m.unionId} className="space-y-1">
                         <div className="flex items-center gap-1">
                           <div className="flex-1 min-w-0">
-                            {m.spouse && <RelativeRow person={m.spouse} onSelect={onSelectPerson} onReroot={onReroot} />}
+                            {m.spouse && <RelativeRow person={m.spouse} onReroot={onReroot} />}
                           </div>
                           {removableChange && (
                             <button
@@ -1762,7 +1748,7 @@ export function PersonDrawer({
                         </div>
                         {m.children.length > 0 && (
                           <ul className="pl-4 space-y-1">
-                            {m.children.map(c => <li key={c.gedcomId}><RelativeRow person={c} onSelect={onSelectPerson} onReroot={onReroot} small /></li>)}
+                            {m.children.map(c => <li key={c.gedcomId}><RelativeRow person={c} onReroot={onReroot} small /></li>)}
                           </ul>
                         )}
                       </li>

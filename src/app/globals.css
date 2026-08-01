@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../styles/tokens.css";
 
 :root {
   --background: #ffffff;
@@ -10,6 +11,23 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-canvas:    var(--ft-canvas);
+  --color-surface:   var(--ft-surface-0);
+  --color-surface-1: var(--ft-surface-1);
+  --color-surface-2: var(--ft-surface-2);
+  --color-line:      var(--ft-border);
+  --color-ink:       var(--ft-text-1);
+  --color-ink-2:     var(--ft-text-2);
+  --color-ink-3:     var(--ft-text-3);
+  --color-accent:    var(--ft-accent);
+  --color-brass:     var(--ft-brass);
+  --color-pending:   var(--ft-pending);
+  --color-approved:  var(--ft-approved);
+  --color-declined:  var(--ft-declined);
+  --radius-node:     var(--ft-r-node);
+  --radius-panel:    var(--ft-r-panel);
+  --font-serif:      var(--ft-font-serif);
 }
 
 @media (prefers-color-scheme: dark) {

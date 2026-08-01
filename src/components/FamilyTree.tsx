@@ -151,7 +151,7 @@ function CopyLinkButton({
  * @param {Node[]} props.nodes - All nodes in the current tree visualization
  * @param {string} props.rootName - Display name of the current root person
  * @param {number} props.hops - Current viewing depth (hops)
- * @param {Function} props.onHopsChange - Callback when user adjusts the depth slider
+ * @param {Function} props.onHopsChange - Callback when user adjusts the depth stepper
  * @param {boolean} [props.truncated] - Whether the API response reported the tree was truncated
  * @param {number} [props.totalNodes] - Total node count reported by the API when truncated
  * @returns {React.ReactElement | null} Rendered toolbar or null if no persons are visible
@@ -219,16 +219,40 @@ export function Toolbar({
       <span data-testid="toolbar-viewing" className="text-xs text-white/60 select-none flex-shrink-0 whitespace-nowrap">
         VIEWING: <span className="text-white font-medium">{rootName}</span>
       </span>
-      <input
-        type="range"
-        data-testid="toolbar-depth-slider"
-        min={MIN_HOPS}
-        max={sliderMax}
-        value={hops}
-        onChange={e => onHopsChange(Number(e.target.value))}
-        className="w-full h-11 flex-shrink-0 sm:w-24 sm:h-auto"
+      <div
+        data-testid="toolbar-depth-stepper"
+        role="group"
         aria-label="Depth"
-      />
+        className="flex items-center gap-1 flex-shrink-0"
+      >
+        <button
+          type="button"
+          data-testid="toolbar-depth-decrement"
+          aria-label="Decrease depth"
+          disabled={hops <= MIN_HOPS}
+          onClick={() => onHopsChange(Math.max(MIN_HOPS, hops - 1))}
+          className="flex items-center justify-center w-11 h-11 sm:w-6 sm:h-6 rounded-lg text-white/80 hover:text-white hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-colors flex-shrink-0"
+        >
+          −
+        </button>
+        <span
+          data-testid="toolbar-depth-value"
+          aria-live="polite"
+          className="text-xs text-white font-medium select-none w-5 text-center flex-shrink-0"
+        >
+          {hops}
+        </span>
+        <button
+          type="button"
+          data-testid="toolbar-depth-increment"
+          aria-label="Increase depth"
+          disabled={hops >= sliderMax}
+          onClick={() => onHopsChange(Math.min(sliderMax, hops + 1))}
+          className="flex items-center justify-center w-11 h-11 sm:w-6 sm:h-6 rounded-lg text-white/80 hover:text-white hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-colors flex-shrink-0"
+        >
+          +
+        </button>
+      </div>
       {getShareUrl && (
         <CopyLinkButton
           getUrl={getShareUrl}

@@ -116,8 +116,10 @@ describe('Toolbar', () => {
     expect(viewing).not.toBeNull()
     expect(viewing!.textContent).toContain('Root Person')
 
-    const slider = container.querySelector('[data-testid="toolbar-depth-slider"]')
-    expect(slider).not.toBeNull()
+    const stepper = container.querySelector('[data-testid="toolbar-depth-stepper"]')
+    expect(stepper).not.toBeNull()
+    const value = container.querySelector('[data-testid="toolbar-depth-value"]')
+    expect(value!.textContent).toBe('3')
   })
 
   it('renders the app name from branding constants as the title', async () => {
@@ -317,7 +319,7 @@ describe('Toolbar', () => {
         'toolbar-gen-up',
         'toolbar-gen-down',
         'toolbar-viewing',
-        'toolbar-depth-slider',
+        'toolbar-depth-stepper',
         'toolbar-copy-link',
         'toolbar-stats-link',
       ]
@@ -390,6 +392,113 @@ describe('Toolbar', () => {
 
       expect(writeText).toHaveBeenCalledWith('https://example.com/?root=%40I0%40')
       expect(copyBtn.textContent).toBe('Copied!')
+    })
+  })
+
+  describe('depth stepper', () => {
+    it('renders a "− n +" stepper showing the current hops value', async () => {
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={4}
+            onHopsChange={jest.fn()}
+            sliderMax={10}
+          />,
+        )
+      })
+
+      expect(container.querySelector('[data-testid="toolbar-depth-decrement"]')!.textContent).toBe('−')
+      expect(container.querySelector('[data-testid="toolbar-depth-increment"]')!.textContent).toBe('+')
+      expect(container.querySelector('[data-testid="toolbar-depth-value"]')!.textContent).toBe('4')
+    })
+
+    it('calls onHopsChange with hops - 1 when the decrement button is clicked', async () => {
+      const onHopsChange = jest.fn()
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={4}
+            onHopsChange={onHopsChange}
+            sliderMax={10}
+          />,
+        )
+      })
+
+      const decrementBtn = container.querySelector('[data-testid="toolbar-depth-decrement"]') as HTMLButtonElement
+      await act(async () => { decrementBtn.click() })
+
+      expect(onHopsChange).toHaveBeenCalledWith(3)
+    })
+
+    it('calls onHopsChange with hops + 1 when the increment button is clicked', async () => {
+      const onHopsChange = jest.fn()
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={4}
+            onHopsChange={onHopsChange}
+            sliderMax={10}
+          />,
+        )
+      })
+
+      const incrementBtn = container.querySelector('[data-testid="toolbar-depth-increment"]') as HTMLButtonElement
+      await act(async () => { incrementBtn.click() })
+
+      expect(onHopsChange).toHaveBeenCalledWith(5)
+    })
+
+    it('disables the decrement button and clamps at MIN_HOPS', async () => {
+      const onHopsChange = jest.fn()
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={1}
+            onHopsChange={onHopsChange}
+            sliderMax={10}
+          />,
+        )
+      })
+
+      const decrementBtn = container.querySelector('[data-testid="toolbar-depth-decrement"]') as HTMLButtonElement
+      expect(decrementBtn.disabled).toBe(true)
+
+      await act(async () => { decrementBtn.click() })
+      expect(onHopsChange).not.toHaveBeenCalled()
+    })
+
+    it('disables the increment button and clamps at sliderMax (MAX_HOPS by default)', async () => {
+      const onHopsChange = jest.fn()
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={10}
+            onHopsChange={onHopsChange}
+            sliderMax={10}
+          />,
+        )
+      })
+
+      const incrementBtn = container.querySelector('[data-testid="toolbar-depth-increment"]') as HTMLButtonElement
+      expect(incrementBtn.disabled).toBe(true)
+
+      await act(async () => { incrementBtn.click() })
+      expect(onHopsChange).not.toHaveBeenCalled()
     })
   })
 })

@@ -104,3 +104,93 @@ describe('applyDagreLayout — CHILD edge orientation contract', () => {
     expect(personYLevels(laidNodes).size).toBe(1)
   })
 })
+
+describe('applyDagreLayout — exposed generation y-levels', () => {
+  it('pins the clustered y-level for each generation across a 3-generation chain', () => {
+    // Arrange: same grandparent -> parent -> grandchild chain as above.
+    const nodes: Node[] = [
+      personNode('gp1', '@I1@'),
+      personNode('gp2', '@I2@'),
+      unionNode('u1'),
+      personNode('parent', '@I3@'),
+      personNode('spouse', '@I4@'),
+      unionNode('u2'),
+      personNode('grandchild', '@I5@'),
+    ]
+    const edges: Edge[] = [
+      unionEdge('e1', 'gp1', 'u1'),
+      unionEdge('e2', 'gp2', 'u1'),
+      childEdge('e3', 'u1', 'parent'),
+      unionEdge('e4', 'parent', 'u2'),
+      unionEdge('e5', 'spouse', 'u2'),
+      childEdge('e6', 'u2', 'grandchild'),
+    ]
+
+    // Act
+    const { generationLevels } = applyDagreLayout(nodes, edges, { rootId: '@I3@' })
+
+    // Assert: exact pinned y-level per generation, so a caller (e.g. generation bands) can
+    // trust these values without recomputing the clustering itself.
+    expect(generationLevels).toEqual([
+      { generation: -1, y: 0 },
+      { generation: 0, y: 230 },
+      { generation: 1, y: 460 },
+    ])
+  })
+
+  it('pins one y-level per rank across a 4-generation chain', () => {
+    // Arrange: great-grandparent union -> grandparent (also child) -> parent (also child) -> child.
+    const nodes: Node[] = [
+      personNode('ggp1', '@I1@'),
+      personNode('ggp2', '@I2@'),
+      unionNode('u1'),
+      personNode('gp', '@I3@'),
+      personNode('gpSpouse', '@I4@'),
+      unionNode('u2'),
+      personNode('parent', '@I5@'),
+      personNode('parentSpouse', '@I6@'),
+      unionNode('u3'),
+      personNode('child', '@I7@'),
+    ]
+    const edges: Edge[] = [
+      unionEdge('e1', 'ggp1', 'u1'),
+      unionEdge('e2', 'ggp2', 'u1'),
+      childEdge('e3', 'u1', 'gp'),
+      unionEdge('e4', 'gp', 'u2'),
+      unionEdge('e5', 'gpSpouse', 'u2'),
+      childEdge('e6', 'u2', 'parent'),
+      unionEdge('e7', 'parent', 'u3'),
+      unionEdge('e8', 'parentSpouse', 'u3'),
+      childEdge('e9', 'u3', 'child'),
+    ]
+
+    // Act: root the generations on the parent (second-from-bottom).
+    const { generationLevels } = applyDagreLayout(nodes, edges, { rootId: '@I5@' })
+
+    // Assert: four generations, each 230px apart, centered on generation 0.
+    expect(generationLevels).toEqual([
+      { generation: -2, y: 0 },
+      { generation: -1, y: 230 },
+      { generation: 0, y: 460 },
+      { generation: 1, y: 690 },
+    ])
+  })
+
+  it('returns no y-levels when no rootId is supplied', () => {
+    const nodes: Node[] = [
+      personNode('p1', '@I1@'),
+      personNode('p2', '@I2@'),
+      unionNode('u1'),
+      personNode('c1', '@I3@'),
+    ]
+    const edges: Edge[] = [
+      unionEdge('e1', 'p1', 'u1'),
+      unionEdge('e2', 'p2', 'u1'),
+      childEdge('e3', 'u1', 'c1'),
+    ]
+
+    const { generationLevels } = applyDagreLayout(nodes, edges)
+
+    expect(generationLevels).toEqual([])
+  })
+})

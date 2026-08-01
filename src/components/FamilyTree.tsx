@@ -31,11 +31,11 @@ import PersonNode from '@/components/PersonNode'
 import UnionNode from '@/components/UnionNode'
 import SearchBar from '@/components/SearchBar'
 import ConfirmDialog from '@/components/ConfirmDialog'
-import { applyDagreLayout } from '@/lib/layout'
+import { applyDagreLayout, GenerationLevel } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -399,6 +399,7 @@ export function computeCascadeDeleteConnectionCount(
 /** ReactFlow store selectors (constant to avoid recreation on every render). */
 const selectCanvasWidth = (s: ReactFlowState) => s.width
 const selectCanvasHeight = (s: ReactFlowState) => s.height
+const selectTransform = (s: ReactFlowState) => s.transform
 
 /**
  * Side drawer panel showing details for a selected person.
@@ -1673,6 +1674,118 @@ export function PersonDrawer({
   )
 }
 
+/** Unicode minus sign (U+2212), used instead of a hyphen for negative generation numbers. */
+const GENERATION_MINUS = '−'
+
+/**
+ * Human-readable name for a signed generation offset, e.g. -2 -> "GRANDPARENTS",
+ * 1 -> "CHILDREN", 0 -> "ROOT". Steps beyond great-grandparent/grandchild (|generation| > 3)
+ * repeat the "GREAT-" prefix rather than hard-coding a finite list, so deep trees (per the
+ * issue's "band count grows with hop depth" risk) still get a sensible label.
+ */
+function generationName(generation: number): string {
+  if (generation === 0) return 'ROOT'
+  const steps = Math.abs(generation)
+  const greatPrefix = steps > 2 ? 'GREAT-'.repeat(steps - 2) : ''
+  return generation < 0
+    ? steps === 1 ? 'PARENTS' : `${greatPrefix}GRANDPARENTS`
+    : steps === 1 ? 'CHILDREN' : `${greatPrefix}GRANDCHILDREN`
+}
+
+/** Eyebrow label for a generation band's sticky gutter tag, e.g. "GEN −2 · GRANDPARENTS". */
+function generationLabel(generation: number): string {
+  const signed = generation < 0 ? `${GENERATION_MINUS}${Math.abs(generation)}` : `${generation}`
+  return `GEN ${signed} · ${generationName(generation)}`
+}
+
+/**
+ * Renders one full-width horizontal band per generation rank behind the canvas edges and
+ * nodes — see docs/DESIGN_SYSTEM.md §3.1. Band boundaries come from the y-positions dagre
+ * already assigned to each person node (via `applyDagreLayout`), so bands can never drift
+ * from the rows they highlight.
+ *
+ * Rendered as a `<ReactFlow>` child (not inside the transformed `.react-flow__viewport`),
+ * so the pan/zoom `transform` is applied by hand — the same approach ReactFlow's own
+ * `<Background>` uses. That placement also keeps it painted behind `.react-flow__renderer`
+ * (edges + nodes) without any explicit z-index, and it is entirely `pointer-events: none`
+ * so it never intercepts clicks or drags.
+ *
+ * Each band also carries a left gutter label (eyebrow type, `--ft-text-3`, gold `--ft-brass`
+ * for generation 0). The label lives inside the band's own full-width container, which is
+ * never translated horizontally (only `translateY`/`zoom` are applied) — so it stays pinned
+ * to the viewport's left edge while the canvas pans, without needing real CSS `position:
+ * sticky` against a scroll container that doesn't exist here.
+ *
+ * @param generationLevels - Clustered generation y-levels from `applyDagreLayout`, already
+ * sorted ascending by y — reused as-is so bands can never drift from the rows they highlight.
+ */
+function GenerationBands({ generationLevels }: { generationLevels: GenerationLevel[] }) {
+  const [, translateY, zoom] = useStore(selectTransform)
+
+  const bands = useMemo(() => {
+    if (generationLevels.length === 0) return []
+
+    // Each band spans the midpoints between its row's y-level and its neighbors',
+    // so adjacent bands tile the canvas with no gaps or overlaps. A single-row tree has no
+    // neighbor to derive a gap from — fall back to a fixed height so the band still shows.
+    const FALLBACK_ROW_GAP = 140
+    return generationLevels.map((row, i) => {
+      const prevGap = i > 0 ? row.y - generationLevels[i - 1].y : undefined
+      const nextGap = i < generationLevels.length - 1 ? generationLevels[i + 1].y - row.y : undefined
+      const gapAbove = prevGap ?? nextGap ?? FALLBACK_ROW_GAP
+      const gapBelow = nextGap ?? prevGap ?? FALLBACK_ROW_GAP
+      return {
+        generation: row.generation,
+        top: row.y - gapAbove / 2,
+        height: gapAbove / 2 + gapBelow / 2,
+      }
+    })
+  }, [generationLevels])
+
+  if (bands.length === 0) return null
+
+  return (
+    <div
+      className="react-flow__generation-bands"
+      style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}
+      aria-hidden="true"
+    >
+      {bands.map(band => (
+        <div
+          key={band.generation}
+          data-testid="generation-band"
+          data-generation={band.generation}
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: translateY + band.top * zoom,
+            height: band.height * zoom,
+            background: band.generation === 0
+              ? `var(${BAND_VARS.root})`
+              : band.generation % 2 === 0 ? `var(${BAND_VARS.a})` : `var(${BAND_VARS.b})`,
+            borderBottom: `1px solid var(${BAND_VARS.rule})`,
+            pointerEvents: 'none',
+          }}
+        >
+          <span
+            data-testid="generation-band-label"
+            data-generation={band.generation}
+            className="absolute left-3 top-2 whitespace-nowrap uppercase"
+            style={{
+              font: 'var(--ft-micro)',
+              letterSpacing: 'var(--ft-micro-track)',
+              color: band.generation === 0 ? 'var(--ft-brass)' : 'var(--ft-text-3)',
+            }}
+          >
+            {generationLabel(band.generation)}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /**
  * Main canvas for rendering the family tree using ReactFlow.
  * Fetches tree data from API, applies hierarchical layout, and handles user interactions
@@ -1698,6 +1811,7 @@ function FlowCanvas({
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [treeBounds, setTreeBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+  const [generationLevels, setGenerationLevels] = useState<GenerationLevel[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [truncated, setTruncated] = useState(false)
@@ -1822,6 +1936,7 @@ function FlowCanvas({
       ))
       setEdges(laid.edges)
       setTreeBounds(laid.bounds)
+      setGenerationLevels(laid.generationLevels)
       setTruncated(data.truncated === true)
       setTotalNodes(typeof data.totalNodes === 'number' ? data.totalNodes : undefined)
     } catch (err) {
@@ -1908,6 +2023,7 @@ function FlowCanvas({
         proOptions={{ hideAttribution: true }}
         onNodeClick={handleNodeClick}
       >
+        <GenerationBands generationLevels={generationLevels} />
         <Background variant={BackgroundVariant.Dots} color="#1e2a4a" gap={28} size={1} />
         <MiniMap
           style={{ background: '#0f172a' }}

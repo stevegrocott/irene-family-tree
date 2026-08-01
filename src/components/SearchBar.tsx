@@ -54,13 +54,13 @@ export default function SearchBar({ onSelect, persons: personsProp }: Props) {
     : []
 
   return (
-    <div className="absolute top-4 inset-x-4 z-10 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:inset-x-auto sm:left-4 sm:w-64">
+    <div className="absolute top-4 inset-x-4 z-10 bg-surface border border-line rounded-[var(--ft-r-md)] p-3 shadow-[var(--ft-shadow-1)] sm:inset-x-auto sm:left-4 sm:w-64">
       <input
         value={query}
         onChange={e => setQuery(e.target.value)}
         placeholder="Search by name, place or year…"
         data-testid="search-input"
-        className="w-full min-h-11 bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-indigo-400/60 focus:bg-white/15 transition-all"
+        className="w-full min-h-11 bg-surface border border-line rounded-[var(--ft-r-md)] px-3 py-2 text-sm text-ink placeholder-ink-3 focus:outline-none focus:border-[var(--ft-accent)] focus:shadow-[var(--ft-focus)] transition-colors"
       />
       {results.length > 0 && (
         <ul data-testid="search-results" className="search-results mt-2 space-y-0.5 max-h-48 overflow-y-auto">
@@ -69,21 +69,21 @@ export default function SearchBar({ onSelect, persons: personsProp }: Props) {
               key={p.gedcomId}
               data-testid="search-result-item"
               onClick={() => { onSelect(p.gedcomId); setQuery('') }}
-              className="min-h-11 flex items-center px-3 py-2 rounded-lg text-sm text-white/80 cursor-pointer hover:bg-white/15 hover:text-white transition-colors"
+              className="min-h-11 flex items-center gap-2 px-3 py-2 rounded-[var(--ft-r-sm)] text-sm text-ink-2 cursor-pointer hover:bg-surface-1 hover:text-ink transition-colors"
             >
               <span
-                className={`sex-dot w-2 h-2 rounded-full inline-block mr-1.5 ${
+                className={`sex-dot w-0.5 self-stretch rounded-[var(--ft-r-sm)] inline-block ${
                   p.sex === 'F' ? 'bg-pink-400' :
                   p.sex === 'M' ? 'bg-blue-400' :
-                  'bg-slate-400'
+                  'bg-[var(--ft-border-strong)]'
                 }`}
               />
-              <span className="font-medium">{p.name}</span>
+              <span className="font-serif font-medium">{p.name}</span>
               {p.birthYear && (
-                <span className="text-white/50 text-xs ml-1.5">{p.birthYear}</span>
+                <span className="font-mono text-ink-3 text-xs">{p.birthYear}</span>
               )}
               {p.birthPlace && (
-                <span className="text-white/40 text-xs ml-1.5">{p.birthPlace.slice(0, 20)}</span>
+                <span className="text-ink-3 text-xs">{p.birthPlace.slice(0, 20)}</span>
               )}
             </li>
           ))}

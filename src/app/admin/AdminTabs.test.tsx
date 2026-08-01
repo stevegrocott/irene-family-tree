@@ -142,12 +142,13 @@ describe('AdminTabs', () => {
       expect(badge?.className).toEqual(expect.stringContaining('ft-pending-soft'))
     })
 
-    it('does not render a count badge when no count is provided', async () => {
+    it('defaults the badge to 0 when no count is provided', async () => {
       await renderAdminTabs()
 
       const suggestionsTab = findTab(container, 'tab-suggestions')!
-      expect(suggestionsTab.querySelector('span')).toBeNull()
-      expect(suggestionsTab.textContent?.trim()).toBe('Pending Suggestions')
+      const badge = suggestionsTab.querySelector('span')
+      expect(badge).not.toBeNull()
+      expect(badge?.textContent?.trim()).toBe('0')
     })
 
     it('does not render a count badge on the History or Duplicates tabs', async () => {

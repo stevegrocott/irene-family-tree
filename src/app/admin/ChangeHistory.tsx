@@ -63,7 +63,7 @@ function FieldDiff({
           {label} after
         </span>
         <p
-          className={`font-mono mt-0.5 break-words rounded-[var(--ft-r-sm)] px-1.5 py-0.5 bg-[var(--ft-approved-soft)] text-ink ${hasNext ? '' : 'italic'}`}
+          className={`font-mono mt-0.5 break-words rounded-[var(--ft-r-sm)] px-1.5 py-0.5 bg-[var(--ft-approved-soft)] ${hasNext ? 'text-ink' : 'text-ink-3 italic'}`}
         >
           {nextStr}
         </p>

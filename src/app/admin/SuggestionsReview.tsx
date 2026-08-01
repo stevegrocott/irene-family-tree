@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import type { Change } from './types'
+import { buildTreeUrlPath, isValidGedcomId } from '@/lib/treeUrlState'
 import {
   ADMIN_CARD_CLASS,
   ADMIN_CARD_META_CLASS,
@@ -10,6 +12,7 @@ import {
   ADMIN_EMPTY_ICON_WRAP_CLASS,
   ADMIN_EMPTY_STATE_CLASS,
   ADMIN_ERROR_TEXT_CLASS,
+  ADMIN_GHOST_LINK_CLASS,
   ADMIN_SECONDARY_BUTTON_CLASS,
   ADMIN_STATUS_PILL_CLASS,
   BUTTON_SPINNER_WRAP_CLASS,
@@ -60,7 +63,7 @@ function FieldDiff({
           {label} after
         </span>
         <p
-          className={`font-mono mt-0.5 break-words rounded-[var(--ft-r-sm)] px-1.5 py-0.5 bg-[var(--ft-approved-soft)] text-ink ${hasNext ? '' : 'italic'}`}
+          className={`font-mono mt-0.5 break-words rounded-[var(--ft-r-sm)] px-1.5 py-0.5 bg-[var(--ft-approved-soft)] ${hasNext ? 'text-ink' : 'text-ink-3 italic'}`}
         >
           {nextStr}
         </p>
@@ -183,6 +186,15 @@ export function SuggestionsReview({ initialSuggestions }: { initialSuggestions: 
                   </span>
                 ) : 'Decline'}
               </button>
+              {isValidGedcomId(s.targetId) && (
+                <Link
+                  href={buildTreeUrlPath({ root: s.targetId })}
+                  className={ADMIN_GHOST_LINK_CLASS}
+                  aria-label={`View ${s.personName || s.targetId} in tree`}
+                >
+                  View in tree
+                </Link>
+              )}
             </div>
           </div>
         )

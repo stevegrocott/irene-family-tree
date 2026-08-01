@@ -171,6 +171,9 @@ export const ADMIN_EMPTY_ICON_CLASS = 'w-8 h-8 text-ink-3'
 
 export const ADMIN_ERROR_TEXT_CLASS = 'text-[var(--ft-declined)] text-xs'
 
+/** Ghost-variant action per §5.4: transparent, text-2 at rest, surface-2/text-1 on hover. */
+export const ADMIN_GHOST_LINK_CLASS = 'flex-1 flex items-center justify-center py-2 rounded-[var(--ft-r-md)] text-ink-2 hover:bg-surface-2 hover:text-ink text-sm font-medium transition-colors'
+
 export const BUTTON_SPINNER_WRAP_CLASS = 'flex items-center justify-center gap-2'
 
 export const SPINNER_CLASS = 'w-4 h-4 border-2 border-line border-t-ink rounded-full animate-spin'

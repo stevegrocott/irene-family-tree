@@ -9,6 +9,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import PersonNode from './PersonNode'
 import type { PersonData } from '@/types/tree'
+import { getNodeLodVariant, LOD_ZOOM_THRESHOLDS } from '@/constants/tree'
 
 jest.mock('reactflow', () => ({
   Handle: () => null,
@@ -97,5 +98,33 @@ describe('PersonNode avatar', () => {
     })
     expect(el.querySelector('[data-testid="person-node-photo"]')).toBeNull()
     expect(el.textContent).toContain('IT')
+  })
+})
+
+describe('getNodeLodVariant boundaries', () => {
+  it('resolves to "dot" just below the DOT threshold (0.45)', () => {
+    expect(getNodeLodVariant(LOD_ZOOM_THRESHOLDS.DOT - 0.01)).toBe('dot')
+  })
+
+  it('resolves the DOT threshold itself (0.45) to "compact", not "dot"', () => {
+    expect(getNodeLodVariant(LOD_ZOOM_THRESHOLDS.DOT)).toBe('compact')
+  })
+
+  it('resolves values between the thresholds to "compact"', () => {
+    expect(getNodeLodVariant(0.6)).toBe('compact')
+  })
+
+  it('resolves the FULL threshold itself (0.85) to "compact", not "full"', () => {
+    expect(getNodeLodVariant(LOD_ZOOM_THRESHOLDS.FULL)).toBe('compact')
+  })
+
+  it('resolves just above the FULL threshold (0.85) to "full"', () => {
+    expect(getNodeLodVariant(LOD_ZOOM_THRESHOLDS.FULL + 0.01)).toBe('full')
+  })
+
+  it('is deterministic and single-valued at each boundary across repeated calls', () => {
+    const calls = Array.from({ length: 5 }, () => getNodeLodVariant(LOD_ZOOM_THRESHOLDS.DOT))
+    expect(new Set(calls).size).toBe(1)
+    expect(calls[0]).toBe('compact')
   })
 })

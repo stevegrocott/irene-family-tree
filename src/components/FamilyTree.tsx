@@ -2045,6 +2045,7 @@ function FlowCanvas({
         defaultEdgeOptions={defaultEdgeOptions}
         proOptions={{ hideAttribution: true }}
         onNodeClick={handleNodeClick}
+        minZoom={0.18}
       >
         <GenerationBands generationLevels={generationLevels} />
         <Background variant={BackgroundVariant.Dots} color="#1e2a4a" gap={28} size={1} />

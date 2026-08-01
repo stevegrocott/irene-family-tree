@@ -501,4 +501,67 @@ describe('Toolbar', () => {
       expect(onHopsChange).not.toHaveBeenCalled()
     })
   })
+
+  describe('mobile collapse (below 640px the toolbar is a 44px icon button that opens a sheet)', () => {
+    async function renderToolbar() {
+      await act(async () => {
+        root = createRoot(container)
+        root.render(
+          <Toolbar
+            nodes={[makePersonNode('@I0@', 0, 'Root Person')]}
+            rootName="Root Person"
+            hops={3}
+            onHopsChange={jest.fn()}
+          />,
+        )
+      })
+    }
+
+    it('renders a 44px toolbar toggle button and keeps the toolbar hidden below sm', async () => {
+      await renderToolbar()
+
+      const toggle = container.querySelector<HTMLButtonElement>('[data-testid="toolbar-toggle"]')
+      expect(toggle).not.toBeNull()
+      expect(toggle!.getAttribute('aria-label')).toBe('Open toolbar')
+      expect(toggle!.className).toMatch(/min-h-11/)
+      expect(toggle!.className).toMatch(/min-w-11/)
+      // Hidden at sm+ (desktop keeps the toolbar open, not the toggle).
+      expect(toggle!.className).toMatch(/sm:hidden/)
+
+      const toolbar = container.querySelector<HTMLElement>('[data-testid="toolbar"]')
+      expect(toolbar).not.toBeNull()
+      // Hidden on mobile until toggled open; always shown at sm+.
+      expect(toolbar!.className).toMatch(/(^|\s)hidden(\s|$)/)
+      expect(toolbar!.className).toMatch(/sm:flex/)
+    })
+
+    it('tapping the toggle button opens the toolbar and hides the toggle', async () => {
+      await renderToolbar()
+
+      const toggle = container.querySelector<HTMLButtonElement>('[data-testid="toolbar-toggle"]')!
+      await act(async () => { toggle.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+
+      const toolbarAfter = container.querySelector<HTMLElement>('[data-testid="toolbar"]')!
+      expect(toolbarAfter.className).not.toMatch(/(^|\s)hidden(\s|$)/)
+
+      const toggleAfter = container.querySelector('[data-testid="toolbar-toggle"]')
+      expect(toggleAfter).toBeNull()
+    })
+
+    it('the toolbar close button collapses back to the toggle button', async () => {
+      await renderToolbar()
+
+      const toggle = container.querySelector<HTMLButtonElement>('[data-testid="toolbar-toggle"]')!
+      await act(async () => { toggle.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+
+      const closeBtn = container.querySelector<HTMLButtonElement>('[data-testid="toolbar-close"]')!
+      expect(closeBtn).not.toBeNull()
+      expect(closeBtn.getAttribute('aria-label')).toBe('Close toolbar')
+      await act(async () => { closeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+
+      expect(container.querySelector('[data-testid="toolbar-toggle"]')).not.toBeNull()
+      const toolbarAfter = container.querySelector<HTMLElement>('[data-testid="toolbar"]')!
+      expect(toolbarAfter.className).toMatch(/(^|\s)hidden(\s|$)/)
+    })
+  })
 })

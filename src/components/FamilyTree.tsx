@@ -147,6 +147,12 @@ function CopyLinkButton({
  * Shows a small app title followed by ancestor/descendant counts and allows users
  * to adjust the viewing depth (hops).
  *
+ * Below the `sm` (640px) breakpoint the toolbar starts collapsed behind a 44px
+ * icon button that opens it as a sheet (docs/DESIGN_SYSTEM.md §4.2/§6 — "on
+ * mobile it collapses to a single 44 px icon button that opens a sheet"); at
+ * `sm` and up the toolbar is always shown via the `sm:flex` override below,
+ * regardless of this state.
+ *
  * @param {Object} props - Component props
  * @param {Node[]} props.nodes - All nodes in the current tree visualization
  * @param {string} props.rootName - Display name of the current root person
@@ -175,6 +181,7 @@ export function Toolbar({
   truncated?: boolean
   totalNodes?: number
 }) {
+  const [mobileOpen, setMobileOpen] = useState(false)
   const ancestorGens = nodes.filter(n => n.type === 'person').map(n => (n.data as PersonData).generation).filter((g): g is number => typeof g === 'number' && g < 0)
   const ancestors = ancestorGens.length > 0 ? Math.abs(Math.min(...ancestorGens)) : 0
   const descendantGens = nodes.filter(n => n.type === 'person').map(n => (n.data as PersonData).generation).filter((g): g is number => typeof g === 'number' && g > 0)
@@ -182,11 +189,39 @@ export function Toolbar({
   const personCount = nodes.filter(n => n.type === 'person').length
   if (personCount === 0) return null
   return (
-    <div
-      data-testid="toolbar"
-      className="absolute bottom-4 inset-x-4 z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 bg-slate-800 border border-white/20 rounded-lg px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-auto sm:max-w-[calc(100vw-2rem)] sm:flex-nowrap sm:gap-4 sm:py-2"
-    >
-      <span
+    <>
+      {!mobileOpen && (
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Open toolbar"
+          data-testid="toolbar-toggle"
+          className="sm:hidden absolute bottom-4 left-4 z-10 min-h-11 min-w-11 flex items-center justify-center bg-slate-800 border border-white/20 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.4)] text-white focus:outline-none transition-colors"
+        >
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+            <line x1="3" y1="6" x2="17" y2="6" strokeLinecap="round" />
+            <line x1="3" y1="10" x2="17" y2="10" strokeLinecap="round" />
+            <line x1="3" y1="14" x2="17" y2="14" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
+      <div
+        data-testid="toolbar"
+        className={`${mobileOpen ? 'flex' : 'hidden'} sm:flex absolute bottom-4 inset-x-4 z-10 flex-wrap items-center justify-center gap-x-3 gap-y-2 bg-slate-800 border border-white/20 rounded-lg px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-auto sm:max-w-[calc(100vw-2rem)] sm:flex-nowrap sm:gap-4 sm:py-2`}
+      >
+        <button
+          type="button"
+          onClick={() => setMobileOpen(false)}
+          aria-label="Close toolbar"
+          data-testid="toolbar-close"
+          className="sm:hidden order-first min-h-11 min-w-11 -my-3 -ml-4 mr-1 flex items-center justify-center text-white/70 hover:text-white transition-colors flex-shrink-0"
+        >
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+            <line x1="4" y1="4" x2="16" y2="16" strokeLinecap="round" />
+            <line x1="16" y1="4" x2="4" y2="16" strokeLinecap="round" />
+          </svg>
+        </button>
+        <span
         data-testid="toolbar-app-name"
         className="text-xs text-white font-semibold select-none pr-4 border-r border-white/20 tracking-wide flex-shrink-0 whitespace-nowrap"
       >
@@ -267,7 +302,8 @@ export function Toolbar({
       >
         Stats
       </Link>
-    </div>
+      </div>
+    </>
   )
 }
 

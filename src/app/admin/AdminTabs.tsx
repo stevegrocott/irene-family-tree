@@ -17,8 +17,11 @@ const PANEL_IDS: Record<Tab, string> = {
   duplicates: 'panel-duplicates',
 }
 
-const TAB_ACTIVE = 'px-4 py-2 rounded-panel text-sm font-medium bg-surface-2 border border-line text-ink shadow-[var(--ft-shadow-1)] transition-colors'
-const TAB_INACTIVE = 'px-4 py-2 rounded-panel text-sm font-medium bg-transparent border border-transparent text-ink-3 hover:text-ink-2 hover:bg-surface-1 transition-colors'
+const TAB_BASE = 'inline-flex items-center gap-2 px-3 py-1 [font:var(--ft-label)] border-b-2 transition-colors'
+const TAB_ACTIVE = `${TAB_BASE} border-accent text-ink`
+const TAB_INACTIVE = `${TAB_BASE} border-transparent text-ink-3 hover:text-ink-2`
+
+const COUNT_BADGE_CLASS = 'inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-[var(--ft-pending-soft)] text-[var(--ft-pending)] text-[11px] font-semibold leading-none'
 
 /**
  * Accessible tab container for the admin page.
@@ -29,21 +32,24 @@ const TAB_INACTIVE = 'px-4 py-2 rounded-panel text-sm font-medium bg-transparent
  * @param suggestionsSlot - Content rendered when the "Pending Suggestions" tab is active
  * @param historySlot - Content rendered when the "Change History" tab is active
  * @param duplicatesSlot - Content rendered when the "Duplicates" tab is active
+ * @param suggestionsCount - Number shown in the count badge next to "Pending Suggestions"
  */
 export function AdminTabs({
   suggestionsSlot,
   historySlot,
   duplicatesSlot,
+  suggestionsCount = 0,
 }: {
   suggestionsSlot: ReactNode
   historySlot: ReactNode
   duplicatesSlot: ReactNode
+  suggestionsCount?: number
 }) {
   const [activeTab, setActiveTab] = useState<Tab>(TABS.SUGGESTIONS)
 
   return (
     <>
-      <div role="tablist" className="flex gap-2 mb-6">
+      <div role="tablist" className="flex gap-2 mb-6 border-b border-line">
         <button
           type="button"
           role="tab"
@@ -54,6 +60,9 @@ export function AdminTabs({
           className={activeTab === TABS.SUGGESTIONS ? TAB_ACTIVE : TAB_INACTIVE}
         >
           Pending Suggestions
+          <span className={COUNT_BADGE_CLASS} data-testid="suggestions-count-badge">
+            {suggestionsCount}
+          </span>
         </button>
         <button
           type="button"

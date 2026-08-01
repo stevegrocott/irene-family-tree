@@ -31,6 +31,7 @@ jest.mock('@/lib/layout', () => ({
 }))
 jest.mock('@/lib/person', () => ({ formatLifespan: () => null }))
 jest.mock('@/constants/tree', () => ({
+  ...jest.requireActual('@/constants/tree'),
   MIN_HOPS: 1,
   DEFAULT_HOPS: 3,
   MAX_HOPS: 10,
@@ -174,30 +175,59 @@ describe('PersonDrawer', () => {
     expect(marriagesSection?.textContent).toContain('Spouse Smith')
   })
 
-  it('clicking a parent row calls onSelectPerson with the parent gedcomId', async () => {
+  it('tapping a relative row re-roots the tree on that person, not select', async () => {
+    const onReroot = jest.fn()
     const onSelectPerson = jest.fn()
 
-    await act(async () => {
-      root = createRoot(container)
-      root.render(
-        <PersonDrawer
-          person={basePerson}
-          onClose={jest.fn()}
-          onReroot={jest.fn()}
-          onSelectPerson={onSelectPerson}
-        />
-      )
-    })
-
-    await act(async () => { await Promise.resolve() })
+    await renderDrawer({ onReroot, onSelectPerson })
 
     const parentsSection = container.querySelector('[data-testid="person-drawer-parents"]')
-    const firstParentButton = parentsSection?.querySelector('button')
-    expect(firstParentButton).not.toBeNull()
+    const firstParentRow = parentsSection?.querySelector('[data-testid="relative-row"]')
+    expect(firstParentRow).not.toBeNull()
 
-    await act(async () => { firstParentButton!.click() })
+    await act(async () => { (firstParentRow as HTMLElement).click() })
 
-    expect(onSelectPerson).toHaveBeenCalledWith('@I2@')
+    expect(onReroot).toHaveBeenCalledWith('@I2@')
+    expect(onSelectPerson).not.toHaveBeenCalled()
+  })
+
+  it('renders relative rows at a 44px touch-target height', async () => {
+    await renderDrawer()
+
+    const rows = container.querySelectorAll('[data-testid="relative-row"]')
+    expect(rows.length).toBeGreaterThan(0)
+    rows.forEach(row => {
+      expect((row as HTMLElement).className).toContain('min-h-[44px]')
+    })
+  })
+
+  describe('Sticky bottom actions bar and mobile drag handle', () => {
+    it('renders the actions bar pinned to the bottom with a top border and --ft-surface-1 background', async () => {
+      await renderDrawer()
+
+      const actions = container.querySelector('[data-testid="person-drawer-actions"]') as HTMLElement
+      expect(actions).not.toBeNull()
+      expect(actions.className).toContain('sticky')
+      expect(actions.className).toContain('bottom-0')
+      expect(actions.className).toContain('border-t')
+      expect(actions.className).toContain('bg-surface-1')
+
+      // Re-root and delete live inside the actions bar, not the scrollable body.
+      expect(actions.querySelector('[data-testid="person-drawer-reroot"]')).not.toBeNull()
+    })
+
+    it('renders a 32×4 px mobile drag handle, hidden on desktop', async () => {
+      await renderDrawer()
+
+      const handleWrap = container.querySelector('[data-testid="drawer-drag-handle"]') as HTMLElement
+      expect(handleWrap).not.toBeNull()
+      expect(handleWrap.className).toContain('sm:hidden')
+
+      const bar = handleWrap.firstElementChild as HTMLElement
+      expect(bar).not.toBeNull()
+      expect(bar.className).toContain('w-8')
+      expect(bar.className).toContain('h-1')
+    })
   })
 
   describe('Add parent', () => {
@@ -851,6 +881,73 @@ describe('PersonDrawer', () => {
 
       expect(writeText).toHaveBeenCalledWith('https://example.com/?root=%40I1%40')
       expect(copyBtn.textContent).toBe('Copied!')
+    })
+  })
+
+  describe('Facts — empty values render ghost buttons, never a dash', () => {
+    const filledDetail = {
+      ...mockDetailResponse,
+      birthPlace: 'Boston, MA',
+      deathPlace: 'Chicago, IL',
+      occupation: 'Carpenter',
+      notes: 'Some biographical notes.',
+    }
+
+    it('renders a "+ Add …" ghost button in place of each empty fact', async () => {
+      await renderDrawer()
+
+      expect(container.querySelector('[data-testid="person-drawer-fact-birthplace"]')).toBeNull()
+      expect(container.querySelector('[data-testid="person-drawer-fact-deathplace"]')).toBeNull()
+      expect(container.querySelector('[data-testid="person-drawer-fact-occupation"]')).toBeNull()
+      expect(container.querySelector('[data-testid="person-drawer-fact-notes"]')).toBeNull()
+
+      expect(container.querySelector('[data-testid="person-drawer-fact-birthplace-add"]')?.textContent).toBe('+ Add birth place')
+      expect(container.querySelector('[data-testid="person-drawer-fact-deathplace-add"]')?.textContent).toBe('+ Add death place')
+      expect(container.querySelector('[data-testid="person-drawer-fact-occupation-add"]')?.textContent).toBe('+ Add occupation')
+      expect(container.querySelector('[data-testid="person-drawer-fact-notes-add"]')?.textContent).toBe('+ Add notes')
+
+      const facts = container.querySelector('[data-testid="person-drawer-facts"]')
+      expect(facts?.textContent).not.toContain('—')
+    })
+
+    it('renders the value row instead of a ghost button when a fact is present', async () => {
+      global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => filledDetail })
+      await renderDrawer()
+
+      expect(container.querySelector('[data-testid="person-drawer-fact-birthplace"]')?.textContent).toContain('Boston, MA')
+      expect(container.querySelector('[data-testid="person-drawer-fact-deathplace"]')?.textContent).toContain('Chicago, IL')
+      expect(container.querySelector('[data-testid="person-drawer-fact-occupation"]')?.textContent).toContain('Carpenter')
+      expect(container.querySelector('[data-testid="person-drawer-fact-notes"]')?.textContent).toContain('Some biographical notes.')
+
+      expect(container.querySelector('[data-testid="person-drawer-fact-birthplace-add"]')).toBeNull()
+      expect(container.querySelector('[data-testid="person-drawer-fact-deathplace-add"]')).toBeNull()
+      expect(container.querySelector('[data-testid="person-drawer-fact-occupation-add"]')).toBeNull()
+      expect(container.querySelector('[data-testid="person-drawer-fact-notes-add"]')).toBeNull()
+    })
+
+    it('signed-in: clicking a ghost button opens edit mode with that field expanded', async () => {
+      mockSession('user')
+      await renderDrawer()
+
+      const birthplaceAdd = container.querySelector('[data-testid="person-drawer-fact-birthplace-add"]') as HTMLButtonElement
+      await act(async () => { birthplaceAdd.click() })
+
+      expect(container.querySelector('[data-testid="person-drawer-edit-form"]')).not.toBeNull()
+      const input = container.querySelector('#edit-birth-place') as HTMLInputElement | null
+      expect(input).not.toBeNull()
+      expect(input!.value).toBe('')
+    })
+
+    it('signed-out: clicking a ghost button prompts sign-in instead of opening edit mode', async () => {
+      mockSession(null)
+      const signInSpy = jest.spyOn(NextAuthReact, 'signIn').mockImplementation(() => Promise.resolve(undefined) as never)
+      await renderDrawer()
+
+      const birthplaceAdd = container.querySelector('[data-testid="person-drawer-fact-birthplace-add"]') as HTMLButtonElement
+      await act(async () => { birthplaceAdd.click() })
+
+      expect(signInSpy).toHaveBeenCalledWith('google')
+      expect(container.querySelector('[data-testid="person-drawer-edit-form"]')).toBeNull()
     })
   })
 })

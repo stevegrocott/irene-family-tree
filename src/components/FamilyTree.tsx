@@ -36,7 +36,7 @@ import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import { computeLineage } from '@/lib/lineage'
 import type { TreeResponse, PersonData, UnionData, PersonDetailResponse, PersonSummary, FlowNode, FlowEdge } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_TYPES, EDGE_STYLES, EDGE_RENDER_TYPE, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS, EDGE_TYPES, EDGE_RENDER_TYPE } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -248,54 +248,40 @@ export function Toolbar({
 }
 
 /**
- * A list row displaying a person with clickable actions to select or re-root the tree.
- * Double-click to re-root, single-click to select. Shows name and birth year.
+ * A list row displaying a person in the drawer's Relationships section
+ * (docs/DESIGN_SYSTEM.md §4.1: "each a tappable row (44 px) that re-roots
+ * the tree"). Tapping anywhere on the row re-roots the tree on that person;
+ * rows are 44 px tall to meet the drawer's touch-target floor (§6). Only
+ * rendered while the drawer is in view mode, never mid-edit.
  *
  * @param {Object} props - Component props
  * @param {PersonSummary} props.person - Person to display
- * @param {Function} props.onSelect - Called with person's gedcomId on single click
- * @param {Function} props.onReroot - Called with person's gedcomId on double click or focus button
- * @param {boolean} [props.small=false] - Render in compact styling for nested lists
+ * @param {Function} props.onReroot - Called with person's gedcomId when the row is tapped
+ * @param {boolean} [props.small=false] - Render in compact text styling for nested lists (still 44 px tall)
  * @returns {React.ReactElement} Rendered person row
  */
 function RelativeRow({
   person,
-  onSelect,
   onReroot,
   small = false,
 }: {
   person: PersonSummary
-  onSelect: (id: string) => void
   onReroot: (id: string) => void
   small?: boolean
 }) {
   return (
-    <div className="flex items-center group">
-      <button
-        className={`flex-1 text-left px-3 rounded-lg hover:bg-slate-800 transition-colors ${small ? 'py-1.5 text-xs text-white/60 hover:text-white/80' : 'py-2 text-sm text-white/80 hover:text-white'}`}
-        onClick={() => onSelect(person.gedcomId)}
-        onDoubleClick={() => onReroot(person.gedcomId)}
-      >
-        <span className="font-medium">{person.name || 'Unknown'}</span>
-        {person.birthYear && (
-          <span className={`ml-2 text-xs ${small ? 'text-slate-600' : 'text-slate-500'}`}>{person.birthYear}</span>
-        )}
-      </button>
-      <button
-        data-testid="relative-focus"
-        aria-label={`Focus tree on ${person.name || 'person'}`}
-        onClick={() => onReroot(person.gedcomId)}
-        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 mr-1 rounded text-white/40 hover:text-indigo-400 hover:bg-slate-800 flex-shrink-0"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="3" />
-          <line x1="12" y1="2" x2="12" y2="6" />
-          <line x1="12" y1="18" x2="12" y2="22" />
-          <line x1="2" y1="12" x2="6" y2="12" />
-          <line x1="18" y1="12" x2="22" y2="12" />
-        </svg>
-      </button>
-    </div>
+    <button
+      type="button"
+      data-testid="relative-row"
+      aria-label={`Focus tree on ${person.name || 'person'}`}
+      onClick={() => onReroot(person.gedcomId)}
+      className={`${RELATIONSHIP_ROW_CLASS} ${small ? 'text-xs text-white/60 hover:text-white/80' : 'text-sm text-white/80 hover:text-white'}`}
+    >
+      <span className="font-medium">{person.name || 'Unknown'}</span>
+      {person.birthYear && (
+        <span className={`text-xs ${small ? 'text-slate-600' : 'text-slate-500'}`}>{person.birthYear}</span>
+      )}
+    </button>
   )
 }
 
@@ -303,7 +289,76 @@ function RelativeRow({
 function DrawerDragHandle() {
   return (
     <div data-testid="drawer-drag-handle" className={DRAWER_DRAG_HANDLE_CLASS} aria-hidden="true">
-      <div className="h-1.5 w-10 rounded-full bg-slate-700" />
+      <div className={DRAWER_DRAG_HANDLE_BAR_CLASS} />
+    </div>
+  )
+}
+
+/**
+ * A single label/value row in the person drawer's Facts list (docs/DESIGN_SYSTEM.md §4.1).
+ * Rows are separated by full-bleed 1px rules via the parent's `divide-y`, not gaps.
+ *
+ * @param {Object} props - Component props
+ * @param {string} props.label - Fact label, e.g. "Born"
+ * @param {React.ReactNode} props.value - Fact value to display
+ * @param {boolean} [props.mono=false] - Render the value in monospace (dates, places, ids)
+ * @param {boolean} [props.wrap=false] - Allow the value to wrap instead of truncating (long notes)
+ * @param {string} [props.testId] - Optional `data-testid` for the row
+ * @returns {React.ReactElement} Rendered fact row
+ */
+function FactRow({
+  label,
+  value,
+  mono = false,
+  wrap = false,
+  testId,
+}: {
+  label: string
+  value: React.ReactNode
+  mono?: boolean
+  wrap?: boolean
+  testId?: string
+}) {
+  return (
+    <div data-testid={testId} className="flex items-baseline justify-between gap-4 py-[var(--ft-row-gap)]">
+      <span className={FACT_ROW_LABEL_CLASS}>{label}</span>
+      <span className={`${FACT_ROW_VALUE_CLASS} ${mono ? '!font-mono' : ''} ${wrap ? 'whitespace-pre-wrap' : 'truncate'}`}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * A Facts row shown when its value is empty: the label stays put, and an
+ * inline `+ Add …` ghost button takes the value slot instead of a dash
+ * (docs/DESIGN_SYSTEM.md §4.1). Clicking it jumps straight into the edit
+ * sub-view with that field expanded for immediate entry.
+ *
+ * @param {Object} props - Component props
+ * @param {string} props.label - Fact label, e.g. "Birthplace"
+ * @param {string} props.addLabel - Field name used in the button text, e.g. "birth place"
+ * @param {Function} props.onClick - Called when the ghost button is activated
+ * @param {string} [props.testId] - Optional `data-testid` for the button
+ * @returns {React.ReactElement} Rendered ghost Facts row
+ */
+function FactRowGhostButton({
+  label,
+  addLabel,
+  onClick,
+  testId,
+}: {
+  label: string
+  addLabel: string
+  onClick: () => void
+  testId?: string
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-[var(--ft-row-gap)]">
+      <span className={FACT_ROW_LABEL_CLASS}>{label}</span>
+      <button type="button" data-testid={testId} onClick={onClick} className={FACT_ROW_GHOST_CLASS}>
+        + Add {addLabel}
+      </button>
     </div>
   )
 }
@@ -951,6 +1006,33 @@ export function PersonDrawer({
     setMode('edit')
   }
 
+  /**
+   * Opens the edit sub-view with a single optional field pre-expanded, so a
+   * Facts row's "+ Add …" ghost button drops the user straight into that
+   * field's input rather than the generic edit form.
+   * @param {Function} expandField - Setter that reveals the target field's input (e.g. `() => setShowEditBirthPlace(true)`)
+   */
+  const openEditField = (expandField: () => void) => {
+    resetEditForm()
+    expandField()
+    setMode('edit')
+  }
+
+  /**
+   * Handles a Facts ghost "+ Add …" button click. Signed-out visitors are
+   * prompted to sign in first (mirrors the footer's "Sign in to suggest
+   * edits" CTA); signed-in users jump straight into the edit sub-view with
+   * the field expanded.
+   * @param {Function} expandField - Setter that reveals the target field's input
+   */
+  const handleAddFact = (expandField: () => void) => {
+    if (!isSignedIn) {
+      signIn('google')
+      return
+    }
+    openEditField(expandField)
+  }
+
   /** Discards pending edits and returns to view mode. */
   const handleCancelEdit = () => {
     resetEditForm()
@@ -1065,6 +1147,14 @@ export function PersonDrawer({
       onCancel={() => setConfirmAction(null)}
     />
   )
+
+  // Status row pills (docs/DESIGN_SYSTEM.md §4.1): living/redacted, root of the current
+  // tree, and a count of this user's own unreviewed suggestions.
+  const isLiving = detail?.living ?? person.living ?? false
+  const isRootPerson = !!rootId && rootId === person.gedcomId
+  const pendingChangeCount = myChanges
+    ? (myChanges.createChange ? 1 : 0) + myChanges.relationshipChanges.length + myChanges.updateChanges.length
+    : 0
 
   let content: React.ReactNode
   if (mode === 'edit') {
@@ -1402,22 +1492,34 @@ export function PersonDrawer({
       className={DRAWER_CONTAINER_CLASS}
     >
       <DrawerDragHandle />
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-        <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
-          {(detail?.photoUrl ?? person.photoUrl) && (
+      {/* Header — avatar, name, lifespan, close (docs/DESIGN_SYSTEM.md §4.1) */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-line">
+        <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
+          {(detail?.photoUrl ?? person.photoUrl) ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={(detail?.photoUrl ?? person.photoUrl) as string}
               alt=""
               aria-hidden="true"
               data-testid="person-drawer-photo"
-              className="w-9 h-9 rounded-full object-cover border border-white/20 flex-shrink-0"
+              className="w-12 h-12 rounded-full object-cover border border-line flex-shrink-0"
             />
+          ) : (
+            <div
+              aria-hidden="true"
+              className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-semibold flex-shrink-0 ${SEX_AVATAR_BG[person.sex] ?? SEX_AVATAR_BG.default}`}
+            >
+              {(person.name || '?').trim().charAt(0).toUpperCase()}
+            </div>
           )}
-          <h2 className="text-white font-semibold text-base truncate">
-            {person.name || <span className="text-slate-500 italic">Unknown</span>}
-          </h2>
+          <div className="min-w-0">
+            <h2 className="text-ink [font:var(--ft-name-lg)] truncate">
+              {person.name || <span className="text-ink-3 italic">Unknown</span>}
+            </h2>
+            {dates && (
+              <p className="text-ink-3 [font:var(--ft-mono)] truncate">{dates}</p>
+            )}
+          </div>
         </div>
         {isSignedIn && (
           <button
@@ -1446,13 +1548,79 @@ export function PersonDrawer({
         </button>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-        {dates && (
-          <p className="text-slate-400 text-sm">{dates}</p>
-        )}
-        <p data-testid="person-drawer-gedcom-id" className="text-slate-500 text-xs font-mono">{person.gedcomId}</p>
+      {/* Status row — Living / pending edits / Root pills (docs/DESIGN_SYSTEM.md §4.1) */}
+      {(isLiving || isRootPerson || pendingChangeCount > 0) && (
+        <div data-testid="person-drawer-status-row" className="flex flex-wrap items-center gap-2 px-5 py-2 border-b border-line">
+          {isLiving && (
+            <span data-testid="person-drawer-status-living" className={STATUS_PILL_LIVING_CLASS}>Living</span>
+          )}
+          {pendingChangeCount > 0 && (
+            <span data-testid="person-drawer-status-pending" className={STATUS_PILL_PENDING_CLASS}>
+              {pendingChangeCount} pending edit{pendingChangeCount === 1 ? '' : 's'}
+            </span>
+          )}
+          {isRootPerson && (
+            <span data-testid="person-drawer-status-root" className={STATUS_PILL_ROOT_CLASS}>Root</span>
+          )}
+        </div>
+      )}
 
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Facts — label/value rows, full-bleed rule below, rows divided by hairlines (docs/DESIGN_SYSTEM.md §4.1) */}
+        <div data-testid="person-drawer-facts" className="px-5 border-b border-line divide-y divide-line">
+          <FactRow testId="person-drawer-gedcom-id" label="ID" value={person.gedcomId} mono />
+          {detail && (
+            detail.birthPlace ? (
+              <FactRow testId="person-drawer-fact-birthplace" label="Birthplace" value={detail.birthPlace} mono />
+            ) : (
+              <FactRowGhostButton
+                testId="person-drawer-fact-birthplace-add"
+                label="Birthplace"
+                addLabel="birth place"
+                onClick={() => handleAddFact(() => setShowEditBirthPlace(true))}
+              />
+            )
+          )}
+          {detail && (
+            detail.deathPlace ? (
+              <FactRow testId="person-drawer-fact-deathplace" label="Death place" value={detail.deathPlace} mono />
+            ) : (
+              <FactRowGhostButton
+                testId="person-drawer-fact-deathplace-add"
+                label="Death place"
+                addLabel="death place"
+                onClick={() => handleAddFact(() => setShowEditDeathPlace(true))}
+              />
+            )
+          )}
+          {detail && (
+            detail.occupation ? (
+              <FactRow testId="person-drawer-fact-occupation" label="Occupation" value={detail.occupation} />
+            ) : (
+              <FactRowGhostButton
+                testId="person-drawer-fact-occupation-add"
+                label="Occupation"
+                addLabel="occupation"
+                onClick={() => handleAddFact(() => setShowEditOccupation(true))}
+              />
+            )
+          )}
+          {detail && (
+            detail.notes ? (
+              <FactRow testId="person-drawer-fact-notes" label="Notes" value={detail.notes} wrap />
+            ) : (
+              <FactRowGhostButton
+                testId="person-drawer-fact-notes-add"
+                label="Notes"
+                addLabel="notes"
+                onClick={() => handleAddFact(() => setShowEditNotes(true))}
+              />
+            )
+          )}
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
         {rootId && person.gedcomId !== rootId && (
           <div data-testid="person-drawer-relationship">
             {relationship.status !== 'success' && (
@@ -1495,10 +1663,6 @@ export function PersonDrawer({
 
         {detail && (
           <>
-            {detail.birthPlace && (
-              <p className="text-slate-400 text-xs">Born: {detail.birthPlace}</p>
-            )}
-
             <section data-testid="person-drawer-parents">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Parents</h3>
               {detail.parents.length === 0 ? (
@@ -1512,7 +1676,7 @@ export function PersonDrawer({
                     return (
                       <li key={p.gedcomId} className="flex items-center gap-1">
                         <div className="flex-1 min-w-0">
-                          <RelativeRow person={p} onSelect={onSelectPerson} onReroot={onReroot} />
+                          <RelativeRow person={p} onReroot={onReroot} />
                         </div>
                         {removableChange && pendingRemoveParentId !== removableChange.id && (
                           <button
@@ -1573,7 +1737,7 @@ export function PersonDrawer({
                 <p className="text-slate-600 text-xs italic">None recorded</p>
               ) : (
                 <ul className="space-y-1">
-                  {detail.siblings.map(s => <li key={s.gedcomId}><RelativeRow person={s} onSelect={onSelectPerson} onReroot={onReroot} /></li>)}
+                  {detail.siblings.map(s => <li key={s.gedcomId}><RelativeRow person={s} onReroot={onReroot} /></li>)}
                 </ul>
               )}
             </section>
@@ -1592,7 +1756,7 @@ export function PersonDrawer({
                       <li key={m.unionId} className="space-y-1">
                         <div className="flex items-center gap-1">
                           <div className="flex-1 min-w-0">
-                            {m.spouse && <RelativeRow person={m.spouse} onSelect={onSelectPerson} onReroot={onReroot} />}
+                            {m.spouse && <RelativeRow person={m.spouse} onReroot={onReroot} />}
                           </div>
                           {removableChange && (
                             <button
@@ -1610,7 +1774,7 @@ export function PersonDrawer({
                         </div>
                         {m.children.length > 0 && (
                           <ul className="pl-4 space-y-1">
-                            {m.children.map(c => <li key={c.gedcomId}><RelativeRow person={c} onSelect={onSelectPerson} onReroot={onReroot} small /></li>)}
+                            {m.children.map(c => <li key={c.gedcomId}><RelativeRow person={c} onReroot={onReroot} small /></li>)}
                           </ul>
                         )}
                       </li>
@@ -1653,10 +1817,11 @@ export function PersonDrawer({
             </section>
           </>
         )}
+        </div>
       </div>
 
-      {/* Footer – re-root action + unauthenticated CTA */}
-      <div className="px-5 py-4 border-t border-white/10 space-y-2">
+      {/* Actions — sticky bottom bar: re-root, delete, unauthenticated CTA (docs/DESIGN_SYSTEM.md §4.1 point 6) */}
+      <div data-testid="person-drawer-actions" className={DRAWER_ACTIONS_CLASS}>
         <button
           data-testid="person-drawer-reroot"
           onClick={() => { onReroot(person.gedcomId); onClose() }}

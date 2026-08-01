@@ -93,3 +93,50 @@ describe('SuggestionsReview — before/after diff treatment', () => {
     expect(after.className).toContain('text-ink-3')
   })
 })
+
+describe('SuggestionsReview — "View in tree" link', () => {
+  let container: HTMLDivElement
+  let root: ReturnType<typeof createRoot>
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+  })
+
+  afterEach(() => {
+    act(() => { root.unmount() })
+    document.body.removeChild(container)
+  })
+
+  async function renderReview(suggestions: Change[]) {
+    await act(async () => {
+      root = createRoot(container)
+      root.render(<SuggestionsReview initialSuggestions={suggestions} />)
+    })
+  }
+
+  it('renders a link pointing to the tree re-rooted on the suggestion\'s target person', async () => {
+    await renderReview([makeSuggestion({ targetId: '@I42@', personName: 'Ada Lovelace' })])
+
+    const link = container.querySelector('a')
+    expect(link).not.toBeNull()
+    expect(link?.textContent).toBe('View in tree')
+    expect(link?.getAttribute('href')).toBe('/?root=%40I42%40')
+    expect(link?.getAttribute('aria-label')).toBe('View Ada Lovelace in tree')
+  })
+
+  it('falls back to the target id in the aria-label when personName is missing', async () => {
+    await renderReview([makeSuggestion({ targetId: '@I42@', personName: null })])
+
+    const link = container.querySelector('a')
+    expect(link?.getAttribute('aria-label')).toBe('View @I42@ in tree')
+  })
+
+  it('omits the link when targetId is not a valid GEDCOM id (e.g. CREATE_PERSON suggestions)', async () => {
+    await renderReview([
+      makeSuggestion({ changeType: 'CREATE_PERSON', targetId: '', personName: null }),
+    ])
+
+    expect(container.querySelector('a')).toBeNull()
+  })
+})

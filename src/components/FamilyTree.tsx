@@ -35,7 +35,7 @@ import { applyDagreLayout, GenerationLevel } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import type { TreeResponse, PersonData, PersonDetailResponse, PersonSummary } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, DRAWER_CONTAINER_CLASS, DRAWER_DRAG_HANDLE_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, getPersonLodVariant } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -400,6 +400,8 @@ export function computeCascadeDeleteConnectionCount(
 const selectCanvasWidth = (s: ReactFlowState) => s.width
 const selectCanvasHeight = (s: ReactFlowState) => s.height
 const selectTransform = (s: ReactFlowState) => s.transform
+/** Zoom factor only (`transform[2]`) — the single subscription point for node level-of-detail (docs/DESIGN_SYSTEM.md §3.2). */
+const selectZoom = (s: ReactFlowState) => s.transform[2]
 
 /**
  * Side drawer panel showing details for a selected person.
@@ -1831,6 +1833,27 @@ function FlowCanvas({
    */
   const canvasWidth = useStore(selectCanvasWidth)
   const canvasHeight = useStore(selectCanvasHeight)
+  /**
+   * Single canvas-level zoom subscription driving person-node level-of-detail
+   * (docs/DESIGN_SYSTEM.md §3.2). Subscribing once here — instead of once per
+   * node — keeps 368-node trees off the store's hot path; only the discrete
+   * variant below, not this raw float, reaches node data.
+   */
+  const zoom = useStore(selectZoom)
+  /** Discrete LOD variant for the current zoom, memoised so it only changes at a threshold crossing. */
+  const lodVariant = useMemo(() => getPersonLodVariant(zoom), [zoom])
+  /**
+   * `nodes` with the current {@link lodVariant} injected into person node data.
+   * Memoised on `[nodes, lodVariant]` so a continuous zoom gesture only produces
+   * a new array — and only triggers a `PersonNode` re-render — at a threshold
+   * crossing, not on every frame (docs/DESIGN_SYSTEM.md §3.2).
+   */
+  const nodesWithLod = useMemo(
+    () => nodes.map((n) =>
+      n.type === 'person' ? { ...n, data: { ...(n.data as PersonData), lodVariant } } : n
+    ),
+    [nodes, lodVariant]
+  )
   const abortRef = useRef<AbortController | null>(null)
   /** Tracks whether the user has actively changed depth or person, so an untouched initial load never rewrites the URL. */
   const userInteractedRef = useRef(false)
@@ -2016,7 +2039,7 @@ function FlowCanvas({
         </div>
       )}
       <ReactFlow
-        nodes={nodes}
+        nodes={nodesWithLod}
         edges={edges}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}

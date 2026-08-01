@@ -16,6 +16,9 @@ export default defineConfig({
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     env: {
+      // Hides the Next.js dev overlay indicator, which otherwise sits bottom-left
+      // and intercepts taps on the collapsed mobile toolbar toggle (issue #202).
+      PLAYWRIGHT_E2E: '1',
       // Provide NextAuth config to the dev server so auth flows can boot
       // during E2E tests without real Google credentials. Tests stub
       // accounts.google.com, so these IDs never leave the test process.

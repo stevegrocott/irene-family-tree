@@ -36,7 +36,7 @@ import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import { computeLineage } from '@/lib/lineage'
 import type { TreeResponse, PersonData, UnionData, PersonDetailResponse, PersonSummary, FlowNode, FlowEdge } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, getDrawerContainerClass, DEFAULT_DRAWER_DETENT, type DrawerDetent, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS, EDGE_TYPES, EDGE_RENDER_TYPE } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, getDrawerContainerClass, DEFAULT_DRAWER_DETENT, type DrawerDetent, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS, EDGE_TYPES, EDGE_RENDER_TYPE, DEFAULT_DENSITY, getDefaultDensity } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
 
@@ -232,15 +232,18 @@ export function Toolbar({
       </span>
       {truncated === true && (
         // Intentionally omits flex-shrink-0: this item absorbs tight-width pressure via
-        // max-w-[10rem]/sm:max-w-[16rem] + min-w-0 + text-ellipsis, while sibling items stay fixed-size.
+        // max-w-[10rem]/sm:max-w-[16rem] + text-ellipsis, while sibling items stay fixed-size.
         // The visible text is degraded to "⚠ + node count" (rather than the full prose) so this
         // remains the toolbar's widest contributor in name only, not in practice — the full
         // sentence is still available in `title` (e.g. on hover).
+        // `min-w-[3rem]` (not `min-w-0`) is the floor that keeps it shrinkable but never zero-width:
+        // with the #202 stepper widening the row, an unbounded shrink collapsed it entirely at
+        // ~800px, silently dropping the #190 AC4 warning instead of ellipsising it.
         <span
           data-testid="toolbar-truncation-notice"
           role="status"
           title={`⚠ Tree truncated${typeof totalNodes === 'number' ? ` — showing a partial view of ${totalNodes} total nodes` : ''}`}
-          className="text-xs text-amber-300 select-none max-w-[10rem] overflow-hidden whitespace-nowrap text-ellipsis min-w-0 sm:max-w-[16rem]"
+          className="text-xs text-amber-300 select-none max-w-[10rem] overflow-hidden whitespace-nowrap text-ellipsis min-w-[3rem] sm:max-w-[16rem]"
         >
           ⚠{typeof totalNodes === 'number' ? ` ${totalNodes}` : ' Truncated'}
         </span>
@@ -2477,6 +2480,18 @@ export default function FamilyTree() {
   // Captured once on mount so later URL updates (from our own router.replace calls) don't
   // re-trigger root resolution — only the URL present on initial load takes precedence.
   const [initialUrlState] = useState(() => parseTreeUrlState(searchParams))
+  // null until mount so SSR/first paint uses DEFAULT_DENSITY, avoiding a hydration mismatch
+  // (docs/DESIGN_SYSTEM.md §6: density defaults to dense below 640px, compact at/above it).
+  const [viewportWidth, setViewportWidth] = useState<number | null>(null)
+
+  useEffect(() => {
+    const updateViewportWidth = () => setViewportWidth(window.innerWidth)
+    updateViewportWidth()
+    window.addEventListener('resize', updateViewportWidth)
+    return () => window.removeEventListener('resize', updateViewportWidth)
+  }, [])
+
+  const density = viewportWidth === null ? DEFAULT_DENSITY : getDefaultDensity(viewportWidth)
 
   /**
    * Updates the active root person and persists the selection to localStorage
@@ -2530,7 +2545,7 @@ export default function FamilyTree() {
   }
 
   return (
-    <div className="relative w-full h-dvh bg-[#050a18]">
+    <div className="relative w-full h-dvh bg-[#050a18]" data-density={density}>
       <ReactFlowProvider>
         <FlowCanvas rootId={rootId} onSelectRoot={handleSelectRoot} persons={persons} treeVersion={treeVersion} initialUrlState={initialUrlState} />
       </ReactFlowProvider>

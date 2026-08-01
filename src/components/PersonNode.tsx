@@ -97,9 +97,11 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
     return (
       <div
         data-testid="person-node-dot"
+        role="button"
+        tabIndex={0}
         aria-label={accessibleName}
         title={accessibleName}
-        className={`relative rounded-[3px] w-[10px] h-[10px] ${borderClass} cursor-pointer`}
+        className={`relative rounded-[3px] w-[10px] h-[10px] ${borderClass} cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
         style={{ backgroundColor: tickColor }}
       >
         <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
@@ -112,9 +114,11 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
     return (
       <div
         data-testid="person-node-compact"
+        role="button"
+        tabIndex={0}
         aria-label={accessibleName}
         title={accessibleName}
-        className={`relative flex items-center bg-surface ${borderClass} rounded-node px-4 h-10 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer`}
+        className={`relative flex items-center bg-surface ${borderClass} rounded-node px-4 h-10 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
       >
         <div
           aria-hidden="true"
@@ -134,9 +138,11 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
   return (
     <div
       data-testid="person-node-full"
+      role="button"
+      tabIndex={0}
       aria-label={accessibleName}
       title={accessibleName}
-      className={`relative bg-surface ${borderClass} rounded-node px-4 py-3 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer`}
+      className={`relative bg-surface ${borderClass} rounded-node px-4 py-3 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
     >
       <div
         aria-hidden="true"

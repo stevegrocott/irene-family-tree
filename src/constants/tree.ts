@@ -87,7 +87,7 @@ export const SEX_AVATAR_TEXT: Record<string, string> = {
 }
 
 /** Drawer layout classes — responsive: mobile bottom-sheet, desktop side panel. */
-export const DRAWER_CONTAINER_CLASS = 'absolute inset-x-0 bottom-0 z-20 w-full max-h-[60vh] rounded-t-[var(--ft-r-panel)] border-t border-line bg-surface shadow-[var(--ft-shadow-3)] flex flex-col sm:inset-x-auto sm:top-0 sm:right-0 sm:bottom-auto sm:h-full sm:max-h-none sm:w-80 sm:rounded-none sm:border-t-0 sm:border-l sm:shadow-none'
+export const DRAWER_CONTAINER_CLASS = 'absolute inset-x-0 bottom-0 z-20 w-full max-h-[60vh] rounded-t-[var(--ft-r-panel)] border-t border-line bg-surface shadow-[var(--ft-shadow-3)] flex flex-col sm:inset-x-auto sm:top-0 sm:right-0 sm:bottom-auto sm:h-full sm:max-h-none sm:w-[360px] sm:rounded-none sm:border-t-0 sm:border-l sm:shadow-none'
 
 export const DRAWER_DRAG_HANDLE_CLASS = 'flex justify-center pt-2 pb-1 sm:hidden'
 

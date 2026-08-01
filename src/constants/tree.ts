@@ -88,3 +88,25 @@ export const SPINNER_CLASS = 'w-4 h-4 border-2 border-line border-t-ink rounded-
 
 /** Shared base for ConfirmDialog's cancel/confirm buttons — see ConfirmDialog.tsx. */
 export const DIALOG_BUTTON_BASE_CLASS = 'h-11 sm:h-9 px-4 rounded-[var(--ft-r-md)] [font:var(--ft-body-strong)] transition-colors focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]'
+
+/**
+ * Level-of-detail zoom thresholds (docs/DESIGN_SYSTEM.md §3.2): below `DOT`
+ * nodes render as a bare shape, between `DOT` and `FULL` they show name +
+ * birth year, above `FULL` they render every detail.
+ */
+export const LOD_ZOOM_THRESHOLDS = {
+  DOT: 0.45,
+  FULL: 0.85,
+} as const
+
+export type NodeLodVariant = 'dot' | 'compact' | 'full'
+
+/**
+ * Maps a React Flow zoom level to the node LOD variant. Boundary values
+ * (0.45, 0.85) resolve to the `compact` variant — see AC4 of issue #196.
+ */
+export function getNodeLodVariant(zoom: number): NodeLodVariant {
+  if (zoom < LOD_ZOOM_THRESHOLDS.DOT) return 'dot'
+  if (zoom <= LOD_ZOOM_THRESHOLDS.FULL) return 'compact'
+  return 'full'
+}

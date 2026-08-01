@@ -28,6 +28,15 @@ function nodeSize(type: string | undefined) {
 }
 
 /**
+ * One clustered generation rank: its signed generation number (0 = root's rank)
+ * and the rounded y-coordinate shared by every person node at that rank.
+ */
+export interface GenerationLevel {
+  generation: number
+  y: number
+}
+
+/**
  * Derive signed generation numbers from laid-out y-positions.
  * Clusters person nodes by y-coordinate rank; root person = generation 0,
  * nodes above = negative (ancestors), nodes below = positive (descendants).
@@ -38,11 +47,11 @@ function nodeSize(type: string | undefined) {
 function generationsFromLayout(
   positionedNodes: Array<Node & { position: { x: number; y: number } }>,
   gedcomRootId: string,
-): Map<string, number> {
+): { generationByNodeId: Map<string, number>; levels: GenerationLevel[] } {
   const rootNode = positionedNodes.find(
     n => n.type === 'person' && (n.data as { gedcomId?: string }).gedcomId === gedcomRootId,
   )
-  if (!rootNode) return new Map()
+  if (!rootNode) return { generationByNodeId: new Map(), levels: [] }
 
   // Collect unique y-levels for person nodes (round to nearest 10px to absorb float drift)
   const personNodes = positionedNodes.filter(n => n.type === 'person')
@@ -52,12 +61,14 @@ function generationsFromLayout(
   const rootY = Math.round(rootNode.position.y / 10) * 10
   const rootRank = yLevels.indexOf(rootY)
 
-  const gen = new Map<string, number>()
+  const generationByNodeId = new Map<string, number>()
   for (const n of personNodes) {
     const rank = yLevels.indexOf(Math.round(n.position.y / 10) * 10)
-    if (rank !== -1) gen.set(n.id, rank - rootRank)
+    if (rank !== -1) generationByNodeId.set(n.id, rank - rootRank)
   }
-  return gen
+
+  const levels = yLevels.map((y, rank) => ({ generation: rank - rootRank, y }))
+  return { generationByNodeId, levels }
 }
 
 /**
@@ -111,12 +122,12 @@ export function applyDagreLayout(
   })
 
   // Derive signed generations from laid-out y-positions (requires layout to be complete first)
-  const generations = options?.rootId
+  const { generationByNodeId, levels: generationLevels } = options?.rootId
     ? generationsFromLayout(positionedNodes, options.rootId)
-    : new Map<string, number>()
+    : { generationByNodeId: new Map<string, number>(), levels: [] as GenerationLevel[] }
 
   const finalNodes = positionedNodes.map(n => {
-    const generation = generations.get(n.id)
+    const generation = generationByNodeId.get(n.id)
     return generation !== undefined ? { ...n, data: { ...n.data, generation } } : n
   })
 
@@ -124,5 +135,6 @@ export function applyDagreLayout(
     nodes: finalNodes,
     edges,
     bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+    generationLevels,
   }
 }

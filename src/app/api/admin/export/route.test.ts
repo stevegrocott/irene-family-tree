@@ -1,3 +1,4 @@
+import type { Session } from 'next-auth'
 import { neo4jErrorResponseMock } from '@/test-utils/neo4jMock'
 import { GET } from './route'
 
@@ -14,7 +15,7 @@ import { read } from '@/lib/neo4j'
 const mockRead = read as jest.MockedFunction<typeof read>
 
 import { auth } from '@/auth'
-const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockAuth = auth as unknown as jest.MockedFunction<() => Promise<Session | null>>
 
 const ADMIN_SESSION = { user: { email: 'admin@example.com', name: 'Admin', role: 'admin' } }
 const USER_SESSION = { user: { email: 'user@example.com', name: 'User', role: 'user' } }

@@ -632,9 +632,15 @@ export function PersonDrawer({
   const toggleDetent = useCallback(() => {
     setDetent(prev => (prev === 'peek' ? 'full' : 'peek'))
   }, [])
-  useEffect(() => {
+  // Reset the detent when the drawer switches to a different person. Adjusted during
+  // render (React's "adjusting state when a prop changes" pattern) rather than in an
+  // effect, so re-opening the drawer for someone else always starts collapsed without
+  // an extra post-commit render pass.
+  const [detentPersonId, setDetentPersonId] = useState(person.gedcomId)
+  if (detentPersonId !== person.gedcomId) {
+    setDetentPersonId(person.gedcomId)
     setDetent(DEFAULT_DRAWER_DETENT)
-  }, [person.gedcomId])
+  }
   const [detail, setDetail] = useState<PersonDetailResponse | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailVersion, setDetailVersion] = useState(0)
@@ -689,9 +695,19 @@ export function PersonDrawer({
     updateChanges: Array<{ id: string; newValue: Record<string, unknown>; appliedAt: string }>
   } | null>(null)
 
-  useEffect(() => {
+  // Reset the detail record and enter the loading state as soon as we know we're
+  // fetching for a new person/version, adjusted during render rather than as a
+  // synchronous setState at the top of the effect below (which would otherwise
+  // trigger cascading renders).
+  const detailFetchKey = `${person.gedcomId}:${detailVersion}`
+  const [loadedDetailKey, setLoadedDetailKey] = useState<string | null>(null)
+  if (loadedDetailKey !== detailFetchKey) {
+    setLoadedDetailKey(detailFetchKey)
     setDetail(null)
     setDetailLoading(true)
+  }
+
+  useEffect(() => {
     const ctrl = new AbortController()
     let cancelled = false
     fetch(`/api/person/${encodeURIComponent(person.gedcomId)}`, { signal: ctrl.signal })
@@ -709,8 +725,17 @@ export function PersonDrawer({
     return () => { cancelled = true; ctrl.abort() }
   }, [person.gedcomId, detailVersion])
 
-  useEffect(() => {
+  // Same render-time-adjustment pattern as `detailFetchKey` above: clear the
+  // previous person's changes before the fetch below runs, without a synchronous
+  // setState inside the effect body.
+  const myChangesFetchKey = `${person.gedcomId}:${detailVersion}`
+  const [loadedMyChangesKey, setLoadedMyChangesKey] = useState<string | null>(null)
+  if (loadedMyChangesKey !== myChangesFetchKey) {
+    setLoadedMyChangesKey(myChangesFetchKey)
     setMyChanges(null)
+  }
+
+  useEffect(() => {
     const ctrl = new AbortController()
     let cancelled = false
     fetch(`/api/person/${encodeURIComponent(person.gedcomId)}/my-changes`, { signal: ctrl.signal })
@@ -743,10 +768,16 @@ export function PersonDrawer({
   }, [person.gedcomId])
 
   // Relationship calculation is on-demand (triggered by the button below), so
-  // reset any previous result whenever the selected person or root changes, and
-  // abort any in-flight request on that change or on unmount.
-  useEffect(() => {
+  // reset any previous result whenever the selected person or root changes —
+  // adjusted during render, per the pattern above — and abort any in-flight
+  // request on that change or on unmount.
+  const relationshipKey = `${person.gedcomId}:${rootId ?? ''}`
+  const [trackedRelationshipKey, setTrackedRelationshipKey] = useState(relationshipKey)
+  if (trackedRelationshipKey !== relationshipKey) {
+    setTrackedRelationshipKey(relationshipKey)
     setRelationship({ status: 'idle' })
+  }
+  useEffect(() => {
     return () => { relationshipAbortRef.current?.abort() }
   }, [person.gedcomId, rootId])
 
@@ -791,11 +822,18 @@ export function PersonDrawer({
     return { ok: false, detail: String(detail) }
   }
 
+  // Clear stale search results as soon as the add-relative search becomes inactive
+  // (mode changes away from add-relative, or the query is cleared) — adjusted
+  // during render rather than via a synchronous setState in the effect below.
+  const searchActive = mode === 'add-relative' && !!searchQuery.trim()
+  const [wasSearchActive, setWasSearchActive] = useState(searchActive)
+  if (wasSearchActive !== searchActive) {
+    setWasSearchActive(searchActive)
+    if (!searchActive && searchResults.length > 0) setSearchResults([])
+  }
+
   useEffect(() => {
-    if (mode !== 'add-relative' || !searchQuery.trim()) {
-      if (searchResults.length > 0) setSearchResults([])
-      return
-    }
+    if (!searchActive) return
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     if (searchAbortRef.current) searchAbortRef.current.abort()
     searchTimerRef.current = setTimeout(() => {
@@ -810,7 +848,7 @@ export function PersonDrawer({
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
       if (searchAbortRef.current) searchAbortRef.current.abort()
     }
-  }, [searchQuery, mode])
+  }, [searchQuery, mode, searchActive])
 
   /** Clears all form state for adding a relative, preparing for a new add-relative flow. */
   const resetAddRelativeForm = () => {
@@ -2382,6 +2420,22 @@ function FlowCanvas({
     scrollFocusedNodeIntoView(nextEl ?? null)
   }, [flowNodes, flowEdges, scrollFocusedNodeIntoView])
 
+  // Enter the loading state and clear the previous error/hover as soon as we know
+  // we're fetching a new rootId/hops/treeVersion combination — adjusted during
+  // render rather than as a synchronous setState at the top of `fetchTree` below
+  // (which would otherwise trigger cascading renders when the effect calls it).
+  const treeFetchKey = `${rootId}:${hops}:${treeVersion}`
+  const [loadedTreeKey, setLoadedTreeKey] = useState<string | null>(null)
+  if (rootId && loadedTreeKey !== treeFetchKey) {
+    setLoadedTreeKey(treeFetchKey)
+    setLoading(true)
+    setError(null)
+    // A fresh load replaces `nodes` wholesale, so a stale hover id from the previous
+    // tree (e.g. after re-rooting) would otherwise resolve to an empty lineage set —
+    // dimming everything — until the pointer happens to re-enter a node.
+    setHoveredNodeId(null)
+  }
+
   /**
    * Fetches tree data for the current `rootId` and `hops` depth, applies dagre
    * layout, and updates the node/edge state. Aborts any in-flight request first.
@@ -2391,12 +2445,6 @@ function FlowCanvas({
     abortRef.current?.abort()
     abortRef.current = new AbortController()
     try {
-      setLoading(true)
-      setError(null)
-      // A fresh load replaces `nodes` wholesale, so a stale hover id from the previous
-      // tree (e.g. after re-rooting) would otherwise resolve to an empty lineage set —
-      // dimming everything — until the pointer happens to re-enter a node.
-      setHoveredNodeId(null)
       const res = await fetch(`/api/tree/${rootId}?hops=${hops}`, { signal: abortRef.current.signal })
       if (!res.ok) throw new Error(`Failed to fetch tree: ${res.status}`)
       const data: TreeResponse = await res.json()

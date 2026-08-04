@@ -60,6 +60,21 @@ async function setAdminCookie(context: import('@playwright/test').BrowserContext
   }])
 }
 
+/**
+ * Navigates to /admin and injects a fixture suggestion via SuggestionsReview's
+ * test-only `__setSuggestions` seam (see the file docblock: the admin page
+ * reads suggestions from Neo4j server-side, which this E2E environment has
+ * no live connection to).
+ */
+async function seedSuggestion(page: import('@playwright/test').Page, suggestion: Change) {
+  await page.goto('/admin', { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[data-testid="suggestions-review"]')
+  await page.waitForFunction(() => typeof (window as unknown as { __setSuggestions?: unknown }).__setSuggestions === 'function')
+  await page.evaluate((s) => {
+    (window as unknown as { __setSuggestions: (s: unknown[]) => void }).__setSuggestions([s])
+  }, suggestion)
+}
+
 // ── Fixture ──────────────────────────────────────────────────────────────────
 
 /**
@@ -99,19 +114,12 @@ test.describe('Admin Suggestions diff (/admin)', () => {
     })
 
     test('renders the before value struck through and the after value without a strikethrough', async ({ page }) => {
-      // The admin page reads suggestions from Neo4j server-side, which this
-      // E2E environment has no live connection to (see file docblock). Inject
-      // the fixture suggestion client-side via SuggestionsReview's test-only
-      // `__setSuggestions` seam so the diff markup actually renders, then
-      // assert on the real computed styles the browser applies — this is the
-      // one thing the jsdom-based unit tests in SuggestionsReview.test.tsx
-      // cannot verify.
-      await page.goto('/admin', { waitUntil: 'domcontentloaded' })
-      await page.waitForSelector('[data-testid="suggestions-review"]')
-      await page.waitForFunction(() => typeof (window as unknown as { __setSuggestions?: unknown }).__setSuggestions === 'function')
-      await page.evaluate((suggestion) => {
-        (window as unknown as { __setSuggestions: (s: unknown[]) => void }).__setSuggestions([suggestion])
-      }, mockSuggestion)
+      // Inject the fixture suggestion client-side via SuggestionsReview's
+      // test-only `__setSuggestions` seam so the diff markup actually
+      // renders, then assert on the real computed styles the browser
+      // applies — this is the one thing the jsdom-based unit tests in
+      // SuggestionsReview.test.tsx cannot verify.
+      await seedSuggestion(page, mockSuggestion)
 
       const beforeValue = mockSuggestion.previousValue?.birthPlace as string
       const afterValue = mockSuggestion.newValue.birthPlace as string
@@ -126,6 +134,36 @@ test.describe('Admin Suggestions diff (/admin)', () => {
       await expect(after).toBeVisible()
       await expect(after).toHaveText(afterValue)
       await expect(after).toHaveCSS('text-decoration-line', 'none')
+    })
+
+    test('renders the before and after values on differing background colours', async ({ page }) => {
+      // The before/after values use the `--ft-declined-soft` / `--ft-approved-soft`
+      // theme tokens (see tests/e2e/theme-tokens.spec.ts for precedent on
+      // asserting against --ft-* custom properties rather than literal
+      // colours). Assert the two rendered backgrounds are visually distinct
+      // without pinning to a specific hex/rgb value, so a future theme
+      // change can't silently make the diff unreadable.
+      await seedSuggestion(page, mockSuggestion)
+
+      const before = page.getByTestId('diff-before-birthPlace')
+      const after = page.getByTestId('diff-after-birthPlace')
+
+      await expect(before).toBeVisible()
+      await expect(after).toBeVisible()
+
+      const [beforeBackground, afterBackground] = await Promise.all([
+        before.evaluate(el => getComputedStyle(el).backgroundColor),
+        after.evaluate(el => getComputedStyle(el).backgroundColor),
+      ])
+
+      // Both must be actual, opaque colours (not "transparent" / rgba(0,0,0,0)),
+      // otherwise a difference in value wouldn't imply a visible difference.
+      expect(beforeBackground).not.toBe('rgba(0, 0, 0, 0)')
+      expect(beforeBackground).not.toBe('transparent')
+      expect(afterBackground).not.toBe('rgba(0, 0, 0, 0)')
+      expect(afterBackground).not.toBe('transparent')
+
+      expect(beforeBackground).not.toBe(afterBackground)
     })
   })
 })

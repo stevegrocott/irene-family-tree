@@ -20,7 +20,7 @@ const mockRead = read as jest.MockedFunction<typeof read>
 const mockWrite = write as jest.MockedFunction<typeof write>
 
 import { auth } from '@/auth'
-const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockAuth = auth as unknown as jest.MockedFunction<() => Promise<unknown>>
 
 import { revertChange } from '@/lib/revert'
 const mockRevert = revertChange as jest.MockedFunction<typeof revertChange>
@@ -58,7 +58,7 @@ describe('POST /api/admin/changes/[id]', () => {
   })
 
   it('returns 403 when the authenticated user is not an admin', async () => {
-    mockAuth.mockResolvedValue(USER_SESSION as never)
+    mockAuth.mockResolvedValue(USER_SESSION)
 
     const response = await POST(makeRequest({ action: 'keep' }), makeParams('change-1'))
     const body = await response.json()
@@ -68,7 +68,7 @@ describe('POST /api/admin/changes/[id]', () => {
   })
 
   it('returns 400 when the request body is not valid JSON', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     const request = new Request('http://localhost/api/admin/changes/change-1', {
       method: 'POST',
       body: 'not-json',
@@ -82,7 +82,7 @@ describe('POST /api/admin/changes/[id]', () => {
   })
 
   it('returns 400 when action is missing', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
 
     const response = await POST(makeRequest({}), makeParams('change-1'))
     const body = await response.json()
@@ -92,7 +92,7 @@ describe('POST /api/admin/changes/[id]', () => {
   })
 
   it('returns 400 when action is an unrecognised value', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
 
     const response = await POST(makeRequest({ action: 'delete' }), makeParams('change-1'))
     const body = await response.json()
@@ -102,7 +102,7 @@ describe('POST /api/admin/changes/[id]', () => {
   })
 
   it('returns 500 when the Neo4j read throws', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     mockRead.mockRejectedValue(new Error('Connection refused'))
     jest.spyOn(console, 'error').mockImplementation(() => {})
 
@@ -114,7 +114,7 @@ describe('POST /api/admin/changes/[id]', () => {
   })
 
   it('returns 404 when no change record is found', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     mockRead.mockResolvedValue([])
 
     const response = await POST(makeRequest({ action: 'keep' }), makeParams('change-1'))
@@ -125,7 +125,7 @@ describe('POST /api/admin/changes/[id]', () => {
   })
 
   it('returns 409 when the change status is not live', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     mockRead.mockResolvedValue([{ ...liveChange, status: 'kept' }])
 
     const response = await POST(makeRequest({ action: 'keep' }), makeParams('change-1'))
@@ -136,7 +136,7 @@ describe('POST /api/admin/changes/[id]', () => {
   })
 
   it('returns 200 with success:true and sets status to kept on keep action', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     mockRead.mockResolvedValue([liveChange])
     mockWrite.mockResolvedValue([])
 
@@ -153,7 +153,7 @@ describe('POST /api/admin/changes/[id]', () => {
   })
 
   it('returns 500 when the Neo4j write throws on keep action', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     mockRead.mockResolvedValue([liveChange])
     mockWrite.mockRejectedValue(new Error('Write failed'))
     jest.spyOn(console, 'error').mockImplementation(() => {})
@@ -166,7 +166,7 @@ describe('POST /api/admin/changes/[id]', () => {
   })
 
   it('passes the change id from the route params to the Neo4j read call', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     mockRead.mockResolvedValue([{ ...liveChange, id: 'change-99' }])
     mockWrite.mockResolvedValue([])
 
@@ -180,7 +180,7 @@ describe('POST /api/admin/changes/[id]', () => {
 
   describe('revert action delegation', () => {
     it('delegates to revertChange with the change id and reverter derived from the admin session', async () => {
-      mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+      mockAuth.mockResolvedValue(ADMIN_SESSION)
       mockRead.mockResolvedValue([liveChange])
       mockRevert.mockResolvedValue({ ok: true })
 
@@ -196,7 +196,7 @@ describe('POST /api/admin/changes/[id]', () => {
     })
 
     it('surfaces 409 conflict from revertChange with conflictingChange payload', async () => {
-      mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+      mockAuth.mockResolvedValue(ADMIN_SESSION)
       mockRead.mockResolvedValue([liveChange])
       const conflict = {
         kind: 'has-relationships' as const,
@@ -222,7 +222,7 @@ describe('POST /api/admin/changes/[id]', () => {
     it('falls back to email for name when session has no name', async () => {
       mockAuth.mockResolvedValue({
         user: { email: 'noname@example.com', role: 'admin' },
-      } as never)
+      })
       mockRead.mockResolvedValue([liveChange])
       mockRevert.mockResolvedValue({ ok: true })
 

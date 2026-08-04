@@ -97,5 +97,35 @@ test.describe('Admin Suggestions diff (/admin)', () => {
       await page.goto('/admin', { waitUntil: 'domcontentloaded' })
       await expect(page.getByTestId('suggestions-review')).toBeVisible()
     })
+
+    test('renders the before value struck through and the after value without a strikethrough', async ({ page }) => {
+      // The admin page reads suggestions from Neo4j server-side, which this
+      // E2E environment has no live connection to (see file docblock). Inject
+      // the fixture suggestion client-side via SuggestionsReview's test-only
+      // `__setSuggestions` seam so the diff markup actually renders, then
+      // assert on the real computed styles the browser applies — this is the
+      // one thing the jsdom-based unit tests in SuggestionsReview.test.tsx
+      // cannot verify.
+      await page.goto('/admin', { waitUntil: 'domcontentloaded' })
+      await page.waitForSelector('[data-testid="suggestions-review"]')
+      await page.waitForFunction(() => typeof (window as unknown as { __setSuggestions?: unknown }).__setSuggestions === 'function')
+      await page.evaluate((suggestion) => {
+        (window as unknown as { __setSuggestions: (s: unknown[]) => void }).__setSuggestions([suggestion])
+      }, mockSuggestion)
+
+      const beforeValue = mockSuggestion.previousValue?.birthPlace as string
+      const afterValue = mockSuggestion.newValue.birthPlace as string
+
+      const before = page.getByTestId('diff-before-birthPlace')
+      const after = page.getByTestId('diff-after-birthPlace')
+
+      await expect(before).toBeVisible()
+      await expect(before).toHaveText(beforeValue)
+      await expect(before).toHaveCSS('text-decoration-line', 'line-through')
+
+      await expect(after).toBeVisible()
+      await expect(after).toHaveText(afterValue)
+      await expect(after).toHaveCSS('text-decoration-line', 'none')
+    })
   })
 })

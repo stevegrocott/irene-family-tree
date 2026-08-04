@@ -250,4 +250,32 @@ describe('applyDagreLayout — union horizontal centering', () => {
     const expectedCenter = (centerX(john) + centerX(johnSpouse)) / 2
     expect(centerX(u2)).toBeCloseTo(expectedCenter, 5)
   })
+
+  it('aligns a union to its single in-view parent and leaves rank assignment unchanged', () => {
+    // Arrange: only one parent (donald) is present in this view — the other spouse has been
+    // filtered out (e.g. a partial tree slice). u1 has no second UNION-edge parent to average
+    // against, so it must align exactly to donald's centre x rather than drift or collapse to 0.
+    const nodes: Node[] = [
+      personNode('donald', '@I3@'),
+      unionNode('u1'),
+      personNode('stephen', '@I6@'),
+    ]
+    const edges: Edge[] = [
+      unionEdge('e5', 'donald', 'u1'),
+      childEdge('e7', 'u1', 'stephen'),
+    ]
+
+    // Act
+    const { nodes: laidNodes } = applyDagreLayout(nodes, edges)
+
+    // Assert: union's centre x matches its one known parent exactly.
+    const donald = laidNodes.find(n => n.id === 'donald')!
+    const u1 = laidNodes.find(n => n.id === 'u1')!
+    expect(centerX(u1)).toBeCloseTo(centerX(donald), 5)
+
+    // Assert: rank assignment is unaffected by the centering pass — parent and child still
+    // resolve to distinct, correctly ordered y-levels.
+    expect(personYLevels(laidNodes).size).toBeGreaterThan(1)
+    expect(laidNodes.find(n => n.id === 'stephen')!.position.y).toBeGreaterThan(donald.position.y)
+  })
 })

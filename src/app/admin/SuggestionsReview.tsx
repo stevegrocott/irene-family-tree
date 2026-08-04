@@ -82,8 +82,10 @@ export function SuggestionsReview({ initialSuggestions }: { initialSuggestions: 
   // page's other client-fetched data it can't be driven by a Playwright
   // `page.route` mock. E2E specs that need real suggestion cards to render —
   // e.g. to exercise the "View in tree" link — call this after mount to
-  // inject a fixture. No-op in production: nothing calls it outside tests.
+  // inject a fixture. Gated behind a build-time flag so the hook is compiled
+  // out of the real production bundle (see playwright.config.ts webServer.env).
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_E2E !== '1') return
     const win = window as unknown as { __setSuggestions?: (s: Change[]) => void }
     win.__setSuggestions = setSuggestions
     return () => { delete win.__setSuggestions }

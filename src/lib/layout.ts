@@ -131,12 +131,27 @@ export function applyDagreLayout(
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
 
+  // Same nodesep dagre used when laying out the graph — the minimum gap we must
+  // preserve between a repositioned union and any rank-mate's occupied x-span.
+  const NODE_GAP = 30
+
   const positionedNodes = rawPositionedNodes.map(n => {
     const { w, h } = nodeSize(n.type)
     const parentCenterXs = n.type === 'union' ? unionParentCenterXs.get(n.id) : undefined
-    const px = parentCenterXs?.length
-      ? parentCenterXs.reduce((a, b) => a + b, 0) / parentCenterXs.length - w / 2
-      : n.position.x
+    let px = n.position.x
+    if (parentCenterXs?.length) {
+      const candidateX = parentCenterXs.reduce((a, b) => a + b, 0) / parentCenterXs.length - w / 2
+      // Only take dagre's median-based x if the mean-parent-x override wouldn't
+      // collide with another node occupying the same rank. Otherwise keep dagre's
+      // own (collision-free) position rather than pushing the union on top of a
+      // sibling union or person node.
+      const collidesWithRankMate = rawPositionedNodes.some(other => {
+        if (other.id === n.id || other.position.y !== n.position.y) return false
+        const { w: ow } = nodeSize(other.type)
+        return candidateX < other.position.x + ow + NODE_GAP && candidateX + w + NODE_GAP > other.position.x
+      })
+      if (!collidesWithRankMate) px = candidateX
+    }
     const py = n.position.y
     if (px < minX) minX = px
     if (py < minY) minY = py

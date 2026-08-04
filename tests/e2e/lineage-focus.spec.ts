@@ -20,9 +20,12 @@ import { mockPersonsAndTree } from './helpers/revert-mocks'
  *      fact, a whole branch) that is genuinely off-lineage from the focus
  *      person and demonstrably lit *before* any hover — a single-person
  *      fixture would pass this vacuously.
- *
- * Selection stickiness and clear-on-mouse-out (AC3/AC4) are covered by task 2
- * of #210, not here.
+ * AC3: selecting a person (opening their drawer) makes the lineage focus
+ *      sticky — hovering a different, off-lineage person afterwards does not
+ *      steal focus away from the selection.
+ * AC4: moving the pointer off with no selection active, and deselecting
+ *      (closing the drawer) while one is active, both restore every node to
+ *      full opacity.
  */
 
 function person(gedcomId: string, name: string, sex: string, birthYear: string) {
@@ -245,5 +248,78 @@ test.describe('lineage focus on hover (issue #210)', () => {
     const ancestorEdge = await readEdgeStyle(page, U_GRANDPARENTS, DAD)
     expect(ancestorEdge.opacity).toBeCloseTo(1, 2)
     expect(ancestorEdge.stroke).toBe(strongStroke)
+  })
+
+  test('AC4: moving the pointer off with no selection active restores every node to full opacity', async ({ page }) => {
+    const dimValue = await page.evaluate(() =>
+      parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ft-node-dim'))
+    )
+
+    await page.locator(`.react-flow__node[data-id="${FOCUS}"]`).hover()
+    await expect(async () => {
+      const opacities = await readNodeOpacities(page, OFF_LINEAGE_IDS)
+      for (const id of OFF_LINEAGE_IDS) {
+        expect(opacities[id], `${id} should dim while Faith is hovered`).toBeCloseTo(dimValue, 2)
+      }
+    }).toPass({ timeout: 5_000 })
+
+    // Move the pointer off the tree entirely onto the toolbar — a real mouse-out via a
+    // genuine pointer move, not a synthetic mouseleave event.
+    await page.getByTestId('toolbar-viewing').hover()
+
+    await expect(async () => {
+      const opacities = await readNodeOpacities(page, [...IN_LINEAGE_IDS, ...OFF_LINEAGE_IDS])
+      for (const id of [...IN_LINEAGE_IDS, ...OFF_LINEAGE_IDS]) {
+        expect(opacities[id], `${id} should return to full opacity once the pointer leaves with nothing selected`).toBeCloseTo(1, 2)
+      }
+    }).toPass({ timeout: 5_000 })
+  })
+
+  test('AC3/AC4: selecting a person keeps focus sticky through hover elsewhere, and closing the drawer clears it', async ({ page }) => {
+    const dimValue = await page.evaluate(() =>
+      parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ft-node-dim'))
+    )
+
+    // Click (not hover) Faith's card to select her — opening the drawer is the app's
+    // sticky-focus trigger (docs/DESIGN_SYSTEM.md §3.3).
+    await page.locator(`.react-flow__node[data-id="${FOCUS}"]`).click()
+    await expect(page.getByTestId('person-drawer')).toBeVisible()
+
+    await expect(async () => {
+      const opacities = await readNodeOpacities(page, [...IN_LINEAGE_IDS, ...OFF_LINEAGE_IDS])
+      for (const id of OFF_LINEAGE_IDS) {
+        expect(opacities[id], `${id} should dim once Faith is selected`).toBeCloseTo(dimValue, 2)
+      }
+      for (const id of IN_LINEAGE_IDS) {
+        expect(opacities[id], `${id} is on Faith's line and must stay fully lit`).toBeCloseTo(1, 2)
+      }
+    }).toPass({ timeout: 5_000 })
+
+    // AC3: hover Cousin — a person on a completely different line from Faith's. If hover
+    // ever won over an active selection, Cousin's own lineage (Uncle/Aunt/their union) would
+    // light up and Faith's would dim; it must not, for as long as the pointer stays there.
+    await page.locator(`.react-flow__node[data-id="${COUSIN}"]`).hover()
+
+    await expect(async () => {
+      const opacities = await readNodeOpacities(page, [...IN_LINEAGE_IDS, ...OFF_LINEAGE_IDS])
+      for (const id of OFF_LINEAGE_IDS) {
+        expect(opacities[id], `${id} must stay dimmed to Faith's selection despite hovering Cousin`).toBeCloseTo(dimValue, 2)
+      }
+      for (const id of IN_LINEAGE_IDS) {
+        expect(opacities[id], `${id} must stay lit for Faith's sticky selection despite hovering Cousin`).toBeCloseTo(1, 2)
+      }
+    }).toPass({ timeout: 5_000 })
+
+    // AC4: deselecting — closing the drawer via its real close button — restores every
+    // node to full opacity.
+    await page.getByTestId('person-drawer-close').click()
+    await expect(page.getByTestId('person-drawer')).toBeHidden()
+
+    await expect(async () => {
+      const opacities = await readNodeOpacities(page, [...IN_LINEAGE_IDS, ...OFF_LINEAGE_IDS])
+      for (const id of [...IN_LINEAGE_IDS, ...OFF_LINEAGE_IDS]) {
+        expect(opacities[id], `${id} should return to full opacity once Faith's selection is cleared`).toBeCloseTo(1, 2)
+      }
+    }).toPass({ timeout: 5_000 })
   })
 })

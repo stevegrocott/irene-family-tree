@@ -24,53 +24,81 @@ interface PendingChangeRow {
 }
 
 /**
+ * E2E test-only seam: decodes a base64url-encoded JSON array of `Change`
+ * fixtures from the `__e2eSuggestions` query param, letting specs seed
+ * pending suggestions without a live Neo4j connection. This is read here,
+ * server-side, and gated on non-production builds only — unlike a
+ * `window`-attached setter, nothing is ever exposed in the client bundle.
+ */
+function parseTestSuggestions(raw: string | string[] | undefined): Change[] | null {
+  if (process.env.NODE_ENV === 'production') return null
+  if (typeof raw !== 'string' || raw.length === 0) return null
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(raw, 'base64url').toString('utf-8'))
+    return Array.isArray(parsed) ? (parsed as Change[]) : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Server component for `/admin`.
  *
  * Redirects unauthenticated or non-admin visitors to the sign-in page,
  * fetches the first page of pending suggestions from Neo4j, and renders
  * the tabbed admin UI with the data pre-loaded.
  */
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
   const session = await auth()
   if (!session || session.user?.role !== 'admin') {
     redirect('/api/auth/signin?callbackUrl=/admin')
   }
 
+  const testSuggestions = parseTestSuggestions((await searchParams).__e2eSuggestions)
+
   let suggestions: Change[] = []
-  try {
-    const rows = await read<PendingChangeRow>(
-      `MATCH (c:PendingChange {status: 'pending'})
-       OPTIONAL MATCH (p:Person {gedcomId: c.targetId})
-       RETURN c.id          AS id,
-              c.changeType  AS changeType,
-              c.authorName  AS authorName,
-              c.authorEmail AS authorEmail,
-              c.payload     AS payload,
-              coalesce(p.name, c.targetId, '') AS personName,
-              c.status      AS status,
-              c.createdAt   AS createdAt
-       ORDER BY c.createdAt DESC
-       SKIP $skip LIMIT $limit`,
-      { skip: 0, limit: PAGE_SIZE }
-    )
-    suggestions = rows.map(row => {
-      const parsedPayload = safeParseJson(row.payload) ?? {}
-      const { targetId, ...newValueFields } = parsedPayload as { targetId?: string } & Record<string, unknown>
-      return {
-        id: row.id,
-        changeType: row.changeType as Change['changeType'],
-        targetId: targetId ?? '',
-        personName: row.personName ?? '',
-        authorName: row.authorName,
-        authorEmail: row.authorEmail,
-        previousValue: null,
-        newValue: newValueFields,
-        appliedAt: row.createdAt ?? '',
-        status: row.status,
-      }
-    })
-  } catch (err) {
-    console.error('Failed to fetch pending suggestions:', err)
+  if (testSuggestions) {
+    suggestions = testSuggestions
+  } else {
+    try {
+      const rows = await read<PendingChangeRow>(
+        `MATCH (c:PendingChange {status: 'pending'})
+         OPTIONAL MATCH (p:Person {gedcomId: c.targetId})
+         RETURN c.id          AS id,
+                c.changeType  AS changeType,
+                c.authorName  AS authorName,
+                c.authorEmail AS authorEmail,
+                c.payload     AS payload,
+                coalesce(p.name, c.targetId, '') AS personName,
+                c.status      AS status,
+                c.createdAt   AS createdAt
+         ORDER BY c.createdAt DESC
+         SKIP $skip LIMIT $limit`,
+        { skip: 0, limit: PAGE_SIZE }
+      )
+      suggestions = rows.map(row => {
+        const parsedPayload = safeParseJson(row.payload) ?? {}
+        const { targetId, ...newValueFields } = parsedPayload as { targetId?: string } & Record<string, unknown>
+        return {
+          id: row.id,
+          changeType: row.changeType as Change['changeType'],
+          targetId: targetId ?? '',
+          personName: row.personName ?? '',
+          authorName: row.authorName,
+          authorEmail: row.authorEmail,
+          previousValue: null,
+          newValue: newValueFields,
+          appliedAt: row.createdAt ?? '',
+          status: row.status,
+        }
+      })
+    } catch (err) {
+      console.error('Failed to fetch pending suggestions:', err)
+    }
   }
 
   return (

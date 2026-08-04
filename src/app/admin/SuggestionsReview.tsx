@@ -53,6 +53,7 @@ function FieldDiff({
           {label} before
         </span>
         <p
+          data-testid={`diff-before-${field}`}
           className={`font-mono mt-0.5 break-words rounded-[var(--ft-r-sm)] px-1.5 py-0.5 bg-[var(--ft-declined-soft)] text-ink-3 line-through ${hasPrev ? '' : 'italic no-underline'}`}
         >
           {prevStr}
@@ -63,6 +64,7 @@ function FieldDiff({
           {label} after
         </span>
         <p
+          data-testid={`diff-after-${field}`}
           className={`font-mono mt-0.5 break-words rounded-[var(--ft-r-sm)] px-1.5 py-0.5 bg-[var(--ft-approved-soft)] ${hasNext ? 'text-ink' : 'text-ink-3 italic'}`}
         >
           {nextStr}
@@ -191,6 +193,7 @@ export function SuggestionsReview({ initialSuggestions }: { initialSuggestions: 
                   href={buildTreeUrlPath({ root: s.targetId })}
                   className={ADMIN_GHOST_LINK_CLASS}
                   aria-label={`View ${s.personName || s.targetId} in tree`}
+                  data-testid={`view-in-tree-${s.id}`}
                 >
                   View in tree
                 </Link>

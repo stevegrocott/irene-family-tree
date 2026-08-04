@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import type { Change } from './types'
 import { buildTreeUrlPath, isValidGedcomId } from '@/lib/treeUrlState'
@@ -78,20 +78,6 @@ export function SuggestionsReview({ initialSuggestions }: { initialSuggestions: 
   const [suggestions, setSuggestions] = useState(initialSuggestions)
   const [pending, setPending] = useState<Record<string, 'approve' | 'decline' | undefined>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
-
-  // Test-only seam: the admin page reads suggestions from Neo4j server-side,
-  // which E2E tests can't seed. Expose the setter so specs can inject fixture
-  // data client-side. Mirrors the pattern the (now-removed) ChangesReview
-  // component used for the same reason. Never enabled in production.
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'production') return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(window as any).__setSuggestions = setSuggestions
-    return () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (window as any).__setSuggestions
-    }
-  }, [])
 
   async function handleAction(id: string, action: 'approve' | 'decline') {
     setPending(p => ({ ...p, [id]: action }))

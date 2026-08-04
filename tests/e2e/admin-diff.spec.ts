@@ -61,18 +61,17 @@ async function setAdminCookie(context: import('@playwright/test').BrowserContext
 }
 
 /**
- * Navigates to /admin and injects a fixture suggestion via SuggestionsReview's
- * test-only `__setSuggestions` seam (see the file docblock: the admin page
- * reads suggestions from Neo4j server-side, which this E2E environment has
- * no live connection to).
+ * Navigates to /admin with a fixture suggestion seeded via the admin page's
+ * test-only `__e2eSuggestions` query param (see `src/app/admin/page.tsx`):
+ * the admin page reads suggestions from Neo4j server-side, which this E2E
+ * environment has no live connection to, so the fixture is passed as a
+ * base64url-encoded JSON array and decoded server-side instead of exposing
+ * a setter on `window` from the client bundle.
  */
 async function seedSuggestion(page: import('@playwright/test').Page, suggestion: Change) {
-  await page.goto('/admin', { waitUntil: 'domcontentloaded' })
+  const encoded = Buffer.from(JSON.stringify([suggestion])).toString('base64url')
+  await page.goto(`/admin?__e2eSuggestions=${encoded}`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('[data-testid="suggestions-review"]')
-  await page.waitForFunction(() => typeof (window as unknown as { __setSuggestions?: unknown }).__setSuggestions === 'function')
-  await page.evaluate((s) => {
-    (window as unknown as { __setSuggestions: (s: unknown[]) => void }).__setSuggestions([s])
-  }, suggestion)
 }
 
 /**
@@ -158,15 +157,18 @@ const mockSuggestion: Change = {
   status: 'pending',
 }
 
+// SuggestionsReview only renders "View in tree" when isValidGedcomId(targetId)
+// is true, so the diff/navigation tests below depend on this holding for the
+// fixture. Asserted once at module load rather than as a `test()` — it's a
+// fixture sanity check, not app behaviour, and SuggestionsReview.test.tsx
+// already covers the isValidGedcomId-gated link rendering itself.
+if (!isValidGedcomId(mockSuggestion.targetId)) {
+  throw new Error('mockSuggestion.targetId must be a valid GEDCOM id for admin-diff.spec.ts to be meaningful')
+}
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 test.describe('Admin Suggestions diff (/admin)', () => {
-  test('fixture suggestion has a valid GEDCOM targetId', () => {
-    // SuggestionsReview only renders "View in tree" when isValidGedcomId(targetId)
-    // is true, so the diff/navigation tests added by this issue depend on this.
-    expect(isValidGedcomId(mockSuggestion.targetId)).toBe(true)
-  })
-
   test.describe('with admin session cookie', () => {
     test.beforeEach(async ({ context }) => {
       await setAdminCookie(context)
@@ -178,11 +180,11 @@ test.describe('Admin Suggestions diff (/admin)', () => {
     })
 
     test('renders the before value struck through and the after value without a strikethrough', async ({ page }) => {
-      // Inject the fixture suggestion client-side via SuggestionsReview's
-      // test-only `__setSuggestions` seam so the diff markup actually
-      // renders, then assert on the real computed styles the browser
-      // applies — this is the one thing the jsdom-based unit tests in
-      // SuggestionsReview.test.tsx cannot verify.
+      // Seed the fixture suggestion server-side via the `__e2eSuggestions`
+      // query param so the diff markup actually renders, then assert on the
+      // real computed styles the browser applies — this is the one thing
+      // the jsdom-based unit tests in SuggestionsReview.test.tsx cannot
+      // verify.
       await seedSuggestion(page, mockSuggestion)
 
       const beforeValue = mockSuggestion.previousValue?.birthPlace as string

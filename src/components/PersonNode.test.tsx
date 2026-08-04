@@ -38,7 +38,7 @@ function render(overrides: Partial<PersonData> = {}) {
   root = createRoot(container)
   act(() => {
     root.render(
-      <PersonNode data={{ ...baseData, ...overrides }} {...({} as never)} />
+      <PersonNode {...({ data: { ...baseData, ...overrides } } as unknown as Parameters<typeof PersonNode>[0])} />
     )
   })
   return container

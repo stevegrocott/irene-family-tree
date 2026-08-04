@@ -8,7 +8,12 @@ jest.mock('reactflow', () => ({
 
 function render(props: { marriageYear?: string | null; marriagePlace?: string | null } = {}) {
   return renderToStaticMarkup(
-    <UnionNode marriageYear={props.marriageYear ?? null} marriagePlace={props.marriagePlace ?? null} {...({} as never)} />
+    <UnionNode
+      {...({
+        marriageYear: props.marriageYear ?? null,
+        marriagePlace: props.marriagePlace ?? null,
+      } as unknown as Parameters<typeof UnionNode>[0])}
+    />
   )
 }
 

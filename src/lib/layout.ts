@@ -108,12 +108,36 @@ export function applyDagreLayout(
 
   dagre.layout(g)
 
+  const rawPositionedNodes = nodes.map(n => {
+    const { x, y, width: w, height: h } = g.node(n.id)
+    return { ...n, position: { x: x - w / 2, y: y - h / 2 } }
+  })
+
+  // Dagre positions each union node at the median x of its neighbours (parents AND
+  // children), so a union with an imbalanced child count drifts off-centre from the
+  // two parents who actually form it. Re-centre every union node on the midpoint of
+  // its own UNION-edge parents, overriding dagre's x for that node only.
+  const rawPositionById = new Map(rawPositionedNodes.map(n => [n.id, n]))
+  const unionParentCenterXs = new Map<string, number[]>()
+  edges.forEach(e => {
+    if (e.label !== 'UNION') return
+    const parent = rawPositionById.get(e.source)
+    if (!parent) return
+    const { w } = nodeSize(parent.type)
+    const centerXs = unionParentCenterXs.get(e.target) ?? []
+    centerXs.push(parent.position.x + w / 2)
+    unionParentCenterXs.set(e.target, centerXs)
+  })
+
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
 
-  const positionedNodes = nodes.map(n => {
-    const { x, y, width: w, height: h } = g.node(n.id)
-    const px = x - w / 2
-    const py = y - h / 2
+  const positionedNodes = rawPositionedNodes.map(n => {
+    const { w, h } = nodeSize(n.type)
+    const parentCenterXs = n.type === 'union' ? unionParentCenterXs.get(n.id) : undefined
+    const px = parentCenterXs?.length
+      ? parentCenterXs.reduce((a, b) => a + b, 0) / parentCenterXs.length - w / 2
+      : n.position.x
+    const py = n.position.y
     if (px < minX) minX = px
     if (py < minY) minY = py
     if (px + w > maxX) maxX = px + w

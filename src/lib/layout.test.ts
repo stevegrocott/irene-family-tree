@@ -1,6 +1,10 @@
 import { Node, Edge } from 'reactflow'
 import { applyDagreLayout } from './layout'
 
+/** Must match the private sizing constants in layout.ts. */
+const PERSON_W = 240
+const UNION_W = 14
+
 /** Builds a minimal person node; only `gedcomId` is read by the layout code. */
 function personNode(id: string, gedcomId: string): Node {
   return { id, type: 'person', data: { gedcomId }, position: { x: 0, y: 0 } }
@@ -25,6 +29,12 @@ function personYLevels(nodes: ReturnType<typeof applyDagreLayout>['nodes']) {
   return new Set(
     nodes.filter(n => n.type === 'person').map(n => Math.round(n.position.y / 10) * 10),
   )
+}
+
+/** Horizontal centre of a positioned node (position.x is its top-left corner). */
+function centerX(node: { type?: string; position: { x: number } }) {
+  const w = node.type === 'union' ? UNION_W : PERSON_W
+  return node.position.x + w / 2
 }
 
 describe('applyDagreLayout — CHILD edge orientation contract', () => {
@@ -192,5 +202,52 @@ describe('applyDagreLayout — exposed generation y-levels', () => {
     const { generationLevels } = applyDagreLayout(nodes, edges)
 
     expect(generationLevels).toEqual([])
+  })
+})
+
+describe('applyDagreLayout — union horizontal centering', () => {
+  it('centers a union node horizontally between its two parents, even when its own child count pulls it off the naive dagre position', () => {
+    // Arrange: mirrors issue #219's Donald/John family. Donald's union u1 (with Irene) has one
+    // child; John's union u2 (with johnSpouse) has five children. Without a post-layout centering
+    // pass, dagre's median heuristic pulls a union toward its wider set of children rather than
+    // holding it centred on its two actual parents — this is the reported drift.
+    const nodes: Node[] = [
+      personNode('donald', '@I3@'),
+      personNode('irene', '@I5@'),
+      unionNode('u1'),
+      personNode('stephen', '@I6@'),
+      personNode('john', '@I4@'),
+      personNode('johnSpouse', '@I7@'),
+      unionNode('u2'),
+      personNode('jc1', '@I8@'),
+      personNode('jc2', '@I9@'),
+      personNode('jc3', '@I10@'),
+      personNode('jc4', '@I11@'),
+      personNode('jc5', '@I12@'),
+    ]
+    const edges: Edge[] = [
+      unionEdge('e5', 'donald', 'u1'),
+      unionEdge('e6', 'irene', 'u1'),
+      childEdge('e7', 'u1', 'stephen'),
+      unionEdge('e8', 'john', 'u2'),
+      unionEdge('e9', 'johnSpouse', 'u2'),
+      childEdge('e10', 'u2', 'jc1'),
+      childEdge('e11', 'u2', 'jc2'),
+      childEdge('e12', 'u2', 'jc3'),
+      childEdge('e13', 'u2', 'jc4'),
+      childEdge('e14', 'u2', 'jc5'),
+    ]
+
+    // Act
+    const { nodes: laidNodes } = applyDagreLayout(nodes, edges)
+
+    // Assert: each union's centre x must be the exact midpoint of its own two parents' centres —
+    // u2 must not be dragged toward the median of its five children.
+    const john = laidNodes.find(n => n.id === 'john')!
+    const johnSpouse = laidNodes.find(n => n.id === 'johnSpouse')!
+    const u2 = laidNodes.find(n => n.id === 'u2')!
+
+    const expectedCenter = (centerX(john) + centerX(johnSpouse)) / 2
+    expect(centerX(u2)).toBeCloseTo(expectedCenter, 5)
   })
 })

@@ -122,15 +122,19 @@ test.describe('tree initial render at default root', () => {
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 
     // Drive a real zoom-in gesture with the mouse wheel -- the same input a
-    // user would send. Before the fix, the main thread was saturated by the
-    // full-LOD first paint and stayed unresponsive well past this point.
-    // Waiting for a wheel event to land and flip a node to the `full`
-    // variant is a direct probe for renderer responsiveness: it can only
-    // pass if the page is still processing input and re-rendering, and it
-    // times out (rather than silently passing) if the tab has hung.
+    // user would send -- and confirm it actually changes the viewport zoom.
+    // Reading the zoom before and after ties the assertion to the gesture's
+    // *effect* rather than to ambient state that could already satisfy it:
+    // a `full`-variant node visibility check used to pass here even when the
+    // page was not processing input at all, because in the unfixed world
+    // (`defaultViewport` removed) ~370 full-detail nodes are already in the
+    // DOM before the first wheel event lands (issue #221). Comparing against
+    // the captured baseline -- rather than a hard-coded target value --
+    // keeps this robust to exactly how far a given wheel tick zooms.
+    const zoomBefore = await readCanvasZoom(page);
     await expect(async () => {
       await page.mouse.wheel(0, -120);
-      await expect(page.getByTestId('person-node-full').first()).toBeVisible({ timeout: 200 });
+      expect(await readCanvasZoom(page)).not.toBeCloseTo(zoomBefore, 5);
     }).toPass({ timeout: 30_000 });
 
     // Confirm the rest of the UI -- not just the canvas -- is still taking

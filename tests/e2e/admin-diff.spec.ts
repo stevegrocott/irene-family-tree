@@ -29,6 +29,21 @@ import { encode } from '@auth/core/jwt'
  * without a production code change, which is out of scope for this test
  * task. Change History's diff treatment — verified here — is the same
  * treatment in practice.
+ *
+ * Task 2 (below) covers AC3: clicking "View in tree" — which only exists on
+ * the Pending Suggestions card (`SuggestionsReview.tsx`), not Change
+ * History — navigates to the tree and re-roots it on that person. Because
+ * that surface's data is a server-rendered Neo4j read rather than a
+ * client-side fetch, it can't be driven by a `page.route` mock the way the
+ * diff tests above are. Rather than depending on live, seeded database
+ * state (fragile, and blocked in this environment by an unrelated,
+ * pre-existing bug where `admin/page.tsx`'s paginated Neo4j query throws —
+ * see the PR/commit description), it uses the same override-hook approach
+ * `admin-review.spec.ts` documents for the admin page's Neo4j-backed props:
+ * `SuggestionsReview.tsx` exposes a test-only `window.__setSuggestions`
+ * setter (a no-op in production) that the spec calls after mount to inject
+ * a synthetic fixture, then drives the resulting navigation through the
+ * real "View in tree" link.
  */
 
 async function adminSessionToken(): Promise<string> {
@@ -145,5 +160,141 @@ test.describe('Admin diff treatment (/admin, Change History)', () => {
     // The paired "after" value for that same field is real and rendered
     // distinctly — the empty-state treatment applies only to the empty side.
     await expect(panel.getByText('Chemist', { exact: true })).toBeVisible()
+  })
+})
+
+// ── Task 2: "View in tree" navigation (AC3) ─────────────────────────────────
+
+/**
+ * A synthetic person used both as the suggestion's target and as the sole
+ * node the mocked tree canvas serves. A synthetic fixture (rather than a
+ * real, currently-seeded person) keeps this test deterministic and
+ * independent of live database content — the same reasoning `deep-links
+ * .spec.ts`'s `mockCanvas()` documents for the rest of this directory.
+ */
+const VIEW_IN_TREE_TARGET = {
+  gedcomId: '@IVIEWTREE001@',
+  name: 'Percival Hawthorne',
+  sex: 'M',
+  birthYear: '1901',
+  deathYear: '1975',
+  birthPlace: 'York, England',
+  deathPlace: null,
+  occupation: null,
+  notes: null,
+}
+
+const viewInTreeSuggestion = {
+  id: 'e2e-view-in-tree-001',
+  changeType: 'UPDATE_PERSON',
+  targetId: VIEW_IN_TREE_TARGET.gedcomId,
+  personName: VIEW_IN_TREE_TARGET.name,
+  authorName: 'E2E Suggester',
+  authorEmail: 'suggester@example.com',
+  previousValue: null,
+  newValue: { birthPlace: 'A Suggested Birthplace' },
+  appliedAt: new Date(Date.now() - 3_600_000).toISOString(),
+  status: 'pending',
+}
+
+/**
+ * Mocks the tree canvas endpoints so that following the "View in tree" link
+ * lands on a real, verifiable render of VIEW_IN_TREE_TARGET rather than
+ * depending on live Neo4j content. Mirrors `deep-links.spec.ts`'s
+ * `mockCanvas()`.
+ */
+async function mockCanvasForTarget(page: Page) {
+  await page.route(/\/api\/persons/, route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([VIEW_IN_TREE_TARGET]),
+    })
+  )
+
+  await page.route(/\/api\/tree\//, route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        nodes: [
+          {
+            id: `node-${VIEW_IN_TREE_TARGET.gedcomId}`,
+            type: 'person',
+            data: { ...VIEW_IN_TREE_TARGET, isRoot: true, generation: 0 },
+            position: { x: 0, y: 0 },
+          },
+        ],
+        edges: [],
+      }),
+    })
+  )
+
+  await page.route(/\/api\/person\//, route => {
+    const url = route.request().url()
+    if (url.includes('/my-changes')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ createChange: null, relationshipChanges: [], updateChanges: [] }),
+      })
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ parents: [], siblings: [], marriages: [] }),
+    })
+  })
+}
+
+test.describe('"View in tree" navigation (Pending Suggestions tab)', () => {
+  test.beforeEach(async ({ context, page }) => {
+    await setAdminCookie(context)
+    await mockCanvasForTarget(page)
+  })
+
+  test('clicking "View in tree" navigates to the tree and re-roots it on that person', async ({ page }) => {
+    await page.goto('/admin', { waitUntil: 'domcontentloaded' })
+
+    // Pending Suggestions is the default active tab — no tab click needed.
+    const panel = page.getByTestId('suggestions-review')
+    await expect(panel).toBeVisible({ timeout: 15_000 })
+
+    // SuggestionsReview's card data is a server component prop read
+    // directly from Neo4j (src/app/admin/page.tsx), not a client-side
+    // fetch, so it can't be driven by `page.route` the way the diff tests
+    // above drive Change History. Inject the fixture via the component's
+    // test-only `window.__setSuggestions` override once it has mounted
+    // (retried via `toPass` since the hook attaches in a post-mount effect).
+    await expect(async () => {
+      const applied = await page.evaluate((suggestion) => {
+        const setter = (window as unknown as { __setSuggestions?: (s: unknown[]) => void }).__setSuggestions
+        if (!setter) return false
+        setter([suggestion])
+        return true
+      }, viewInTreeSuggestion)
+      expect(applied).toBe(true)
+    }).toPass({ timeout: 15_000 })
+
+    // The link's aria-label ("View <person> in tree") is its accessible
+    // name and is more specific than the shared "View in tree" visible
+    // text, so this can't accidentally match a different pending card.
+    const viewInTreeLink = page.getByRole('link', {
+      name: `View ${VIEW_IN_TREE_TARGET.name} in tree`,
+      exact: true,
+    })
+    await expect(viewInTreeLink).toBeVisible({ timeout: 10_000 })
+
+    await viewInTreeLink.click()
+
+    // AC3 — asserted on resulting page state (URL + rendered root), not on
+    // the link's href, so a broken click handler or a dead route fails the
+    // test even though the href itself looked correct.
+    const targetIdEncoded = encodeURIComponent(VIEW_IN_TREE_TARGET.gedcomId)
+    await expect(page).toHaveURL(new RegExp(`root=${targetIdEncoded}`), { timeout: 10_000 })
+
+    const toolbarViewing = page.getByTestId('toolbar-viewing')
+    await expect(toolbarViewing).toBeVisible({ timeout: 15_000 })
+    await expect(toolbarViewing).toContainText(VIEW_IN_TREE_TARGET.name, { timeout: 10_000 })
   })
 })

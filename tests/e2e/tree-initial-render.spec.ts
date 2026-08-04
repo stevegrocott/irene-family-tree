@@ -83,4 +83,41 @@ test.describe('tree initial render at default root', () => {
     await expect(page.getByTestId('person-node-full')).toHaveCount(0);
     expect(await page.getByTestId('person-node-dot').count()).toBeGreaterThan(0);
   });
+
+  test('stays responsive at DEFAULT_HOPS after a zoom gesture (AC1)', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+
+    // Load the real default-root tree -- DEFAULT_HOPS = 60, the heaviest
+    // configuration in issue #218 (~370 person nodes after the MAX_NODES
+    // cap) -- and let the auto-fit effect settle before probing.
+    const toolbarViewing = page.getByTestId('toolbar-viewing');
+    await expect(toolbarViewing).toContainText('Irene', { timeout: 15_000 });
+    await waitForCanvasSettled(page);
+
+    const pane = page.locator('.react-flow');
+    await expect(pane).toBeVisible();
+    const box = await pane.boundingBox();
+    if (!box) throw new Error('react-flow pane has no bounding box');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+    // Drive a real zoom-in gesture with the mouse wheel -- the same input a
+    // user would send. Before the fix, the main thread was saturated by the
+    // full-LOD first paint and stayed unresponsive well past this point.
+    // Waiting for a wheel event to land and flip a node to the `full`
+    // variant is a direct probe for renderer responsiveness: it can only
+    // pass if the page is still processing input and re-rendering, and it
+    // times out (rather than silently passing) if the tab has hung.
+    await expect(async () => {
+      await page.mouse.wheel(0, -120);
+      await expect(page.getByTestId('person-node-full').first()).toBeVisible({ timeout: 200 });
+    }).toPass({ timeout: 30_000 });
+
+    // Confirm the rest of the UI -- not just the canvas -- is still taking
+    // input: the depth stepper should update on click.
+    const depthValue = page.getByTestId('toolbar-depth-value');
+    const before = await depthValue.textContent();
+    await page.getByTestId('toolbar-depth-decrement').click();
+    await expect(depthValue).not.toHaveText(before ?? '', { timeout: 5_000 });
+  });
 });

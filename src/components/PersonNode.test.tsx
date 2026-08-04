@@ -127,6 +127,10 @@ describe('getPersonLodVariant boundaries', () => {
     expect(new Set(calls).size).toBe(1)
     expect(calls[0]).toBe('compact')
   })
+
+  it('resolves to "dot" at the default initial zoom (0.18), not "full" (issue #218)', () => {
+    expect(getPersonLodVariant(0.18)).toBe('dot')
+  })
 })
 
 describe('PersonNode lodVariant wiring', () => {

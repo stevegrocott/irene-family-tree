@@ -104,7 +104,23 @@ test.describe('tree initial render at default root', () => {
     expect(await readCanvasZoom(page)).toBeCloseTo(MIN_ZOOM, 5);
   });
 
-  test('stays responsive at DEFAULT_HOPS after a zoom gesture (AC1)', async ({ page }) => {
+  /**
+   * NOTE on #218's AC1 ("loads and remains interactive at DEFAULT_HOPS"):
+   * this test does NOT guard the renderer-freeze regression that AC1 was
+   * written for. Investigation under issue #221 found that the freeze does
+   * not reproduce under Playwright at all -- the same unfixed build that
+   * hard-froze real Chrome (CDP `Runtime.evaluate` and screenshot injection
+   * both timing out) ran to completion here, wheel gesture and depth-stepper
+   * click included. No assertion written against this environment can
+   * observe the freeze, so none is claimed below. What this test does check
+   * is that the wheel gesture and toolbar control both produce a real,
+   * state-sensitive effect (as opposed to passing on ambient state that was
+   * already true beforehand, which the pre-#221 version of this test did).
+   * Guarding the actual freeze needs either an environment change (e.g. CDP
+   * CPU throttling, spiked separately) or manual verification in a real
+   * browser.
+   */
+  test('wheel zoom and depth stepper remain interactive at DEFAULT_HOPS', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 

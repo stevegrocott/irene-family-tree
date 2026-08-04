@@ -1,3 +1,4 @@
+import type { Session } from 'next-auth'
 import { POST } from './route'
 
 jest.mock('@/lib/neo4j', () => ({
@@ -17,7 +18,7 @@ import { read } from '@/lib/neo4j'
 const mockRead = read as jest.MockedFunction<typeof read>
 
 import { auth } from '@/auth'
-const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockAuth = auth as unknown as jest.MockedFunction<() => Promise<Session | null>>
 
 import { revertChange } from '@/lib/revert'
 const mockRevert = revertChange as jest.MockedFunction<typeof revertChange>

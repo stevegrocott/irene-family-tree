@@ -1,3 +1,4 @@
+import type { Session } from 'next-auth'
 import { neo4jErrorResponseMock } from '@/test-utils/neo4jMock'
 import { POST } from './route'
 
@@ -20,7 +21,7 @@ const mockRead = read as jest.MockedFunction<typeof read>
 const mockWrite = write as jest.MockedFunction<typeof write>
 
 import { auth } from '@/auth'
-const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockAuth = auth as unknown as jest.MockedFunction<() => Promise<Session | null>>
 
 import { recordChange } from '@/lib/changes'
 const mockRecordChange = recordChange as jest.MockedFunction<typeof recordChange>

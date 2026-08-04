@@ -1,3 +1,4 @@
+import type { Session } from 'next-auth'
 import { neo4jErrorResponseMock } from '@/test-utils/neo4jMock'
 import { GET } from './route'
 
@@ -14,10 +15,17 @@ import { read } from '@/lib/neo4j'
 const mockRead = read as jest.MockedFunction<typeof read>
 
 import { auth } from '@/auth'
-const mockAuth = auth as jest.MockedFunction<typeof auth>
+type AuthFn = () => Promise<Session | null>
+const mockAuth = auth as unknown as jest.MockedFunction<AuthFn>
 
-const ADMIN_SESSION = { user: { email: 'admin@example.com', name: 'Admin', role: 'admin' } }
-const USER_SESSION = { user: { email: 'user@example.com', name: 'User', role: 'user' } }
+const ADMIN_SESSION: Session = {
+  user: { email: 'admin@example.com', name: 'Admin', role: 'admin' },
+  expires: '2100-01-01T00:00:00.000Z',
+}
+const USER_SESSION: Session = {
+  user: { email: 'user@example.com', name: 'User', role: 'user' },
+  expires: '2100-01-01T00:00:00.000Z',
+}
 
 const makeDuplicateRow = (suffix: string) => ({
   gedcomId1: `I00${suffix}a`,
@@ -72,7 +80,7 @@ describe('GET /api/admin/duplicates', () => {
   })
 
   it('returns 403 when the authenticated user is not an admin', async () => {
-    mockAuth.mockResolvedValue(USER_SESSION as never)
+    mockAuth.mockResolvedValue(USER_SESSION)
 
     const response = await GET()
     const body = await response.json()
@@ -82,7 +90,7 @@ describe('GET /api/admin/duplicates', () => {
   })
 
   it('returns 200 with an empty duplicates array when none exist', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     mockRead.mockResolvedValue([])
 
     const response = await GET()
@@ -93,7 +101,7 @@ describe('GET /api/admin/duplicates', () => {
   })
 
   it('returns 200 with duplicate pairs mapped into person1/person2 objects', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     mockRead.mockResolvedValue([makeDuplicateRow('1')])
 
     const response = await GET()
@@ -108,7 +116,7 @@ describe('GET /api/admin/duplicates', () => {
   })
 
   it('queries Person pairs with normalized name match, birthYear window, and gedcomId ordering', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     mockRead.mockResolvedValue([])
 
     await GET()
@@ -122,7 +130,7 @@ describe('GET /api/admin/duplicates', () => {
   })
 
   it('returns 500 when the Neo4j read throws', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     mockRead.mockRejectedValue(new Error('Connection refused'))
     jest.spyOn(console, 'error').mockImplementation(() => {})
 

@@ -14,7 +14,7 @@ import { read } from '@/lib/neo4j'
 const mockRead = read as jest.MockedFunction<typeof read>
 
 import { auth } from '@/auth'
-const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockAuth = auth as unknown as jest.MockedFunction<() => Promise<unknown>>
 
 const ADMIN_SESSION = { user: { email: 'admin@example.com', name: 'Admin', role: 'admin' } }
 const USER_SESSION = { user: { email: 'user@example.com', name: 'User', role: 'user' } }
@@ -50,7 +50,7 @@ describe('GET /api/admin/changes', () => {
   })
 
   it('returns 403 when the authenticated user is not an admin', async () => {
-    mockAuth.mockResolvedValue(USER_SESSION as never)
+    mockAuth.mockResolvedValue(USER_SESSION)
 
     const response = await GET(makeRequest())
     const body = await response.json()
@@ -60,7 +60,7 @@ describe('GET /api/admin/changes', () => {
   })
 
   it('returns 500 when the Neo4j read throws', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     mockRead.mockRejectedValue(new Error('Connection refused'))
     jest.spyOn(console, 'error').mockImplementation(() => {})
 
@@ -72,7 +72,7 @@ describe('GET /api/admin/changes', () => {
   })
 
   it('queries PAGE_SIZE + 1 rows', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     mockRead.mockResolvedValue([])
 
     await GET(makeRequest())
@@ -84,7 +84,7 @@ describe('GET /api/admin/changes', () => {
   })
 
   it('returns hasMore:false and all rows when the query returns PAGE_SIZE or fewer rows', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     const rows = Array.from({ length: 20 }, (_, i) => makeChangeRow(String(i)))
     mockRead.mockResolvedValue(rows)
 
@@ -97,7 +97,7 @@ describe('GET /api/admin/changes', () => {
   })
 
   it('returns hasMore:true and trims to PAGE_SIZE rows when the query returns PAGE_SIZE + 1 rows', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     const rows = Array.from({ length: 21 }, (_, i) => makeChangeRow(String(i)))
     mockRead.mockResolvedValue(rows)
 
@@ -113,7 +113,7 @@ describe('GET /api/admin/changes', () => {
   })
 
   it('uses skip based on the requested page', async () => {
-    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockAuth.mockResolvedValue(ADMIN_SESSION)
     mockRead.mockResolvedValue([])
 
     await GET(makeRequest('http://localhost/api/admin/changes?page=3'))

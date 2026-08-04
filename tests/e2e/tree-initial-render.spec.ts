@@ -19,6 +19,9 @@ import { test, expect, type Page } from '@playwright/test';
  * transitions themselves (dot -> compact -> full) and must keep passing
  * alongside this spec (AC5).
  */
+/** Mirrors the `MIN_ZOOM` the auto-fit effect in `FamilyTree.tsx` frames at. */
+const MIN_ZOOM = 0.18;
+
 test.describe('tree initial render at default root', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
@@ -42,6 +45,18 @@ test.describe('tree initial render at default root', () => {
       await page.waitForTimeout(150);
     }
     throw new Error('React Flow canvas transform never settled');
+  }
+
+  /**
+   * Reads the canvas' current zoom out of the React Flow viewport transform
+   * (`translate(x, y) scale(z)`), so AC3's exact-value requirement can be
+   * asserted rather than inferred from the LOD variant it produces.
+   */
+  async function readCanvasZoom(page: Page) {
+    const style = await page.locator('.react-flow__viewport').getAttribute('style');
+    const scale = style?.match(/scale\(([\d.]+)\)/);
+    if (!scale) throw new Error(`no scale() in viewport transform: ${style}`);
+    return Number(scale[1]);
   }
 
   test('renders only dot-variant nodes on first paint, never full', async ({ page }) => {
@@ -82,6 +97,11 @@ test.describe('tree initial render at default root', () => {
     await waitForCanvasSettled(page);
     await expect(page.getByTestId('person-node-full')).toHaveCount(0);
     expect(await page.getByTestId('person-node-dot').count()).toBeGreaterThan(0);
+
+    // AC3 is specific about the value, not just its LOD consequence: both
+    // auto-fit branches in `FamilyTree.tsx` (fit-to-bounds and the
+    // too-large-to-fit root fallback) frame the tree at exactly MIN_ZOOM.
+    expect(await readCanvasZoom(page)).toBeCloseTo(MIN_ZOOM, 5);
   });
 
   test('stays responsive at DEFAULT_HOPS after a zoom gesture (AC1)', async ({ page }) => {

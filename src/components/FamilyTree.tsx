@@ -2522,6 +2522,7 @@ function FlowCanvas({
         proOptions={{ hideAttribution: true }}
         onNodeClick={handleNodeClick}
         minZoom={0.18}
+        defaultViewport={{ x: 0, y: 0, zoom: 0.18 }}
         onNodeMouseEnter={handleNodeMouseEnter}
         onNodeMouseLeave={handleNodeMouseLeave}
         onKeyDownCapture={handleGraphKeyDown}

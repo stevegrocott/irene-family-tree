@@ -1,0 +1,101 @@
+import { test, expect } from '@playwright/test'
+import { encode } from '@auth/core/jwt'
+import { isValidGedcomId } from '@/lib/treeUrlState'
+import type { Change } from '@/app/admin/types'
+
+/**
+ * E2E tests for the admin Suggestions Review diff treatment and "View in
+ * tree" re-root link (issue #217, restoring task 6 of #200 which was
+ * dropped when PR #213 merged).
+ *
+ * Scope: unit coverage for the diff markup already exists in
+ * `src/app/admin/SuggestionsReview.test.tsx` (struck-through/background
+ * classes, link href/aria-label). This spec asserts only what unit tests
+ * cannot: that the before/after diff renders visually distinct in a real
+ * browser, and that clicking "View in tree" actually navigates and
+ * re-roots the graph. It must not duplicate the unit test's assertions.
+ *
+ * Auth: follows tests/e2e/admin-review.spec.ts's pattern — sign a NextAuth
+ * v5 JWT with @auth/core/jwt's `encode()` using AUTH_SECRET (falling back
+ * to `e2e-test-auth-secret`, matching the dev server's default — see
+ * playwright.config.ts), then inject it as the `authjs.session-token`
+ * cookie so the middleware treats the request as an authenticated admin.
+ *
+ * Data: `/admin` is a server component that reads pending suggestions
+ * directly from Neo4j (see `src/app/admin/page.tsx`); like every other spec
+ * in this directory, the E2E dev server has no live Neo4j connection (see
+ * e.g. tests/e2e/deep-links.spec.ts), so `initialSuggestions` is always
+ * empty here. The fixture below uses a valid GEDCOM targetId —
+ * `isValidGedcomId` gates whether SuggestionsReview renders the "View in
+ * tree" link at all — so it is ready to exercise the diff and navigation
+ * assertions the remaining tasks of this issue add.
+ */
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+async function adminSessionToken(): Promise<string> {
+  return encode({
+    token: {
+      name: 'E2E Admin',
+      email: 'admin@test.com',
+      picture: null,
+      sub: 'e2e-admin-001',
+      role: 'admin',
+    },
+    secret: process.env.AUTH_SECRET ?? 'e2e-test-auth-secret',
+    salt: 'authjs.session-token',
+  })
+}
+
+async function setAdminCookie(context: import('@playwright/test').BrowserContext) {
+  const token = await adminSessionToken()
+  await context.addCookies([{
+    name: 'authjs.session-token',
+    value: token,
+    domain: 'localhost',
+    path: '/',
+    httpOnly: true,
+    secure: false,
+    sameSite: 'Lax',
+  }])
+}
+
+// ── Fixture ──────────────────────────────────────────────────────────────────
+
+/**
+ * A pending suggestion changing `birthPlace`, with a valid GEDCOM
+ * targetId so the "View in tree" link renders (see `isValidGedcomId`).
+ */
+const mockSuggestion: Change = {
+  id: 'e2e-suggestion-001',
+  changeType: 'UPDATE_PERSON',
+  targetId: '@I042@',
+  personName: 'Ada Lovelace',
+  authorName: 'Charles Babbage',
+  authorEmail: 'charles@example.com',
+  previousValue: { birthPlace: 'London, England' },
+  newValue: { birthPlace: 'Marylebone, London' },
+  appliedAt: new Date(Date.now() - 3_600_000).toISOString(),
+  status: 'pending',
+}
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+
+test.describe('Admin Suggestions diff (/admin)', () => {
+  test('fixture suggestion has a valid GEDCOM targetId', () => {
+    // SuggestionsReview only renders "View in tree" when isValidGedcomId(targetId)
+    // is true, so the diff/navigation tests added by this issue depend on this.
+    expect(isValidGedcomId(mockSuggestion.targetId)).toBe(true)
+  })
+
+  test.describe('with admin session cookie', () => {
+    test.beforeEach(async ({ context }) => {
+      await setAdminCookie(context)
+    })
+
+    test('renders the Pending Suggestions panel for an authenticated admin', async ({ page }) => {
+      await page.goto('/admin', { waitUntil: 'domcontentloaded' })
+      await expect(page.getByTestId('suggestions-review')).toBeVisible()
+    })
+  })
+})

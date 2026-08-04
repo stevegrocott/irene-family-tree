@@ -22,7 +22,7 @@ import { recordChange } from '@/lib/changes'
 const mockRecordChange = recordChange as jest.MockedFunction<typeof recordChange>
 
 import { auth } from '@/auth'
-const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockAuth = auth as unknown as jest.MockedFunction<() => Promise<unknown>>
 
 const makeRequest = (body: unknown) =>
   new Request('http://localhost/api/person/I001/relationships', {
@@ -69,7 +69,7 @@ describe('POST /api/person/[id]/relationships', () => {
     ['role: user', { email: 'user@example.com', name: 'Regular User', role: 'user' }],
     ['role: admin', { email: 'admin@example.com', name: 'Admin', role: 'admin' }],
   ])('allows %s to create a parent relationship directly', async (_label, user) => {
-    mockAuth.mockResolvedValueOnce({ user } as never)
+    mockAuth.mockResolvedValueOnce({ user })
     mockWrite.mockResolvedValue([{ unionId: '@F12345678@', created: true }])
 
     const response = await POST(makeRequest({ type: 'parent', targetId: 'I002' }), makeParams('I001'))

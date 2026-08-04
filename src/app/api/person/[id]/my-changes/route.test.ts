@@ -12,7 +12,7 @@ import { read } from '@/lib/neo4j'
 const mockRead = read as jest.MockedFunction<typeof read>
 
 import { auth } from '@/auth'
-const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockAuth = auth as unknown as jest.MockedFunction<() => Promise<unknown>>
 
 const USER_SESSION = {
   user: { email: 'user@example.com', name: 'User', role: 'user' },
@@ -40,7 +40,7 @@ describe('GET /api/person/[id]/my-changes', () => {
   })
 
   it('returns 401 when session has no email', async () => {
-    mockAuth.mockResolvedValue({ user: { name: 'Anon' } } as never)
+    mockAuth.mockResolvedValue({ user: { name: 'Anon' } })
 
     const response = await GET(makeRequest(), makeParams('I001'))
 
@@ -49,7 +49,7 @@ describe('GET /api/person/[id]/my-changes', () => {
   })
 
   it('returns empty result when the user has no changes for this person', async () => {
-    mockAuth.mockResolvedValue(USER_SESSION as never)
+    mockAuth.mockResolvedValue(USER_SESSION)
     // First read: unions. Second read: changes.
     mockRead.mockResolvedValueOnce([])
     mockRead.mockResolvedValueOnce([])
@@ -66,7 +66,7 @@ describe('GET /api/person/[id]/my-changes', () => {
   })
 
   it('filters by authorEmail and status=live in the change query', async () => {
-    mockAuth.mockResolvedValue(USER_SESSION as never)
+    mockAuth.mockResolvedValue(USER_SESSION)
     mockRead.mockResolvedValueOnce([])
     mockRead.mockResolvedValueOnce([])
 
@@ -82,7 +82,7 @@ describe('GET /api/person/[id]/my-changes', () => {
   })
 
   it('splits changes by changeType into the correct categories', async () => {
-    mockAuth.mockResolvedValue(USER_SESSION as never)
+    mockAuth.mockResolvedValue(USER_SESSION)
     // Person has one union U100
     mockRead.mockResolvedValueOnce([{ unionId: 'U100' }])
     // Three rows: one of each type
@@ -148,7 +148,7 @@ describe('GET /api/person/[id]/my-changes', () => {
   })
 
   it('filters out ADD_RELATIONSHIP rows whose unionId is not in this person\'s unions', async () => {
-    mockAuth.mockResolvedValue(USER_SESSION as never)
+    mockAuth.mockResolvedValue(USER_SESSION)
     mockRead.mockResolvedValueOnce([{ unionId: 'U100' }])
     mockRead.mockResolvedValueOnce([
       {
@@ -177,7 +177,7 @@ describe('GET /api/person/[id]/my-changes', () => {
   })
 
   it('returns updateChanges in newest-first order', async () => {
-    mockAuth.mockResolvedValue(USER_SESSION as never)
+    mockAuth.mockResolvedValue(USER_SESSION)
     mockRead.mockResolvedValueOnce([])
     mockRead.mockResolvedValueOnce([
       {
@@ -208,7 +208,7 @@ describe('GET /api/person/[id]/my-changes', () => {
   })
 
   it('does not crash on malformed JSON in newValue; returns newValue: {}', async () => {
-    mockAuth.mockResolvedValue(USER_SESSION as never)
+    mockAuth.mockResolvedValue(USER_SESSION)
     mockRead.mockResolvedValueOnce([])
     mockRead.mockResolvedValueOnce([
       {
@@ -230,7 +230,7 @@ describe('GET /api/person/[id]/my-changes', () => {
   })
 
   it('returns createChange when session email case differs from stored author email', async () => {
-    mockAuth.mockResolvedValue({ user: { email: 'USER@EXAMPLE.COM', name: 'User', role: 'user' } } as never)
+    mockAuth.mockResolvedValue({ user: { email: 'USER@EXAMPLE.COM', name: 'User', role: 'user' } })
     mockRead.mockResolvedValueOnce([])
     mockRead.mockResolvedValueOnce([
       {
@@ -255,7 +255,7 @@ describe('GET /api/person/[id]/my-changes', () => {
   })
 
   it('returns only the newest when multiple CREATE_PERSON rows exist', async () => {
-    mockAuth.mockResolvedValue(USER_SESSION as never)
+    mockAuth.mockResolvedValue(USER_SESSION)
     mockRead.mockResolvedValueOnce([])
     // Rows come back ordered newest-first by the Cypher ORDER BY
     mockRead.mockResolvedValueOnce([

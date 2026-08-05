@@ -2685,7 +2685,7 @@ export default function FamilyTree() {
 
   if (personsError) {
     return (
-      <div className="relative w-full h-dvh bg-[#050a18] flex items-center justify-center">
+      <div className="relative w-full h-dvh bg-[var(--ft-canvas)] flex items-center justify-center">
         <div className="bg-slate-800 border border-red-400/30 rounded-lg p-6 max-w-sm text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
           <p className="text-red-300 text-sm">{personsError}</p>
         </div>
@@ -2694,7 +2694,7 @@ export default function FamilyTree() {
   }
 
   return (
-    <div className="relative w-full h-dvh bg-[#050a18]" data-density={density}>
+    <div className="relative w-full h-dvh bg-[var(--ft-canvas)]" data-density={density}>
       <ReactFlowProvider>
         <FlowCanvas rootId={rootId} onSelectRoot={handleSelectRoot} persons={persons} treeVersion={treeVersion} initialUrlState={initialUrlState} />
       </ReactFlowProvider>

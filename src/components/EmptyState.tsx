@@ -131,9 +131,9 @@ export default function EmptyState({
                       <span className="block [font:var(--ft-label)] text-ink-3">{row.label}</span>
                       <span className="block font-serif font-medium text-ink truncate">{row.person.name}</span>
                     </span>
-                    {row.person.birthYear && (
+                    {(row.person.birthYear || row.person.deathYear) && (
                       <span className="flex-shrink-0 [font:var(--ft-mono)] text-ink-3">
-                        {row.person.birthYear}
+                        {row.person.birthYear ?? '?'}
                         {row.person.deathYear ? `–${row.person.deathYear}` : ''}
                       </span>
                     )}

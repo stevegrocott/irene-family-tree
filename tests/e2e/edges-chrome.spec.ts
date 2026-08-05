@@ -222,20 +222,21 @@ test.describe('union marker horizontal positioning (issue #219)', () => {
     expect(checkable.length).toBeGreaterThan(0);
     expect(checkable.length).toBeGreaterThan(checks.length * 0.9);
 
-    // `applyDagreLayout` (src/lib/layout.ts) centres a union on the mean x of its
-    // UNION-edge parents, but clamps that candidate away when it would collide with
-    // a same-rank sibling union (NODE_GAP = 30px clearance either side) — the
-    // documented mitigation, in issue #219's own risk analysis, for "moving a union
-    // horizontally could push it on top of ... another union in the same rank."
-    // Every union in the default tree ranks alongside other unions only (never
-    // person nodes — CHILD/UNION edges keep the two node types on strictly
-    // alternating dagre ranks), so the worst case is one blocking union neighbour:
-    // its forbidden zone is 2×NODE_GAP plus both nodes' 14px width wide, so a
-    // clamp can land at most ~(30 + 14) = 44px from the ideal mean-parent x.
-    // TOLERANCE_PX covers that with headroom while staying far tighter than the
-    // reported bug, which drifted a union tens to hundreds of pixels from its
-    // parents (e.g. under an unrelated, same-rank *person* node).
-    const TOLERANCE_PX = 50;
+    // `applyDagreLayout` (src/lib/layout.ts) solves each rank as a whole
+    // (`resolveRankXs`): a union that would collide with a same-rank neighbour
+    // displaces that neighbour rather than being pushed off its own parents' span,
+    // so the span holds exactly. This carried a 50px tolerance while the pass
+    // placed one union at a time and had to trade the span away under collision
+    // pressure (issue #236); that drift no longer exists, so the tolerance is now
+    // only float/`transform`-string rounding.
+    //
+    // `resolveRankXs` does have one documented residual case — unions whose parent
+    // spans overlap and are each narrower than UNION_W + NODE_GAP cannot all stay in
+    // span without moving the *person* rank above, so it relaxes the span rather than
+    // let nodes overlap. That case is covered by unit tests in src/lib/layout.test.ts,
+    // and does not arise in this view: measured across the default tree it is 0px.
+    // If it ever does arise here, that is a real regression signal, not noise.
+    const TOLERANCE_PX = 1;
     for (const { unionId, unionCenterX, parentCenterXs } of checkable) {
       const minParentX = Math.min(...parentCenterXs);
       const maxParentX = Math.max(...parentCenterXs);

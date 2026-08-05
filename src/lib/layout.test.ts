@@ -1,5 +1,8 @@
 import { Node, Edge } from 'reactflow'
-import { applyDagreLayout, resolveUnionX, PERSON_W, UNION_W } from './layout'
+import { applyDagreLayout, resolveRankXs, PERSON_W, UNION_W } from './layout'
+
+/** Mirrors `NODE_GAP` in src/lib/layout.ts (and dagre's configured `nodesep`). */
+const NODE_GAP = 30
 
 /** Builds a minimal person node; only `gedcomId` is read by the layout code. */
 function personNode(id: string, gedcomId: string): Node {
@@ -275,45 +278,148 @@ describe('applyDagreLayout — union horizontal centering', () => {
     expect(laidNodes.find(n => n.id === 'stephen')!.position.y).toBeGreaterThan(donald.position.y)
   })
 
-  describe('two colliding unions on the same rank (resolveUnionX)', () => {
+  describe('colliding unions on the same rank (resolveRankXs)', () => {
     // dagre's crossing-minimisation reorders small synthetic graphs so that same-rank
-    // unions never actually collide, so the clamp branch is unreachable through
-    // applyDagreLayout fixtures and is exercised on the pure helper instead — driven
-    // the same way the layout pass drives it: one union at a time, each seeing the
-    // *post-clamp* working position of the rank-mate already placed.
+    // unions never actually collide, so the collision-pressure branch is unreachable
+    // through applyDagreLayout fixtures and is exercised on the pure helper instead.
     const W = UNION_W
-    // Two nested couples: uOuter's parents straddle uInner's, so both mean-parent x
-    // values land within a node-width of each other — a genuine collision.
-    const outerParents = [1000, 2000]   // ideal centre 1500
-    const innerParents = [1400, 1620]   // ideal centre 1510
 
-    it('does not let the second union cross past the first', () => {
-      // Act: place uOuter first (rank-mate still at its dagre slot), then uInner
-      // against uOuter's resolved position.
-      const outerX = resolveUnionX({ parentCenterXs: outerParents, w: W, rankMates: [{ x: 1510 - W / 2, w: W }] })
-      const innerX = resolveUnionX({ parentCenterXs: innerParents, w: W, rankMates: [{ x: outerX, w: W }] })
+    /** Centre x of a member given its resolved left-edge x. */
+    const center = (x: number) => x + W / 2
 
-      // Assert: uInner's parents sit to the right of uOuter's mean, so uInner must
-      // stay to the right of uOuter — it must not clamp through to the far side.
-      expect(innerX).toBeGreaterThan(outerX)
-      // Assert: their occupied spans stay disjoint.
-      expect(outerX + W).toBeLessThanOrEqual(innerX)
+    /** Asserts every member keeps NODE_GAP clearance from its neighbours. */
+    function expectSeparated(xs: number[], widths: number[]) {
+      const boxes = xs.map((x, i) => ({ x, w: widths[i] })).sort((a, b) => a.x - b.x)
+      boxes.slice(1).forEach((box, i) => {
+        expect(box.x - (boxes[i].x + boxes[i].w)).toBeGreaterThanOrEqual(NODE_GAP)
+      })
+    }
+
+    it('places a union inside its parents\' span by displacing the rank-mate on top of it (issue #236)', () => {
+      // Arrange: the exact repro from issue #236. The union's parents sit 20px apart
+      // (span [1483, 1503] in left-edge terms) with a same-rank union seeded right on
+      // its ideal x. No x is both inside that span and clear of a *stationary*
+      // neighbour, so the old one-union-at-a-time helper returned 1449 — 34px outside
+      // the span, silently breaking AC2. Solving the rank as a whole moves the
+      // neighbour instead.
+      const { xs, spanRelaxed } = resolveRankXs([
+        { x: 1493, w: W, parentCenterXs: [1490, 1510] },
+        { x: 1493, w: W },
+      ])
+
+      // Assert: AC2 holds unconditionally — centre inside the parents' span.
+      expect(center(xs[0])).toBeGreaterThanOrEqual(1490)
+      expect(center(xs[0])).toBeLessThanOrEqual(1510)
+      // Assert: and the left edge lands inside the span the issue names explicitly.
+      expect(xs[0]).toBeGreaterThanOrEqual(1483)
+      expect(xs[0]).toBeLessThanOrEqual(1503)
+      // Assert: collision-freedom holds too — the rank-mate was moved clear.
+      expectSeparated(xs, [W, W])
+      // Assert: nothing had to be relaxed; both invariants held outright.
+      expect(spanRelaxed).toEqual([])
     })
 
-    it('keeps a clamped union within its own parents\' horizontal span (AC2)', () => {
-      // Act: a rank-mate parked exactly on the ideal forces the clamp branch.
-      const idealX = (innerParents[0] + innerParents[1]) / 2 - W / 2
-      const clampedX = resolveUnionX({
-        parentCenterXs: innerParents,
-        w: W,
-        rankMates: [{ x: idealX, w: W }],
-      })
+    it('does not let one union cross past another', () => {
+      // Arrange: two nested couples — uOuter's parents straddle uInner's, so both
+      // mean-parent x values land within a node-width of each other.
+      const outerParents = [1000, 2000] // ideal centre 1500
+      const innerParents = [1400, 1620] // ideal centre 1510
 
-      // Assert: the clamp fired (moved off the ideal) …
-      expect(clampedX).not.toBeCloseTo(idealX, 5)
-      // … but never outside the min/max of its own parents' centres.
-      expect(clampedX + W / 2).toBeGreaterThanOrEqual(Math.min(...innerParents))
-      expect(clampedX + W / 2).toBeLessThanOrEqual(Math.max(...innerParents))
+      // Act
+      const { xs, spanRelaxed } = resolveRankXs([
+        { x: 1500 - W / 2, w: W, parentCenterXs: outerParents },
+        { x: 1510 - W / 2, w: W, parentCenterXs: innerParents },
+      ])
+      const [outerX, innerX] = xs
+
+      // Assert: uInner's parents sit to the right of uOuter's mean, so uInner must
+      // stay to the right of uOuter — it must not jump through to the far side.
+      expect(innerX).toBeGreaterThan(outerX)
+      expectSeparated(xs, [W, W])
+      // Assert: both stay inside their own parents' spans.
+      expect(center(outerX)).toBeGreaterThanOrEqual(Math.min(...outerParents))
+      expect(center(outerX)).toBeLessThanOrEqual(Math.max(...outerParents))
+      expect(center(innerX)).toBeGreaterThanOrEqual(Math.min(...innerParents))
+      expect(center(innerX)).toBeLessThanOrEqual(Math.max(...innerParents))
+      expect(spanRelaxed).toEqual([])
+    })
+
+    it('keeps both unions within their own parents\' spans under collision pressure (AC2)', () => {
+      // Arrange: two narrow, adjacent spans whose ideals are only 35px apart — closer
+      // than the 44px (UNION_W + NODE_GAP) they need. The rank must spread, and the
+      // spreading must stay inside both spans rather than pushing either one out.
+      const leftParents = [1000, 1020] // span [993, 1013], ideal 1003
+      const rightParents = [1010, 1080] // span [1003, 1073], ideal 1038
+
+      // Act
+      const { xs, spanRelaxed } = resolveRankXs([
+        { x: 1003, w: W, parentCenterXs: leftParents },
+        { x: 1038, w: W, parentCenterXs: rightParents },
+      ])
+
+      // Assert: they were genuinely forced apart (at least one moved off its ideal) …
+      expect(xs[1] - xs[0]).toBeGreaterThanOrEqual(W + NODE_GAP)
+      expect([xs[0] - 1003, xs[1] - 1038].some(delta => Math.abs(delta) > 1e-9)).toBe(true)
+      // … and yet both centres are still inside their own parents' spans.
+      expect(center(xs[0])).toBeGreaterThanOrEqual(Math.min(...leftParents))
+      expect(center(xs[0])).toBeLessThanOrEqual(Math.max(...leftParents))
+      expect(center(xs[1])).toBeGreaterThanOrEqual(Math.min(...rightParents))
+      expect(center(xs[1])).toBeLessThanOrEqual(Math.max(...rightParents))
+      expect(spanRelaxed).toEqual([])
+    })
+
+    it('reports a relaxed span, and still never overlaps, when two spans are provably infeasible', () => {
+      // Arrange: the documented residual-infeasibility case. Both spans are 10px wide
+      // and overlap each other, so the widest achievable separation is
+      // (max hi) - (min lo) = 1008 - 993 = 15px — far short of the 44px two 14px-wide
+      // unions need. Only moving the *person* nodes a rank above could fix this, which
+      // this pass deliberately does not do.
+      const leftParents = [1000, 1010] // span [993, 1003]
+      const rightParents = [1005, 1015] // span [998, 1008]
+
+      // Act
+      const { xs, spanRelaxed } = resolveRankXs([
+        { x: 998, w: W, parentCenterXs: leftParents },
+        { x: 1003, w: W, parentCenterXs: rightParents },
+      ])
+
+      // Assert: collision-freedom is absolute — it is never the invariant that gives.
+      expectSeparated(xs, [W, W])
+      // Assert: so is ordering — the left union's parents are to the left, so it stays left.
+      expect(xs[0]).toBeLessThan(xs[1])
+      // Assert: the span breach is reported rather than swallowed, and it is minimal —
+      // only the member that actually ended up outside its span is listed.
+      expect(spanRelaxed.length).toBeGreaterThan(0)
+      spanRelaxed.forEach(i => {
+        const parents = i === 0 ? leftParents : rightParents
+        const outside =
+          center(xs[i]) < Math.min(...parents) || center(xs[i]) > Math.max(...parents)
+        expect(outside).toBe(true)
+      })
+      const kept = [0, 1].filter(i => !spanRelaxed.includes(i))
+      kept.forEach(i => {
+        const parents = i === 0 ? leftParents : rightParents
+        expect(center(xs[i])).toBeGreaterThanOrEqual(Math.min(...parents))
+        expect(center(xs[i])).toBeLessThanOrEqual(Math.max(...parents))
+      })
+    })
+
+    it('reports a relaxed span when an immovable rank-mate blocks the only feasible slot', () => {
+      // Arrange: the #236 repro again, except the blocking rank-mate is pinned (a node
+      // this pass must not move, e.g. a person node dagre placed). With nothing free to
+      // displace, the conflict is real and the union has to leave its span.
+      const { xs, spanRelaxed } = resolveRankXs([
+        { x: 1493, w: W, parentCenterXs: [1490, 1510] },
+        { x: 1493, w: W, movable: false },
+      ])
+
+      // Assert: the immovable member did not move …
+      expect(xs[1]).toBe(1493)
+      // … the boxes still do not overlap …
+      expectSeparated(xs, [W, W])
+      // … and the span breach is reported, not silently returned as if it were fine
+      // (the old helper returned exactly this 1449 with no signal at all).
+      expect(spanRelaxed).toEqual([0])
     })
   })
 

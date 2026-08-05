@@ -131,7 +131,14 @@ export function resolveUnionX({
   // so without this bound it can push the union outside its parents' min/max centre.
   const minParentX = Math.min(...parentCenterXs) - w / 2
   const maxParentX = Math.max(...parentCenterXs) - w / 2
-  return Math.min(Math.max(snapped, minParentX), maxParentX)
+  const clamped = Math.min(Math.max(snapped, minParentX), maxParentX)
+  // Clamping back into the parents' span can undo the snap and land the box back
+  // inside the very forbidden zone it was escaping (e.g. when the parents sit close
+  // together near a same-rank neighbour). Collision-freedom is the primary invariant
+  // — never move a union into an occupied x-span — so only accept the parent-span
+  // clamp if it's still clear of every rank-mate; otherwise keep the snapped value.
+  const clampCollides = merged.some(r => clamped > r.lo && clamped < r.hi)
+  return clampCollides ? snapped : clamped
 }
 
 /**
@@ -207,23 +214,31 @@ export function applyDagreLayout(
   // clamp toward the other's original slot and cross, reintroducing issue #219.
   const workingPositionXs = new Map(rawPositionedNodes.map(n => [n.id, n.position.x]))
 
+  // Resolve unions left-to-right by their raw dagre x, not by `nodes` input array
+  // order — otherwise the clamp outcome for 3+ same-rank unions depends on
+  // caller-supplied node ordering rather than geometry.
+  const unionProcessingOrder = rawPositionedNodes
+    .filter(n => n.type === 'union' && (unionParentCenterXs.get(n.id)?.length ?? 0) > 0)
+    .sort((a, b) => a.position.x - b.position.x)
+
+  for (const n of unionProcessingOrder) {
+    const { w } = nodeSize(n.type)
+    const parentCenterXs = unionParentCenterXs.get(n.id)!
+    const rankMates = rawPositionedNodes
+      .filter(other => other.id !== n.id && other.position.y === n.position.y)
+      .map(other => ({
+        // Each neighbour's *current working* position — final if it was already
+        // clamped earlier in this pass, otherwise dagre's original collision-free x.
+        x: workingPositionXs.get(other.id) ?? other.position.x,
+        w: nodeSize(other.type).w,
+      }))
+    workingPositionXs.set(n.id, resolveUnionX({ parentCenterXs, w, rankMates }))
+  }
+
   const positionedNodes = rawPositionedNodes.map(n => {
     const { w, h } = nodeSize(n.type)
-    const parentCenterXs = n.type === 'union' ? unionParentCenterXs.get(n.id) : undefined
-    let px = n.position.x
-    if (parentCenterXs?.length) {
-      const rankMates = rawPositionedNodes
-        .filter(other => other.id !== n.id && other.position.y === n.position.y)
-        .map(other => ({
-          // Each neighbour's *current working* position — final if it was already
-          // clamped earlier in this pass, otherwise dagre's original collision-free x.
-          x: workingPositionXs.get(other.id) ?? other.position.x,
-          w: nodeSize(other.type).w,
-        }))
-      px = resolveUnionX({ parentCenterXs, w, rankMates })
-    }
+    const px = workingPositionXs.get(n.id) ?? n.position.x
     const py = n.position.y
-    if (n.type === 'union') workingPositionXs.set(n.id, px)
     if (px < minX) minX = px
     if (py < minY) minY = py
     if (px + w > maxX) maxX = px + w

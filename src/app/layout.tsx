@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Source_Serif_4 } from "next/font/google";
 import Script from "next/script";
 import { SessionProvider } from "next-auth/react";
 import AuthButton from "@/components/AuthButton";
@@ -53,6 +53,11 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const sourceSerif = Source_Serif_4({
+  variable: "--font-source-serif",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   title: {
     default: APP_NAME,
@@ -88,7 +93,7 @@ export default function RootLayout({
       lang="en"
       data-theme={DEFAULT_THEME}
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${sourceSerif.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <Script id="theme-init" strategy="beforeInteractive">

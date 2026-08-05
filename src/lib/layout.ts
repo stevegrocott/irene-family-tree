@@ -7,11 +7,11 @@ import dagre from '@dagrejs/dagre'
 import { Node, Edge } from 'reactflow'
 
 /** Width of a person node in pixels. */
-const PERSON_W = 240
+export const PERSON_W = 240
 /** Height of a person node in pixels. */
 const PERSON_H = 76
 /** Width of a union (marriage) node in pixels. */
-const UNION_W = 14
+export const UNION_W = 14
 /** Height of a union (marriage) node in pixels. */
 const UNION_H = 14
 
@@ -69,6 +69,69 @@ function generationsFromLayout(
 
   const levels = yLevels.map((y, rank) => ({ generation: rank - rootRank, y }))
   return { generationByNodeId, levels }
+}
+
+/** Same nodesep dagre is configured with — the minimum gap a re-centred union must
+ * keep from any rank-mate's occupied x-span. */
+const NODE_GAP = 30
+
+/**
+ * Resolve the final left-edge x for one union node during the re-centering pass.
+ *
+ * The union wants the mean of its parents' centre x values ("ideal"). If that lands
+ * on top of a same-rank neighbour it is snapped to the nearer edge of the occupied
+ * range, then bounded to stay inside its own parents' horizontal span (AC2 of #219).
+ *
+ * Exported for unit testing: dagre's crossing-minimisation reorders synthetic graphs
+ * to avoid same-rank union collisions, so the clamp branch is not reachable from a
+ * small `applyDagreLayout` fixture and must be exercised directly.
+ *
+ * @param parentCenterXs - Centre x of each in-view UNION-edge parent (non-empty)
+ * @param w - Width of the union node being placed
+ * @param rankMates - Same-rank neighbours as `{ x: left edge, w: width }`, using each
+ *   neighbour's current working position (post-clamp if already processed this pass)
+ * @returns The union's left-edge x
+ */
+export function resolveUnionX({
+  parentCenterXs,
+  w,
+  rankMates,
+}: {
+  parentCenterXs: number[]
+  w: number
+  rankMates: Array<{ x: number; w: number }>
+}): number {
+  const idealX = parentCenterXs.reduce((a, b) => a + b, 0) / parentCenterXs.length - w / 2
+
+  // Derive the x-ranges a `w`-wide box must avoid to keep NODE_GAP clearance from
+  // every rank-mate, then merge overlaps so a snap lands clear of all of them rather
+  // than only the first one it escapes.
+  const forbidden = rankMates
+    .map(other => ({ lo: other.x - w - NODE_GAP, hi: other.x + other.w + NODE_GAP }))
+    .sort((a, b) => a.lo - b.lo)
+
+  const merged: { lo: number; hi: number }[] = []
+  for (const range of forbidden) {
+    const last = merged[merged.length - 1]
+    if (last && range.lo <= last.hi) {
+      last.hi = Math.max(last.hi, range.hi)
+    } else {
+      merged.push({ ...range })
+    }
+  }
+
+  const collision = merged.find(r => idealX > r.lo && idealX < r.hi)
+  // No rank-mate in the way: take the mean-parent-x position outright.
+  if (!collision) return idealX
+
+  // Snap to whichever edge of the occupied range sits closer to the ideal x, so the
+  // union stays as near its parents as it can without overlapping a rank-mate.
+  const snapped = idealX - collision.lo <= collision.hi - idealX ? collision.lo : collision.hi
+  // Then keep it within its own parents' span — the snap only knows about neighbours,
+  // so without this bound it can push the union outside its parents' min/max centre.
+  const minParentX = Math.min(...parentCenterXs) - w / 2
+  const maxParentX = Math.max(...parentCenterXs) - w / 2
+  return Math.min(Math.max(snapped, minParentX), maxParentX)
 }
 
 /**
@@ -136,52 +199,31 @@ export function applyDagreLayout(
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
 
-  // Same nodesep dagre used when laying out the graph — the minimum gap we must
-  // preserve between a repositioned union and any rank-mate's occupied x-span.
-  const NODE_GAP = 30
+  // Mutable working positions, seeded from dagre's raw layout and updated in place
+  // as each union is clamped below. Same-rank collision checks read from this map
+  // instead of `rawPositionedNodes` so a union processed later in this pass sees the
+  // *final* (post-clamp) position of an already-processed rank-mate rather than its
+  // stale pre-centering one — otherwise two same-rank unions can each independently
+  // clamp toward the other's original slot and cross, reintroducing issue #219.
+  const workingPositionXs = new Map(rawPositionedNodes.map(n => [n.id, n.position.x]))
 
   const positionedNodes = rawPositionedNodes.map(n => {
     const { w, h } = nodeSize(n.type)
     const parentCenterXs = n.type === 'union' ? unionParentCenterXs.get(n.id) : undefined
     let px = n.position.x
     if (parentCenterXs?.length) {
-      const idealX = parentCenterXs.reduce((a, b) => a + b, 0) / parentCenterXs.length - w / 2
-
-      // Derive the x-ranges an `w`-wide box at `idealX` must avoid to keep at least
-      // NODE_GAP clearance from each same-rank neighbour (using dagre's own
-      // collision-free layout as the source of truth for where those neighbours sit).
-      const forbidden = rawPositionedNodes
+      const rankMates = rawPositionedNodes
         .filter(other => other.id !== n.id && other.position.y === n.position.y)
-        .map(other => {
-          const { w: ow } = nodeSize(other.type)
-          return { lo: other.position.x - w - NODE_GAP, hi: other.position.x + ow + NODE_GAP }
-        })
-        .sort((a, b) => a.lo - b.lo)
-
-      // Merge overlapping/touching forbidden ranges so clamping below lands on a
-      // boundary that's clear of every rank-mate, not just the one it first escapes.
-      const merged: { lo: number; hi: number }[] = []
-      for (const range of forbidden) {
-        const last = merged[merged.length - 1]
-        if (last && range.lo <= last.hi) {
-          last.hi = Math.max(last.hi, range.hi)
-        } else {
-          merged.push({ ...range })
-        }
-      }
-
-      const collision = merged.find(r => idealX > r.lo && idealX < r.hi)
-      if (!collision) {
-        // No rank-mate in the way: take the mean-parent-x position outright.
-        px = idealX
-      } else {
-        // Snap to whichever edge of the occupied range sits closer to the ideal
-        // (mean-parent) x, so the union lands as close as possible to its parents
-        // without overlapping a sibling union or person node.
-        px = idealX - collision.lo <= collision.hi - idealX ? collision.lo : collision.hi
-      }
+        .map(other => ({
+          // Each neighbour's *current working* position — final if it was already
+          // clamped earlier in this pass, otherwise dagre's original collision-free x.
+          x: workingPositionXs.get(other.id) ?? other.position.x,
+          w: nodeSize(other.type).w,
+        }))
+      px = resolveUnionX({ parentCenterXs, w, rankMates })
     }
     const py = n.position.y
+    if (n.type === 'union') workingPositionXs.set(n.id, px)
     if (px < minX) minX = px
     if (py < minY) minY = py
     if (px + w > maxX) maxX = px + w

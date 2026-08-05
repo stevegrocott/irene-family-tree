@@ -97,7 +97,6 @@ export async function cascadeRevertPerson(
         `MATCH (c:Change { changeType: $relType, status: $live })
          WHERE any(uid IN $unionIds WHERE c.newValue CONTAINS uid)
          RETURN c.id AS id, c.authorEmail AS authorEmail, c.authorName AS authorName, c.newValue AS newValue
-         ORDER BY c.appliedAt ASC
          LIMIT toInteger($limit)`,
         // Each union produces one ADD_RELATIONSHIP change; multiply by 2 as a safety margin for retries or dual-direction entries.
         { unionIds, relType: CHANGE_TYPE.ADD_RELATIONSHIP, live: CHANGE_STATUS.LIVE, limit: unionIds.length * 2 }

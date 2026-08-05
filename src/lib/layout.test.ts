@@ -1,9 +1,5 @@
 import { Node, Edge } from 'reactflow'
-import { applyDagreLayout } from './layout'
-
-/** Must match the private sizing constants in layout.ts. */
-const PERSON_W = 240
-const UNION_W = 14
+import { applyDagreLayout, resolveUnionX, PERSON_W, UNION_W } from './layout'
 
 /** Builds a minimal person node; only `gedcomId` is read by the layout code. */
 function personNode(id: string, gedcomId: string): Node {
@@ -277,5 +273,102 @@ describe('applyDagreLayout — union horizontal centering', () => {
     // resolve to distinct, correctly ordered y-levels.
     expect(personYLevels(laidNodes).size).toBeGreaterThan(1)
     expect(laidNodes.find(n => n.id === 'stephen')!.position.y).toBeGreaterThan(donald.position.y)
+  })
+
+  describe('two colliding unions on the same rank (resolveUnionX)', () => {
+    // dagre's crossing-minimisation reorders small synthetic graphs so that same-rank
+    // unions never actually collide, so the clamp branch is unreachable through
+    // applyDagreLayout fixtures and is exercised on the pure helper instead — driven
+    // the same way the layout pass drives it: one union at a time, each seeing the
+    // *post-clamp* working position of the rank-mate already placed.
+    const W = UNION_W
+    // Two nested couples: uOuter's parents straddle uInner's, so both mean-parent x
+    // values land within a node-width of each other — a genuine collision.
+    const outerParents = [1000, 2000]   // ideal centre 1500
+    const innerParents = [1400, 1620]   // ideal centre 1510
+
+    it('does not let the second union cross past the first', () => {
+      // Act: place uOuter first (rank-mate still at its dagre slot), then uInner
+      // against uOuter's resolved position.
+      const outerX = resolveUnionX({ parentCenterXs: outerParents, w: W, rankMates: [{ x: 1510 - W / 2, w: W }] })
+      const innerX = resolveUnionX({ parentCenterXs: innerParents, w: W, rankMates: [{ x: outerX, w: W }] })
+
+      // Assert: uInner's parents sit to the right of uOuter's mean, so uInner must
+      // stay to the right of uOuter — it must not clamp through to the far side.
+      expect(innerX).toBeGreaterThan(outerX)
+      // Assert: their occupied spans stay disjoint.
+      expect(outerX + W).toBeLessThanOrEqual(innerX)
+    })
+
+    it('keeps a clamped union within its own parents\' horizontal span (AC2)', () => {
+      // Act: a rank-mate parked exactly on the ideal forces the clamp branch.
+      const idealX = (innerParents[0] + innerParents[1]) / 2 - W / 2
+      const clampedX = resolveUnionX({
+        parentCenterXs: innerParents,
+        w: W,
+        rankMates: [{ x: idealX, w: W }],
+      })
+
+      // Assert: the clamp fired (moved off the ideal) …
+      expect(clampedX).not.toBeCloseTo(idealX, 5)
+      // … but never outside the min/max of its own parents' centres.
+      expect(clampedX + W / 2).toBeGreaterThanOrEqual(Math.min(...innerParents))
+      expect(clampedX + W / 2).toBeLessThanOrEqual(Math.max(...innerParents))
+    })
+  })
+
+  describe('three unions sharing parents on one rank', () => {
+    // Arrange (shared): a, b and c are pairwise partnered, so all three unions land on the
+    // same rank and each shares a parent with the other two. Every union must still centre
+    // on its own two parents and stay in the left-to-right order those parents imply.
+    const nodes: Node[] = [
+      personNode('a', '@I1@'),
+      personNode('b', '@I2@'),
+      personNode('c', '@I3@'),
+      unionNode('u1'),
+      unionNode('u2'),
+      unionNode('u3'),
+      personNode('ch1', '@I5@'),
+      personNode('ch2', '@I6@'),
+      personNode('ch3', '@I7@'),
+    ]
+    const edges: Edge[] = [
+      unionEdge('e1', 'a', 'u1'),
+      unionEdge('e2', 'c', 'u1'),
+      childEdge('e3', 'u1', 'ch1'),
+      unionEdge('e4', 'a', 'u2'),
+      unionEdge('e5', 'b', 'u2'),
+      childEdge('e6', 'u2', 'ch2'),
+      unionEdge('e7', 'b', 'u3'),
+      unionEdge('e8', 'c', 'u3'),
+      childEdge('e9', 'u3', 'ch3'),
+    ]
+
+    it('keeps every union on one rank, non-overlapping and within its own parents\' span', () => {
+      // Act
+      const { nodes: laidNodes } = applyDagreLayout(nodes, edges)
+      const byId = (id: string) => laidNodes.find(n => n.id === id)!
+      const unions = [
+        { union: byId('u1'), parents: ['a', 'c'] },
+        { union: byId('u2'), parents: ['a', 'b'] },
+        { union: byId('u3'), parents: ['b', 'c'] },
+      ]
+
+      // Assert: all three unions share one rank (precondition for the same-rank pass).
+      expect(new Set(unions.map(u => u.union.position.y)).size).toBe(1)
+
+      // Assert: each union centre stays within the min/max of its own parents' centres.
+      unions.forEach(({ union, parents }) => {
+        const parentCenters = parents.map(id => centerX(byId(id)))
+        expect(centerX(union)).toBeGreaterThanOrEqual(Math.min(...parentCenters))
+        expect(centerX(union)).toBeLessThanOrEqual(Math.max(...parentCenters))
+      })
+
+      // Assert: no two unions occupy overlapping x-spans.
+      const sorted = [...unions].map(u => u.union).sort((l, r) => l.position.x - r.position.x)
+      sorted.slice(1).forEach((node, i) => {
+        expect(sorted[i].position.x + UNION_W).toBeLessThanOrEqual(node.position.x)
+      })
+    })
   })
 })

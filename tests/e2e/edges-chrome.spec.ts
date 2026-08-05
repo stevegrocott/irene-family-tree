@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { PERSON_W, UNION_W } from '@/lib/layout';
 
 /**
  * E2E coverage for issue #198 task 5 (design system §3.4/§3.6 — descent
@@ -150,7 +151,7 @@ test.describe('union marker horizontal positioning (issue #219)', () => {
 
     type UnionSpanCheck = { unionId: string; unionCenterX: number; parentCenterXs: number[] };
 
-    const checks: UnionSpanCheck[] = await page.evaluate(() => {
+    const checks: UnionSpanCheck[] = await page.evaluate(({ PERSON_W, UNION_W }) => {
       const nodeType = (id: string): string | null => {
         const el = document.querySelector(`[data-id="${CSS.escape(id)}"]`);
         if (!el) return null;
@@ -168,10 +169,8 @@ test.describe('union marker horizontal positioning (issue #219)', () => {
       // is correctly centred. React Flow always stamps a node's *layout* position (the
       // top-left corner used to size/centre it, independent of the LOD symbol currently
       // drawn inside it) as `transform: translate(Xpx, Ypx)` on the node element, so
-      // read that directly instead. PERSON_W/UNION_W mirror the constants of the same
-      // name in src/lib/layout.ts — the widths `applyDagreLayout` centred nodes against.
-      const PERSON_W = 240;
-      const UNION_W = 14;
+      // read that directly instead. PERSON_W/UNION_W are passed in from src/lib/layout.ts
+      // (see the page.evaluate call site) — the widths `applyDagreLayout` centred nodes against.
       const centerX = (id: string): number | null => {
         const el = document.querySelector(`[data-id="${CSS.escape(id)}"]`);
         if (!el) return null;
@@ -210,7 +209,7 @@ test.describe('union marker horizontal positioning (issue #219)', () => {
         results.push({ unionId, unionCenterX, parentCenterXs });
       });
       return results;
-    });
+    }, { PERSON_W, UNION_W });
 
     // A union node can be rendered with no parent person node in view at all
     // (its parent(s) sit outside the current hop-depth radius, e.g. a root's

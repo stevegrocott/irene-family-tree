@@ -19,7 +19,7 @@ import FamilyTree from '@/components/FamilyTree'
  */
 export default function Home() {
   return (
-    <Suspense fallback={<div className="relative w-screen h-screen bg-[#050a18]" />}>
+    <Suspense fallback={<div className="relative w-screen h-screen bg-[var(--ft-canvas)]" />}>
       <FamilyTree />
     </Suspense>
   )

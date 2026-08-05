@@ -120,7 +120,12 @@ export function applyDagreLayout(
   const rawPositionById = new Map(rawPositionedNodes.map(n => [n.id, n]))
   const unionParentCenterXs = new Map<string, number[]>()
   edges.forEach(e => {
-    if (e.label !== 'UNION') return
+    // The relationship type arrives either as the edge's `label` (unit tests build
+    // edges this way directly) or as `data.relType` (the real app's shape — see
+    // FamilyTree.tsx, which deliberately leaves `label` unset so React Flow never
+    // renders it as visible edge text, per issue #198).
+    const relType = e.label ?? (e.data as { relType?: string } | undefined)?.relType
+    if (relType !== 'UNION') return
     const parent = rawPositionById.get(e.source)
     if (!parent) return
     const { w } = nodeSize(parent.type)

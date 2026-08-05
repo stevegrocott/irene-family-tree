@@ -4,6 +4,10 @@ export default defineConfig({
   testDir: 'tests/e2e',
   use: {
     baseURL: 'http://localhost:3000',
+    // Seeds `family-tree-root-id` so specs load straight into the viewer
+    // canvas instead of the cold-start entry state (issue #232). Specs that
+    // need the entry state or default-root fallback override this per-file.
+    storageState: 'tests/e2e/helpers/viewer-storage.json',
   },
   projects: [
     {

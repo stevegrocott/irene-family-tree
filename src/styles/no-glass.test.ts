@@ -15,9 +15,10 @@ const BANNED_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
   { name: 'glow shadow (shadow-[0_0...])', pattern: /shadow-\[0_0/g },
 ]
 
-// backdrop-blur is permitted on exactly one surface: the modal scrim overlay
-// in ConfirmDialog.tsx (docs/DESIGN_SYSTEM.md §1).
-const BACKDROP_BLUR_ALLOWLIST = new Set(['components/ConfirmDialog.tsx'])
+// backdrop-blur is permitted on exactly two surfaces: the modal scrim overlay
+// in ConfirmDialog.tsx and the search overlay scrim in SearchOverlay.tsx
+// (docs/DESIGN_SYSTEM.md §1).
+const BACKDROP_BLUR_ALLOWLIST = new Set(['components/ConfirmDialog.tsx', 'components/SearchOverlay.tsx'])
 
 function collectFiles(dir: string): string[] {
   const files: string[] = []

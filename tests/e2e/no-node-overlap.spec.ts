@@ -5,7 +5,8 @@ import { test, expect } from '@playwright/test';
  * level in the default family tree layout.
  *
  * Flow:
- *   1. Clear localStorage so the default root (Irene Tunnicliffe) is loaded.
+ *   1. Seed localStorage with the default root (Irene Tunnicliffe) so the spec
+ *      lands on the viewer canvas rather than the cold-start entry state (issue #232).
  *   2. Wait for the tree to render with at least one person node visible.
  *   3. Collect bounding boxes for all person nodes.
  *   4. Group nodes into y-levels using a tolerance band (nodes within 10px
@@ -17,7 +18,7 @@ import { test, expect } from '@playwright/test';
 test.describe('no person node overlap', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.removeItem('family-tree-root-id');
+      localStorage.setItem('family-tree-root-id', '@I85@');
     });
     await page.goto('/');
   });

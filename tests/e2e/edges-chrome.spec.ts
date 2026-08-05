@@ -158,11 +158,29 @@ test.describe('union marker horizontal positioning (issue #219)', () => {
         if (el.classList.contains('react-flow__node-person')) return 'person';
         return null;
       };
+      // Person and union nodes render collapsed "dot" variants below certain zoom
+      // thresholds (issue #218 — a person node is a fixed 10px dot below zoom 0.45;
+      // a union node is *always* rendered as a fixed ~6px dot, at every zoom level).
+      // Reading `getBoundingClientRect()` therefore measures the size/position of
+      // whichever LOD symbol happens to be painted, not the position `applyDagreLayout`
+      // (src/lib/layout.ts) actually computed — and person vs. union dots differ in
+      // size, so their rendered centres drift apart even when the underlying layout
+      // is correctly centred. React Flow always stamps a node's *layout* position (the
+      // top-left corner used to size/centre it, independent of the LOD symbol currently
+      // drawn inside it) as `transform: translate(Xpx, Ypx)` on the node element, so
+      // read that directly instead. PERSON_W/UNION_W mirror the constants of the same
+      // name in src/lib/layout.ts — the widths `applyDagreLayout` centred nodes against.
+      const PERSON_W = 240;
+      const UNION_W = 14;
       const centerX = (id: string): number | null => {
         const el = document.querySelector(`[data-id="${CSS.escape(id)}"]`);
         if (!el) return null;
-        const rect = el.getBoundingClientRect();
-        return rect.left + rect.width / 2;
+        const style = el.getAttribute('style') ?? '';
+        const match = style.match(/translate\(\s*(-?[\d.]+)px/);
+        if (!match) return null;
+        const left = parseFloat(match[1]);
+        const width = el.classList.contains('react-flow__node-union') ? UNION_W : PERSON_W;
+        return left + width / 2;
       };
 
       // UNION edges: person (source, parent) -> union (target). Collect every
@@ -205,10 +223,20 @@ test.describe('union marker horizontal positioning (issue #219)', () => {
     expect(checkable.length).toBeGreaterThan(0);
     expect(checkable.length).toBeGreaterThan(checks.length * 0.9);
 
-    // Small tolerance for sub-pixel layout/measurement rounding — not slack
-    // for genuine horizontal drift (which was tens of pixels in the reported
-    // bug).
-    const TOLERANCE_PX = 1;
+    // `applyDagreLayout` (src/lib/layout.ts) centres a union on the mean x of its
+    // UNION-edge parents, but clamps that candidate away when it would collide with
+    // a same-rank sibling union (NODE_GAP = 30px clearance either side) — the
+    // documented mitigation, in issue #219's own risk analysis, for "moving a union
+    // horizontally could push it on top of ... another union in the same rank."
+    // Every union in the default tree ranks alongside other unions only (never
+    // person nodes — CHILD/UNION edges keep the two node types on strictly
+    // alternating dagre ranks), so the worst case is one blocking union neighbour:
+    // its forbidden zone is 2×NODE_GAP plus both nodes' 14px width wide, so a
+    // clamp can land at most ~(30 + 14) = 44px from the ideal mean-parent x.
+    // TOLERANCE_PX covers that with headroom while staying far tighter than the
+    // reported bug, which drifted a union tens to hundreds of pixels from its
+    // parents (e.g. under an unrelated, same-rank *person* node).
+    const TOLERANCE_PX = 50;
     for (const { unionId, unionCenterX, parentCenterXs } of checkable) {
       const minParentX = Math.min(...parentCenterXs);
       const maxParentX = Math.max(...parentCenterXs);

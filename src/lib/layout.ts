@@ -145,17 +145,41 @@ export function applyDagreLayout(
     const parentCenterXs = n.type === 'union' ? unionParentCenterXs.get(n.id) : undefined
     let px = n.position.x
     if (parentCenterXs?.length) {
-      const candidateX = parentCenterXs.reduce((a, b) => a + b, 0) / parentCenterXs.length - w / 2
-      // Only take dagre's median-based x if the mean-parent-x override wouldn't
-      // collide with another node occupying the same rank. Otherwise keep dagre's
-      // own (collision-free) position rather than pushing the union on top of a
-      // sibling union or person node.
-      const collidesWithRankMate = rawPositionedNodes.some(other => {
-        if (other.id === n.id || other.position.y !== n.position.y) return false
-        const { w: ow } = nodeSize(other.type)
-        return candidateX < other.position.x + ow + NODE_GAP && candidateX + w + NODE_GAP > other.position.x
-      })
-      if (!collidesWithRankMate) px = candidateX
+      const idealX = parentCenterXs.reduce((a, b) => a + b, 0) / parentCenterXs.length - w / 2
+
+      // Derive the x-ranges an `w`-wide box at `idealX` must avoid to keep at least
+      // NODE_GAP clearance from each same-rank neighbour (using dagre's own
+      // collision-free layout as the source of truth for where those neighbours sit).
+      const forbidden = rawPositionedNodes
+        .filter(other => other.id !== n.id && other.position.y === n.position.y)
+        .map(other => {
+          const { w: ow } = nodeSize(other.type)
+          return { lo: other.position.x - w - NODE_GAP, hi: other.position.x + ow + NODE_GAP }
+        })
+        .sort((a, b) => a.lo - b.lo)
+
+      // Merge overlapping/touching forbidden ranges so clamping below lands on a
+      // boundary that's clear of every rank-mate, not just the one it first escapes.
+      const merged: { lo: number; hi: number }[] = []
+      for (const range of forbidden) {
+        const last = merged[merged.length - 1]
+        if (last && range.lo <= last.hi) {
+          last.hi = Math.max(last.hi, range.hi)
+        } else {
+          merged.push({ ...range })
+        }
+      }
+
+      const collision = merged.find(r => idealX > r.lo && idealX < r.hi)
+      if (!collision) {
+        // No rank-mate in the way: take the mean-parent-x position outright.
+        px = idealX
+      } else {
+        // Snap to whichever edge of the occupied range sits closer to the ideal
+        // (mean-parent) x, so the union lands as close as possible to its parents
+        // without overlapping a sibling union or person node.
+        px = idealX - collision.lo <= collision.hi - idealX ? collision.lo : collision.hi
+      }
     }
     const py = n.position.y
     if (px < minX) minX = px

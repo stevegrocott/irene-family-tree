@@ -1,5 +1,6 @@
 import {
   isValidGedcomId,
+  isValidTreeView,
   clampHops,
   parseTreeUrlState,
   serializeTreeUrlState,
@@ -43,6 +44,28 @@ describe('isValidGedcomId', () => {
   })
 })
 
+describe('isValidTreeView', () => {
+  it('accepts each valid view value', () => {
+    expect(isValidTreeView('entry')).toBe(true)
+    expect(isValidTreeView('walk')).toBe(true)
+    expect(isValidTreeView('split')).toBe(true)
+    expect(isValidTreeView('tree')).toBe(true)
+  })
+
+  it('rejects an unrecognized view value', () => {
+    expect(isValidTreeView('bogus')).toBe(false)
+  })
+
+  it('rejects null and undefined', () => {
+    expect(isValidTreeView(null)).toBe(false)
+    expect(isValidTreeView(undefined)).toBe(false)
+  })
+
+  it('rejects an empty string', () => {
+    expect(isValidTreeView('')).toBe(false)
+  })
+})
+
 describe('clampHops', () => {
   it('returns the value unchanged when within range', () => {
     expect(clampHops(6)).toBe(6)
@@ -63,17 +86,32 @@ describe('clampHops', () => {
 })
 
 describe('parseTreeUrlState', () => {
-  it('parses a valid root, person, and hops from URLSearchParams', () => {
+  it('parses a valid root, person, hops, and view from URLSearchParams', () => {
     const params = new URLSearchParams()
     params.set('root', '@I85@')
     params.set('person', '@I12@')
     params.set('hops', '6')
+    params.set('view', 'walk')
 
     expect(parseTreeUrlState(params)).toEqual({
       root: '@I85@',
       person: '@I12@',
       hops: 6,
+      view: 'walk',
     })
+  })
+
+  it('returns null view when the param is absent', () => {
+    const params = new URLSearchParams()
+
+    expect(parseTreeUrlState(params).view).toBeNull()
+  })
+
+  it('returns null view for an unrecognized value', () => {
+    const params = new URLSearchParams()
+    params.set('view', 'bogus')
+
+    expect(parseTreeUrlState(params).view).toBeNull()
   })
 
   it('tolerates a raw (percent-encoded) query string with %40 for @', () => {
@@ -83,6 +121,7 @@ describe('parseTreeUrlState', () => {
       root: '@I85@',
       person: '@I12@',
       hops: 6,
+      view: null,
     })
   })
 
@@ -93,6 +132,7 @@ describe('parseTreeUrlState', () => {
       root: null,
       person: null,
       hops: null,
+      view: null,
     })
   })
 
@@ -144,12 +184,25 @@ describe('serializeTreeUrlState', () => {
   })
 
   it('omits fields that are null or undefined', () => {
-    const query = serializeTreeUrlState({ root: '@I85@', person: null, hops: undefined })
+    const query = serializeTreeUrlState({
+      root: '@I85@',
+      person: null,
+      hops: undefined,
+      view: null,
+    })
     const params = new URLSearchParams(query)
 
     expect(params.has('person')).toBe(false)
     expect(params.has('hops')).toBe(false)
+    expect(params.has('view')).toBe(false)
     expect(params.get('root')).toBe('@I85@')
+  })
+
+  it('serializes a valid view value', () => {
+    const query = serializeTreeUrlState({ view: 'split' })
+    const params = new URLSearchParams(query)
+
+    expect(params.get('view')).toBe('split')
   })
 
   it('clamps hops when serializing an out-of-range value', () => {
@@ -166,7 +219,7 @@ describe('serializeTreeUrlState', () => {
 
 describe('parse/serialize round-trip', () => {
   it('recovers the original state after serializing and re-parsing', () => {
-    const original = { root: '@I85@', person: '@I12@', hops: 6 }
+    const original = { root: '@I85@', person: '@I12@', hops: 6, view: 'tree' as const }
     const reparsed = parseTreeUrlState(new URLSearchParams(serializeTreeUrlState(original)))
 
     expect(reparsed).toEqual(original)
@@ -179,7 +232,9 @@ describe('buildTreeUrlPath', () => {
   })
 
   it('returns "/" when all fields are null or undefined', () => {
-    expect(buildTreeUrlPath({ root: null, person: undefined, hops: null })).toBe('/')
+    expect(
+      buildTreeUrlPath({ root: null, person: undefined, hops: null, view: null })
+    ).toBe('/')
   })
 
   it('returns a relative path with a query string when state is present', () => {
@@ -187,7 +242,7 @@ describe('buildTreeUrlPath', () => {
   })
 
   it('includes all provided fields in the query string', () => {
-    const path = buildTreeUrlPath({ root: '@I85@', person: '@I12@', hops: 6 })
+    const path = buildTreeUrlPath({ root: '@I85@', person: '@I12@', hops: 6, view: 'entry' })
     const [pathname, query] = path.split('?')
     const params = new URLSearchParams(query)
 
@@ -195,10 +250,11 @@ describe('buildTreeUrlPath', () => {
     expect(params.get('root')).toBe('@I85@')
     expect(params.get('person')).toBe('@I12@')
     expect(params.get('hops')).toBe('6')
+    expect(params.get('view')).toBe('entry')
   })
 
   it('produces a path whose query round-trips through parseTreeUrlState', () => {
-    const original = { root: '@I85@', person: '@ISPOUSE_A@', hops: 4 }
+    const original = { root: '@I85@', person: '@ISPOUSE_A@', hops: 4, view: 'split' as const }
 
     const path = buildTreeUrlPath(original)
     const query = path.split('?')[1]

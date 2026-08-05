@@ -147,4 +147,49 @@ test.describe('viewer first view (issue #232)', () => {
       timeout: 10_000,
     })
   })
+
+  test('⌘K opens the search overlay, Esc closes it, and Esc again returns to the entry state', async ({ page }) => {
+    await mockPersonsAndTree(page, MOCK_PERSONS, treeResponseFor(ROOT_PERSON))
+
+    await page.goto('/')
+    await expect(rootRow(page)).toBeVisible({ timeout: 15_000 })
+    await rootRow(page).click()
+
+    // Focused in the viewer, not the entry state.
+    await expect(page.getByTestId('empty-state')).toHaveCount(0)
+    const shell = page.getByTestId('viewer-shell')
+    await expect(shell).toBeVisible()
+
+    const overlayPanel = page.getByTestId('search-overlay-panel')
+    const overlayInput = page.getByTestId('search-overlay-input')
+
+    // ⌘K (Ctrl+K on non-Mac) opens the overlay from the viewer, with a cleared query,
+    // even though focus is on no particular element (AC3).
+    await page.keyboard.press('ControlOrMeta+k')
+    await expect(overlayPanel).toBeVisible()
+    await expect(overlayInput).toBeFocused()
+    await expect(overlayInput).toHaveValue('')
+
+    // Typing a query, then closing and reopening, confirms the query really
+    // resets rather than merely starting empty.
+    await overlayInput.fill(EARLIEST_ANCESTOR.name)
+    await expect(overlayInput).toHaveValue(EARLIEST_ANCESTOR.name)
+
+    // First Esc closes the overlay only — the viewer underneath is untouched.
+    await page.keyboard.press('Escape')
+    await expect(overlayPanel).toHaveCount(0)
+    await expect(shell).toBeVisible()
+    await expect(page.getByTestId('empty-state')).toHaveCount(0)
+
+    // Reopening confirms the query was cleared by the close, not just this test's fill.
+    await page.keyboard.press('ControlOrMeta+k')
+    await expect(overlayInput).toHaveValue('')
+    await page.keyboard.press('Escape')
+    await expect(overlayPanel).toHaveCount(0)
+
+    // Second Esc, with no overlay open, clears focus/trail and returns to the entry state.
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('empty-state')).toBeVisible()
+    await expect(shell).toHaveCount(0)
+  })
 })

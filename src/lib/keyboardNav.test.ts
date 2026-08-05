@@ -1,4 +1,4 @@
-import { resolveArrowTarget } from './keyboardNav'
+import { resolveArrowTarget, resolveShellAction } from './keyboardNav'
 import type { FlowNode, FlowEdge } from '@/types/tree'
 
 /** Minimal person node; only `id`/`type`/`position.x` are read by arrow resolution. */
@@ -140,5 +140,61 @@ describe('resolveArrowTarget — ArrowLeft/ArrowRight between siblings', () => {
     ]
     expect(resolveArrowTarget(nodes, shuffledEdges, 'focus', 'ArrowRight')).toBe('sib-right')
     expect(resolveArrowTarget(nodes, shuffledEdges, 'focus', 'ArrowLeft')).toBe('sib-left')
+  })
+})
+
+describe('resolveShellAction — ⌘K / Ctrl+K open search', () => {
+  it('opens search on "k" with metaKey', () => {
+    expect(resolveShellAction({ key: 'k', metaKey: true }, { searchOpen: false, hasFocus: false }))
+      .toEqual({ type: 'openSearch' })
+  })
+
+  it('opens search on "k" with ctrlKey', () => {
+    expect(resolveShellAction({ key: 'k', ctrlKey: true }, { searchOpen: false, hasFocus: false }))
+      .toEqual({ type: 'openSearch' })
+  })
+
+  it('is a no-op for "k" without a modifier', () => {
+    expect(resolveShellAction({ key: 'k' }, { searchOpen: false, hasFocus: false })).toBeNull()
+  })
+})
+
+describe('resolveShellAction — Esc', () => {
+  it('closes search when search is open', () => {
+    expect(resolveShellAction({ key: 'Escape' }, { searchOpen: true, hasFocus: false }))
+      .toEqual({ type: 'closeSearch' })
+  })
+
+  it('is a no-op when search is already closed', () => {
+    expect(resolveShellAction({ key: 'Escape' }, { searchOpen: false, hasFocus: false })).toBeNull()
+  })
+})
+
+describe('resolveShellAction — 1/2/3 view switch', () => {
+  it('maps "1"/"2"/"3" to walk/split/tree when a focus person is set', () => {
+    const state = { searchOpen: false, hasFocus: true }
+    expect(resolveShellAction({ key: '1' }, state)).toEqual({ type: 'setView', view: 'walk' })
+    expect(resolveShellAction({ key: '2' }, state)).toEqual({ type: 'setView', view: 'split' })
+    expect(resolveShellAction({ key: '3' }, state)).toEqual({ type: 'setView', view: 'tree' })
+  })
+
+  it('is a no-op for view keys while search is open', () => {
+    const state = { searchOpen: true, hasFocus: true }
+    expect(resolveShellAction({ key: '1' }, state)).toBeNull()
+    expect(resolveShellAction({ key: '2' }, state)).toBeNull()
+    expect(resolveShellAction({ key: '3' }, state)).toBeNull()
+  })
+
+  it('is a no-op for view keys when no focus person is set', () => {
+    const state = { searchOpen: false, hasFocus: false }
+    expect(resolveShellAction({ key: '1' }, state)).toBeNull()
+    expect(resolveShellAction({ key: '2' }, state)).toBeNull()
+    expect(resolveShellAction({ key: '3' }, state)).toBeNull()
+  })
+})
+
+describe('resolveShellAction — unrelated keys', () => {
+  it('returns null for keys with no shell binding', () => {
+    expect(resolveShellAction({ key: 'ArrowUp' }, { searchOpen: false, hasFocus: true })).toBeNull()
   })
 })

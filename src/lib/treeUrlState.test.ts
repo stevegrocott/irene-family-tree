@@ -5,6 +5,7 @@ import {
   parseTreeUrlState,
   serializeTreeUrlState,
   buildTreeUrlPath,
+  TREE_VIEWS,
 } from './treeUrlState'
 import { MIN_HOPS, MAX_HOPS } from '@/constants/tree'
 
@@ -101,15 +102,29 @@ describe('parseTreeUrlState', () => {
     })
   })
 
-  it('returns null view when the param is absent', () => {
+  it.each(TREE_VIEWS)('parses %s as a valid view', (view) => {
+    const params = new URLSearchParams()
+    params.set('view', view)
+
+    expect(parseTreeUrlState(params).view).toBe(view)
+  })
+
+  it('defaults to a null view when the param is absent', () => {
     const params = new URLSearchParams()
 
     expect(parseTreeUrlState(params).view).toBeNull()
   })
 
-  it('returns null view for an unrecognized value', () => {
+  it('defaults to a null view for an unrecognized value', () => {
     const params = new URLSearchParams()
     params.set('view', 'bogus')
+
+    expect(parseTreeUrlState(params).view).toBeNull()
+  })
+
+  it('defaults to a null view for an empty string value', () => {
+    const params = new URLSearchParams()
+    params.set('view', '')
 
     expect(parseTreeUrlState(params).view).toBeNull()
   })
@@ -198,11 +213,19 @@ describe('serializeTreeUrlState', () => {
     expect(params.get('root')).toBe('@I85@')
   })
 
-  it('serializes a valid view value', () => {
-    const query = serializeTreeUrlState({ view: 'split' })
+  it.each(TREE_VIEWS)('serializes %s as a valid view', (view) => {
+    const query = serializeTreeUrlState({ view })
     const params = new URLSearchParams(query)
 
-    expect(params.get('view')).toBe('split')
+    expect(params.get('view')).toBe(view)
+  })
+
+  it('omits the view field when it is undefined but other fields are present', () => {
+    const query = serializeTreeUrlState({ root: '@I85@' })
+    const params = new URLSearchParams(query)
+
+    expect(params.has('view')).toBe(false)
+    expect(params.get('root')).toBe('@I85@')
   })
 
   it('clamps hops when serializing an out-of-range value', () => {
@@ -223,6 +246,20 @@ describe('parse/serialize round-trip', () => {
     const reparsed = parseTreeUrlState(new URLSearchParams(serializeTreeUrlState(original)))
 
     expect(reparsed).toEqual(original)
+  })
+
+  it.each(TREE_VIEWS)('round-trips the %s view alongside root, person, and hops', (view) => {
+    const original = { root: '@I85@', person: '@I12@', hops: 6, view }
+    const reparsed = parseTreeUrlState(new URLSearchParams(serializeTreeUrlState(original)))
+
+    expect(reparsed).toEqual(original)
+  })
+
+  it('recovers a null view when the original state omits it', () => {
+    const original = { root: '@I85@', person: '@I12@', hops: 6 }
+    const reparsed = parseTreeUrlState(new URLSearchParams(serializeTreeUrlState(original)))
+
+    expect(reparsed).toEqual({ ...original, view: null })
   })
 })
 

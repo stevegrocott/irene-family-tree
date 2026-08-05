@@ -24,8 +24,10 @@ const MIN_ZOOM = 0.18;
 
 test.describe('tree initial render at default root', () => {
   test.beforeEach(async ({ page }) => {
+    // Seed the default root (Irene Tunnicliffe) explicitly so this spec lands on
+    // the viewer canvas rather than the cold-start entry state (issue #232).
     await page.addInitScript(() => {
-      localStorage.removeItem('family-tree-root-id');
+      localStorage.setItem('family-tree-root-id', '@I85@');
     });
   });
 

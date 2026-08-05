@@ -6,7 +6,8 @@ import { test, expect, type Page, type Locator } from '@playwright/test';
  * the 0.45 / 0.85 thresholds, and the dot variant (overview zoom) renders no name text.
  *
  * Flow:
- *   1. Clear localStorage so the default root (Irene Tunnicliffe) is loaded.
+ *   1. Seed localStorage with the default root (Irene Tunnicliffe) so the spec
+ *      lands on the viewer canvas rather than the cold-start entry state (issue #232).
  *   2. Zoom in with the mouse wheel until a `full` node is visible; assert its name text
  *      is visible.
  *   3. Continue zooming out with the wheel through `compact` and down to `dot`; assert
@@ -15,7 +16,7 @@ import { test, expect, type Page, type Locator } from '@playwright/test';
 test.describe('person node LOD zoom sweep', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.removeItem('family-tree-root-id');
+      localStorage.setItem('family-tree-root-id', '@I85@');
     });
     await page.goto('/');
   });

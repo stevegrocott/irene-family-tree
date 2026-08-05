@@ -25,9 +25,10 @@ import { test, expect } from '@playwright/test';
  */
 test.describe('generation bands', () => {
   test.beforeEach(async ({ page }) => {
-    // Clear stored root so the default (Irene Tunnicliffe, multi-generation) is used
+    // Seed the default root (Irene Tunnicliffe, multi-generation) explicitly so this
+    // spec lands on the viewer canvas rather than the cold-start entry state (issue #232).
     await page.addInitScript(() => {
-      localStorage.removeItem('family-tree-root-id');
+      localStorage.setItem('family-tree-root-id', '@I85@');
     });
     await page.goto('/', { waitUntil: 'domcontentloaded' });
   });

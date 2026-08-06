@@ -61,9 +61,18 @@ test.describe('edges rendering (issue #198)', () => {
         if (nodeType(sourceId) !== 'union' || nodeType(targetId) !== 'person') return;
 
         const path = edge.querySelector('.react-flow__edge-path');
+        // Resolve the `marker-end` reference itself rather than just checking
+        // attribute presence: a stale/dangling `url(#id)` reference (pointing
+        // at a `<marker>` def that was never rendered, e.g. removed from
+        // ReactFlow's SVG defs) would still satisfy an attribute-presence
+        // check while drawing no arrowhead at all. Only count it as an
+        // arrowhead if the id actually resolves to a `<marker>` element.
+        const markerEnd = path?.getAttribute('marker-end') ?? null;
+        const markerId = markerEnd?.match(/url\(["']?#([^"')]+)["']?\)/)?.[1] ?? null;
+        const markerEl = markerId ? document.getElementById(markerId) : null;
         results.push({
           isStep: edge.classList.contains('react-flow__edge-step'),
-          hasArrowhead: !!path?.getAttribute('marker-end'),
+          hasArrowhead: markerEl?.tagName.toLowerCase() === 'marker',
           d: path?.getAttribute('d') ?? null,
         });
       });
@@ -100,16 +109,41 @@ test.describe('edges rendering (issue #198)', () => {
 
     // Zoom in via the on-canvas controls; label suppression must not be a
     // zoom-dependent behaviour that only happens to hold at the default zoom.
+    // React Flow's Controls disable the zoom-in/zoom-out buttons (native
+    // `disabled` attribute) once `maxZoom`/`minZoom` is reached, and
+    // Playwright's `.click()` waits for the target to be actionable — it
+    // would hang for the whole test timeout clicking a disabled button
+    // rather than no-op. So drive each loop from the button's enabled state
+    // instead of a fixed click count: that makes this correct when the
+    // default zoom already equals `minZoom` (as it does here — see
+    // FamilyTree.tsx's `defaultViewport`/`minZoom`), in which case "zoom
+    // out" is disabled from the very first check and its loop below is a
+    // no-op rather than a hang. Each click also gets a short bounded
+    // timeout to absorb the race between that enabled-state check and the
+    // click's own actionability check — e.g. FamilyTree.tsx's initial
+    // fit-to-bounds viewport animation can flip a button to disabled mid-
+    // loop; a timeout there means "became disabled", so stop like the loop
+    // condition would have. A safety cap guards against an unexpected
+    // always-enabled button.
     const zoomIn = page.getByLabel('zoom in');
-    for (let i = 0; i < 5; i++) {
-      await zoomIn.click();
+    for (let i = 0; i < 20 && (await zoomIn.isEnabled()); i++) {
+      try {
+        await zoomIn.click({ timeout: 2_000 });
+      } catch {
+        break;
+      }
     }
     await expect(page.locator('.react-flow__edge-text')).toHaveCount(0);
 
-    // Zoom back out past the default level too.
+    // Zoom back out past the default level too (a no-op loop, and still a
+    // valid check, when the default zoom already sits at `minZoom`).
     const zoomOut = page.getByLabel('zoom out');
-    for (let i = 0; i < 10; i++) {
-      await zoomOut.click();
+    for (let i = 0; i < 20 && (await zoomOut.isEnabled()); i++) {
+      try {
+        await zoomOut.click({ timeout: 2_000 });
+      } catch {
+        break;
+      }
     }
     await expect(page.locator('.react-flow__edge-text')).toHaveCount(0);
   });

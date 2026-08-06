@@ -61,9 +61,18 @@ test.describe('edges rendering (issue #198)', () => {
         if (nodeType(sourceId) !== 'union' || nodeType(targetId) !== 'person') return;
 
         const path = edge.querySelector('.react-flow__edge-path');
+        // Resolve the `marker-end` reference itself rather than just checking
+        // attribute presence: a stale/dangling `url(#id)` reference (pointing
+        // at a `<marker>` def that was never rendered, e.g. removed from
+        // ReactFlow's SVG defs) would still satisfy an attribute-presence
+        // check while drawing no arrowhead at all. Only count it as an
+        // arrowhead if the id actually resolves to a `<marker>` element.
+        const markerEnd = path?.getAttribute('marker-end') ?? null;
+        const markerId = markerEnd?.match(/url\(["']?#([^"')]+)["']?\)/)?.[1] ?? null;
+        const markerEl = markerId ? document.getElementById(markerId) : null;
         results.push({
           isStep: edge.classList.contains('react-flow__edge-step'),
-          hasArrowhead: !!path?.getAttribute('marker-end'),
+          hasArrowhead: markerEl?.tagName.toLowerCase() === 'marker',
           d: path?.getAttribute('d') ?? null,
         });
       });

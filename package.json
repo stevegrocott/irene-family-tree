@@ -30,6 +30,13 @@
       "**/*.test.ts",
       "**/*.test.tsx"
     ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "<rootDir>/logs/"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/logs/"
+    ],
     "transform": {
       "^.+\\.(t|j)sx?$": [
         "ts-jest",

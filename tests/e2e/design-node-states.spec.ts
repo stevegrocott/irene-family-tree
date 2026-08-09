@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
-import { resolved, restPointer, zoomUntilVariantVisible } from './helpers/design-tokens'
+import { mockPersonsAndTree } from './helpers/revert-mocks'
+import { resolved } from './helpers/design-tokens'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * Design-conformance E2E for the person-node state treatments.
@@ -18,6 +20,11 @@ import { resolved, restPointer, zoomUntilVariantVisible } from './helpers/design
  * Every assertion reads computed style rather than class names, so a move
  * between Tailwind utilities and plain CSS does not break the spec.
  *
+ * These fixtures hold one or two nodes, so `FamilyTree`'s fit-to-bounds pass
+ * clamps at its max zoom of 2 — comfortably past §3.2's 0.85 `full` threshold.
+ * No zoom gesture is needed or wanted here; zoom-driven LOD switching is
+ * `node-lod.spec.ts`'s subject.
+ *
  * Data: the API is mocked, as in every other spec here — the E2E dev server
  * has no Neo4j connection.
  */
@@ -35,45 +42,28 @@ const BASE = {
   notes: null,
 }
 
-/**
- * Serves a single-person tree so fit-zoom stays high and one wheel gesture
- * reaches the `full` variant, where every §3.2 state treatment is visible.
- */
+/** The node rendered at the `full` level of detail. */
+const fullNode = (page: Page) => page.getByTestId('person-node-full').first()
+
+/** Serves a single-person tree and opens the viewer on it. */
 async function mockCanvas(page: Page, overrides: Record<string, unknown> = {}) {
   const person = { ...BASE, ...overrides }
 
-  await page.route(/\/api\/persons/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify([person]),
-    })
-  )
+  await mockPersonsAndTree(page, [person], {
+    nodes: [
+      {
+        id: 'node-@I1@',
+        type: 'person',
+        data: { isRoot: true, ...person },
+        position: { x: 0, y: 0 },
+      },
+    ],
+    edges: [],
+    totalNodes: 1,
+    truncated: false,
+  })
 
-  await page.route(/\/api\/tree\//, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        nodes: [
-          {
-            id: 'node-@I1@',
-            type: 'person',
-            data: { isRoot: true, generation: 0, ...person },
-            position: { x: 0, y: 0 },
-          },
-        ],
-        edges: [],
-        totalNodes: 1,
-        truncated: false,
-      }),
-    })
-  )
-
-  // The entry-vs-viewer branch takes `?root=` ahead of localStorage
-  // (FamilyTree.tsx), and the storageState default seeds a root id that is not
-  // in this fixture — so address the fixture person directly.
-  await page.goto(`/?root=${encodeURIComponent(BASE.gedcomId)}`)
+  await gotoViewer(page, BASE.gedcomId)
 }
 
 /**
@@ -84,95 +74,66 @@ async function mockTwoGenerations(page: Page) {
   const child = { ...BASE }
   const parent = { ...BASE, gedcomId: '@I2@', name: 'Albert Gullett', sex: 'M', birthYear: '1870', deathYear: '1940' }
 
-  await page.route(/\/api\/persons/, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify([child, parent]),
-    })
-  )
+  await mockPersonsAndTree(page, [child, parent], {
+    nodes: [
+      { id: 'node-@I1@', type: 'person', data: { ...child, isRoot: true }, position: { x: 0, y: 200 } },
+      { id: 'node-@I2@', type: 'person', data: { ...parent, isRoot: false }, position: { x: 0, y: 0 } },
+    ],
+    edges: [{ id: 'e-parent', source: 'node-@I2@', target: 'node-@I1@', label: 'CHILD' }],
+    totalNodes: 2,
+    truncated: false,
+  })
 
-  await page.route(/\/api\/tree\//, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        nodes: [
-          { id: 'node-@I1@', type: 'person', data: { ...child, isRoot: true }, position: { x: 0, y: 200 } },
-          { id: 'node-@I2@', type: 'person', data: { ...parent, isRoot: false }, position: { x: 0, y: 0 } },
-        ],
-        edges: [{ id: 'e-parent', source: 'node-@I2@', target: 'node-@I1@', label: 'CHILD' }],
-        totalNodes: 2,
-        truncated: false,
-      }),
-    })
-  )
-
-  await page.goto(`/?root=${encodeURIComponent(BASE.gedcomId)}`)
+  await gotoViewer(page, BASE.gedcomId)
 }
 
 test.describe('person node states — design system §3.2', () => {
-  // Each test loads the canvas and then steps zoom up to the `full` variant one
-  // control click at a time, which costs ~8s on its own; the first test also
-  // pays the dev server's cold compile of `/`. The default 30s leaves no
-  // headroom for both.
-  test.beforeEach(({}, testInfo) => {
-    testInfo.setTimeout(90_000)
-  })
-
   test('the root person carries a 2px brass border', async ({ page }) => {
     await mockCanvas(page)
-    const node = await zoomUntilVariantVisible(page, 'person-node-full')
 
-    await expect(node).toHaveCSS('border-top-width', '2px')
-    await expect(node).toHaveCSS('border-top-color', await resolved(page, 'var(--ft-brass)'))
+    await expect(fullNode(page)).toHaveCSS('border-top-width', '2px')
+    await expect(fullNode(page)).toHaveCSS('border-top-color', await resolved(page, 'var(--ft-brass)'))
   })
 
   test('the root person carries a brass home marker in the top-right corner', async ({ page }) => {
     await mockCanvas(page)
-    const node = await zoomUntilVariantVisible(page, 'person-node-full')
 
     // §3.2 Root: "2 px `--ft-brass` border + brass `⌂` marker top-right".
     // The border alone is not the whole treatment — the marker is what makes
     // "you are here" readable once the border colour is one of several.
-    const brass = await resolved(page, 'var(--ft-brass)')
-    const marker = await node.evaluate(
-      (el, expected) => {
-        const nodeBox = el.getBoundingClientRect()
-        const found = [...el.querySelectorAll('*')].find((child) => {
-          const text = child.textContent?.trim() ?? ''
-          if (!text.includes('⌂')) return false
-          const box = child.getBoundingClientRect()
-          // Top-right quadrant of the node.
-          return box.left > nodeBox.left + nodeBox.width / 2 && box.top < nodeBox.top + nodeBox.height / 2
-        })
-        if (!found) return { found: false as const }
-        return { found: true as const, color: getComputedStyle(found).color, isBrass: getComputedStyle(found).color === expected }
-      },
-      brass
-    )
+    const markerColor = await fullNode(page).evaluate((el) => {
+      const nodeBox = el.getBoundingClientRect()
+      const marker = [...el.querySelectorAll('*')].find((child) => {
+        if (!child.textContent?.includes('⌂')) return false
+        const box = child.getBoundingClientRect()
+        // Top-right quadrant of the node.
+        return box.left > nodeBox.left + nodeBox.width / 2 && box.top < nodeBox.top + nodeBox.height / 2
+      })
+      return marker ? getComputedStyle(marker).color : null
+    })
 
-    expect(marker.found, 'no ⌂ marker rendered on the root node').toBe(true)
-    expect(marker.found && marker.isBrass, `marker colour was ${marker.found ? marker.color : 'n/a'}`).toBe(true)
+    expect(markerColor, 'no brass ⌂ marker in the root node’s top-right quadrant')
+      .toBe(await resolved(page, 'var(--ft-brass)'))
   })
 
   test('a living person node uses the private-soft background', async ({ page }) => {
     await mockCanvas(page, { living: true, birthYear: null, deathYear: null })
-    const node = await zoomUntilVariantVisible(page, 'person-node-full')
 
     // §3.2 Living/private: "`--ft-private-soft` background, dates replaced by
     // `Living`". The dates half is covered by living-privacy.spec.ts; this
     // asserts the background half, which is what makes a redacted person
     // distinguishable at a glance rather than only on close reading.
-    await expect(node.getByText('Living', { exact: true })).toBeVisible()
-    await expect(node).toHaveCSS('background-color', await resolved(page, 'var(--ft-private-soft)'))
+    await expect(fullNode(page).getByText('Living', { exact: true })).toBeVisible()
+    await expect(fullNode(page)).toHaveCSS(
+      'background-color',
+      await resolved(page, 'var(--ft-private-soft)')
+    )
   })
 
   test('an unknown name renders as italic serif in the muted text token', async ({ page }) => {
     await mockCanvas(page, { name: '' })
-    const node = await zoomUntilVariantVisible(page, 'person-node-full')
 
-    const unknown = node.getByText('Unknown', { exact: true })
+    const unknown = fullNode(page).getByText('Unknown', { exact: true })
     await expect(unknown).toBeVisible()
     await expect(unknown).toHaveCSS('font-style', 'italic')
     await expect(unknown).toHaveCSS('color', await resolved(page, 'var(--ft-text-3)'))
@@ -181,11 +142,8 @@ test.describe('person node states — design system §3.2', () => {
 
   test('hover changes border and elevation but never the node size', async ({ page }) => {
     await mockCanvas(page)
-    const node = await zoomUntilVariantVisible(page, 'person-node-full')
+    const node = fullNode(page)
 
-    // The zoom helper leaves the pointer on the node, so step away before
-    // sampling the resting treatment.
-    await restPointer(page)
     const before = await node.boundingBox()
     const restingShadow = await node.evaluate((el) => getComputedStyle(el).boxShadow)
 
@@ -208,30 +166,25 @@ test.describe('person node states — design system §3.2', () => {
     // today, so this drives the payload the design implies. The absence of the
     // channel is itself the gap §3.2 describes.
     await mockCanvas(page, { pendingEdits: 1 })
-    const node = await zoomUntilVariantVisible(page, 'person-node-full')
 
     // §3.2: "Has pending edit | 6 px violet dot, top-right,
     // `title="1 suggested edit awaiting review"`".
     const pending = await resolved(page, 'var(--ft-pending)')
-    const dot = await node.evaluate(
-      (el, expected) => {
-        const match = [...el.querySelectorAll('*')].find(
-          (child) => getComputedStyle(child).backgroundColor === expected
-        )
-        if (!match) return { found: false as const }
-        const box = match.getBoundingClientRect()
-        return {
-          found: true as const,
-          width: box.width,
-          height: box.height,
-          title: match.getAttribute('title') ?? match.closest('[title]')?.getAttribute('title') ?? null,
-        }
-      },
-      pending
-    )
+    const dot = await fullNode(page).evaluate((el, expected) => {
+      const match = [...el.querySelectorAll('*')].find(
+        (child) => getComputedStyle(child).backgroundColor === expected
+      )
+      if (!match) return null
+      const box = match.getBoundingClientRect()
+      return {
+        size: Math.round(Math.max(box.width, box.height)),
+        title: match.getAttribute('title') ?? match.closest('[title]')?.getAttribute('title') ?? null,
+      }
+    }, pending)
 
-    expect(dot.found, 'no element painted with the pending token').toBe(true)
-    expect(dot.found && dot.title).toMatch(/awaiting review/i)
+    expect(dot, 'no element painted with the pending token').not.toBeNull()
+    expect(dot!.size).toBe(6)
+    expect(dot!.title).toMatch(/awaiting review/i)
   })
 
   test('the avatar tint does not encode generation with off-palette colours', async ({ page }) => {
@@ -240,7 +193,6 @@ test.describe('person node states — design system §3.2', () => {
     // (src/lib/layout.ts). A single-node fixture is always generation 0, which
     // would exercise the neutral branch and prove nothing.
     await mockTwoGenerations(page)
-    await zoomUntilVariantVisible(page, 'person-node-full')
 
     // §0 lists "generation is encoded as a faint avatar tint" as a defect being
     // fixed, and §1 restricts colour to the semantic set plus the two sex

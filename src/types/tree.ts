@@ -46,6 +46,8 @@ export interface PersonData {
   photoUrl?: string | null
   /** Zoom-driven level-of-detail variant (docs/DESIGN_SYSTEM.md §3.2), or absent before the canvas has computed one. */
   lodVariant?: PersonLodVariant
+  /** Count of pending `PendingChange` suggestions targeting this person; survives redaction since it's a workflow signal, not a fact about the person. Absent on stubs/older payloads — treat as 0. */
+  pendingEdits?: number
 }
 
 /**

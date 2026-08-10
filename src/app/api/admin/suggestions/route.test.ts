@@ -103,7 +103,7 @@ describe('GET /api/admin/suggestions', () => {
     await GET()
 
     expect(mockRead).toHaveBeenCalledWith(
-      expect.stringContaining('SKIP $skip LIMIT $limit'),
+      expect.stringContaining('SKIP toInteger($skip) LIMIT toInteger($limit)'),
       { skip: 0, limit: 20 }
     )
   })

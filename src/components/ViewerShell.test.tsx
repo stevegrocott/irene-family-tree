@@ -92,6 +92,14 @@ describe('ViewerShell', () => {
       expect(slot).not.toBeNull()
       expect(slot!.querySelector('[data-testid="auth-button"]')).not.toBeNull()
     })
+
+    it('renders the auth control in flow inside the slot, not floating over the canvas', () => {
+      renderShell()
+      const slot = container.querySelector('[data-testid="viewer-shell-avatar-slot"]')
+      const authButton = slot!.querySelector('[data-testid="auth-button"]')
+      expect(authButton!.parentElement).toBe(slot)
+      expect(authButton!.className.split(/\s+/)).not.toContain('absolute')
+    })
   })
 
   describe('switcher disabled state', () => {

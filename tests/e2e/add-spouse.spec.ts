@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E tests for add-spouse flow (issue #84).
@@ -156,7 +157,7 @@ test.describe('Add-spouse flow', () => {
       })
     })
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, mockDonald.gedcomId)
     await expect(page.getByTestId('toolbar-viewing')).toContainText('Donald', { timeout: 15_000 })
 
     const personNode = page.locator('.react-flow__node-person').first()
@@ -244,7 +245,7 @@ test.describe('Add-spouse flow', () => {
       })
     })
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, mockDonald.gedcomId)
     await expect(page.getByTestId('toolbar-viewing')).toContainText('Donald', { timeout: 15_000 })
 
     const personNode = page.locator('.react-flow__node-person').first()

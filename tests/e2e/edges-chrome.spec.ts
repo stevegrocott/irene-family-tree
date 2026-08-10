@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { PERSON_W, UNION_W } from '@/lib/layout';
+import { gotoViewer } from './helpers/viewer';
 
 /**
  * E2E coverage for issue #198 task 5 (design system §3.4/§3.6 — descent
@@ -30,7 +31,7 @@ test.describe('edges rendering (issue #198)', () => {
     await page.addInitScript(() => {
       localStorage.setItem('family-tree-root-id', '@I85@');
     });
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await gotoViewer(page, '@I85@');
   });
 
   test('descent edges render as orthogonal step paths with no arrowhead', async ({ page }) => {
@@ -174,7 +175,7 @@ test.describe('union marker horizontal positioning (issue #219)', () => {
     await page.addInitScript(() => {
       localStorage.removeItem('family-tree-root-id');
     });
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await gotoViewer(page, '@I85@');
   });
 
   test("every union marker's centre x lies within the horizontal span of its parent person nodes", async ({ page }) => {
@@ -299,7 +300,7 @@ test.describe('minimap and controls chrome (issue #198)', () => {
     await page.addInitScript(() => {
       localStorage.setItem('family-tree-root-id', '@I85@');
     });
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await gotoViewer(page, '@I85@');
   });
 
   test('minimap and controls panels use the solid surface chrome treatment', async ({ page }) => {

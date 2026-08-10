@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { mockPersonsAndTree } from './helpers/revert-mocks'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E coverage for issue #210, task 1 — the Playwright spec that #195 (PR #208)
@@ -189,7 +190,7 @@ test.describe('lineage focus on hover (issue #210)', () => {
       localStorage.removeItem('family-tree-root-id')
     })
     await mockPersonsAndTree(page, mockPersons, mockTreeResponse)
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, '@IFOCUS@')
     await expect(page.getByTestId('toolbar-viewing')).toContainText('Faith', { timeout: 15_000 })
     await expect(page.locator('.react-flow__node-person')).toHaveCount(mockPersons.length, { timeout: 15_000 })
   })

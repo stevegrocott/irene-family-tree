@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E tests for the privacy redaction UI marker (issue #142).
@@ -80,7 +81,7 @@ test.describe('Redacted (living) person on the canvas', () => {
   test('renders the "Living" marker instead of birth and death years', async ({ page }) => {
     await mockCanvas(page, { living: true })
 
-    await page.goto('/')
+    await gotoViewer(page, '@ILIVING@')
 
     const node = personNode(page)
     await expect(node).toContainText('Alice Living')
@@ -90,7 +91,7 @@ test.describe('Redacted (living) person on the canvas', () => {
   test('leaks no birth year, death year, or birth place for a redacted person', async ({ page }) => {
     await mockCanvas(page, { living: true })
 
-    await page.goto('/')
+    await gotoViewer(page, '@ILIVING@')
 
     // The redacted payload carries no years at all, so no "b. YYYY" / "d. YYYY"
     // string may appear on the node.
@@ -106,7 +107,7 @@ test.describe('Unredacted (deceased) person on the canvas', () => {
   test('renders birth and death years and no "Living" marker', async ({ page }) => {
     await mockCanvas(page, { birthYear: '1900', deathYear: '1980', birthPlace: 'Sheffield' })
 
-    await page.goto('/')
+    await gotoViewer(page, '@ILIVING@')
 
     const node = personNode(page)
     await expect(node).toContainText('Alice Living')

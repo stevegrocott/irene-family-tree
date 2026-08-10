@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E tests for the person drawer's Timeline section (issue #151).
@@ -142,7 +143,7 @@ test.describe('Person drawer Timeline', () => {
       })
     })
 
-    await page.goto('/')
+    await gotoViewer(page, aliceDetail.gedcomId)
 
     // Wait for the tree to render — toolbar visibility is a reliable signal.
     await expect(page.getByTestId('toolbar-viewing')).toBeVisible({ timeout: 15_000 })

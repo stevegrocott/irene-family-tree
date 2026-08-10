@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E test for the photo upload flow (issue #159).
@@ -157,7 +158,7 @@ test.describe('Photo upload flow', () => {
       })
     })
 
-    await page.goto('/')
+    await gotoViewer(page, personBase.gedcomId)
 
     // Wait for the tree to render — toolbar visibility is a reliable signal.
     await expect(page.getByTestId('toolbar-viewing')).toBeVisible({ timeout: 15_000 })

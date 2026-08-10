@@ -454,4 +454,58 @@ describe('GET /api/tree/[rootId]', () => {
       expect(body.nodes[0].data).toEqual({ gedcomId: 'F001' })
     })
   })
+
+  // Issue #243: person nodes carry a `pendingEdits` count (the number of
+  // pending PendingChange suggestions targeting that person) so the canvas
+  // can render a review-queue badge without an extra round trip per node.
+  describe('pendingEdits (issue #243)', () => {
+    it('defaults pendingEdits to 0 when absent from the Neo4j row', async () => {
+      mockRead.mockResolvedValue([{ nodes: [personNode], rels: [], totalNodes: 1 }])
+
+      const response = await GET(makeRequest(), makeParams('I001'))
+      const body = await response.json()
+
+      expect(body.nodes[0].data.pendingEdits).toBe(0)
+    })
+
+    it('reflects a nonzero pendingEdits count from the Neo4j row', async () => {
+      const withPending = { ...personNode, pendingEdits: 3 }
+      mockRead.mockResolvedValue([{ nodes: [withPending], rels: [], totalNodes: 1 }])
+
+      const response = await GET(makeRequest(), makeParams('I001'))
+      const body = await response.json()
+
+      expect(body.nodes[0].data.pendingEdits).toBe(3)
+    })
+
+    it('includes pendingEdits for anonymous (redacted) viewers, since it is a workflow signal, not personal data', async () => {
+      mockAuth.mockResolvedValueOnce(null)
+      const livingWithPending = {
+        _id: 'node:9',
+        _labels: ['Person'],
+        gedcomId: 'I009',
+        name: 'Jane Living',
+        sex: 'F',
+        birthYear: '1990',
+        deathYear: null,
+        pendingEdits: 2,
+      }
+      mockRead.mockResolvedValue([{ nodes: [livingWithPending], rels: [], totalNodes: 1 }])
+
+      const response = await GET(makeRequest(), makeParams('I009'))
+      const body = await response.json()
+
+      expect(body.nodes[0].data.living).toBe(true)
+      expect(body.nodes[0].data.pendingEdits).toBe(2)
+    })
+
+    it('does not add a pendingEdits field to union nodes', async () => {
+      mockRead.mockResolvedValue([{ nodes: [unionNode], rels: [], totalNodes: 1 }])
+
+      const response = await GET(makeRequest(), makeParams('F001'))
+      const body = await response.json()
+
+      expect(body.nodes[0].data).toEqual({ gedcomId: 'F001' })
+    })
+  })
 })

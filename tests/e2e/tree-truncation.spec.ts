@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { mockPersonsAndTree } from './helpers/revert-mocks'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E tests for the tree-truncation notice (issue #181).
@@ -66,14 +67,17 @@ test.describe('Tree truncation notice', () => {
       totalNodes: 588,
     })
 
-    await page.goto('/')
+    await gotoViewer(page, rootPerson.gedcomId)
 
     // Wait for the canvas to finish loading before asserting on the notice.
     await expect(page.getByTestId('toolbar-person-count')).toBeVisible({ timeout: 15_000 })
 
     const notice = page.getByTestId('toolbar-truncation-notice')
     await expect(notice).toBeVisible()
-    await expect(notice).toContainText(/truncat/i)
+    // The visible text is degraded to "⚠ + node count" to keep the toolbar
+    // narrow; the full "truncated" sentence lives in `title` instead (see
+    // Toolbar.test.tsx and FamilyTree.tsx's toolbar-truncation-notice span).
+    await expect(notice).toHaveAttribute('title', /truncat/i)
   })
 
   test('shows no truncation notice when the response reports truncated: false', async ({ page }) => {
@@ -84,7 +88,7 @@ test.describe('Tree truncation notice', () => {
       totalNodes: 2,
     })
 
-    await page.goto('/')
+    await gotoViewer(page, rootPerson.gedcomId)
 
     await expect(page.getByTestId('toolbar-person-count')).toBeVisible({ timeout: 15_000 })
     await expect(page.getByTestId('toolbar-truncation-notice')).toHaveCount(0)
@@ -99,7 +103,7 @@ test.describe('Tree truncation notice', () => {
       edges: [],
     })
 
-    await page.goto('/')
+    await gotoViewer(page, rootPerson.gedcomId)
 
     await expect(page.getByTestId('toolbar-person-count')).toBeVisible({ timeout: 15_000 })
     await expect(page.getByTestId('toolbar-truncation-notice')).toHaveCount(0)

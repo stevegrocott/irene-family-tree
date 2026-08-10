@@ -96,6 +96,18 @@ describe('GET /api/admin/suggestions', () => {
     )
   })
 
+  it('executes the query with the pinned SKIP 0 / LIMIT 20 parameter contract', async () => {
+    mockAuth.mockResolvedValue(ADMIN_SESSION as never)
+    mockRead.mockResolvedValue([])
+
+    await GET()
+
+    expect(mockRead).toHaveBeenCalledWith(
+      expect.stringContaining('SKIP $skip LIMIT $limit'),
+      { skip: 0, limit: 20 }
+    )
+  })
+
   it('returns 500 when Neo4j read throws', async () => {
     mockAuth.mockResolvedValue(ADMIN_SESSION as never)
     mockRead.mockRejectedValue(new Error('Connection refused'))

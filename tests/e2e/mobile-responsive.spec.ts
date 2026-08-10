@@ -1,5 +1,6 @@
 import { test, expect, devices, type Page } from '@playwright/test'
 import { mockSignedInSession, mockPersonsAndTree } from './helpers/revert-mocks'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * Mobile responsiveness E2E tests (issue #144).
@@ -149,10 +150,9 @@ function buildRealisticTreeResponse() {
  * @returns locator for the open person drawer
  */
 async function openDrawer(page: Page) {
-  await page.goto('/')
+  await gotoViewer(page, mockPerson.gedcomId)
   // Below `sm` (640px) the toolbar starts collapsed behind `toolbar-toggle`
-  // (issue #202), so that's the readiness signal here, not the toolbar
-  // content itself.
+  // (issue #202); confirm the mobile chrome has settled too.
   await expect(page.getByTestId('toolbar-toggle')).toBeVisible({ timeout: 15_000 })
 
   const personNode = page.locator('.react-flow__node-person').first()
@@ -319,7 +319,7 @@ test.describe('mobile responsive toolbar and search', () => {
     page,
   }) => {
     await mockPersonsAndTree(page, [mockPerson], mockTreeResponse)
-    await page.goto('/')
+    await gotoViewer(page, mockPerson.gedcomId)
 
     // Below `sm` (640px) both start collapsed behind icon buttons (issue #202).
     await expect(page.getByTestId('toolbar-toggle')).toBeVisible({ timeout: 15_000 })
@@ -375,7 +375,7 @@ test.describe('mobile responsive toolbar and search', () => {
     await mockPersonsAndTree(page, [mockRealisticRootPerson], buildRealisticTreeResponse())
 
     await page.setViewportSize({ width: 1440, height: 900 })
-    await page.goto('/')
+    await gotoViewer(page, mockRealisticRootPerson.gedcomId)
 
     const toolbar = page.getByTestId('toolbar')
     await expect(toolbar).toBeVisible({ timeout: 15_000 })
@@ -419,7 +419,7 @@ test.describe('mobile responsive toolbar and search', () => {
     page,
   }) => {
     await mockPersonsAndTree(page, [mockPerson], mockTreeResponse)
-    await page.goto('/')
+    await gotoViewer(page, mockPerson.gedcomId)
 
     // Below `sm` (640px) both start collapsed behind icon buttons (issue #202).
     await expect(page.getByTestId('toolbar-toggle')).toBeVisible({ timeout: 15_000 })
@@ -460,7 +460,7 @@ test.describe('mobile chrome at 360x640', () => {
     page,
   }) => {
     await mockPersonsAndTree(page, [mockRealisticRootPerson], buildRealisticTreeResponse())
-    await page.goto('/')
+    await gotoViewer(page, mockRealisticRootPerson.gedcomId)
 
     // AC1/AC2: below `sm` both chrome panels start collapsed behind icon buttons.
     const toolbarToggle = page.getByTestId('toolbar-toggle')
@@ -503,7 +503,7 @@ test.describe('mobile chrome at 360x640', () => {
 
   test('depth stepper replaces the slider and meets the 44px touch target', async ({ page }) => {
     await mockPersonsAndTree(page, [mockRealisticRootPerson], buildRealisticTreeResponse())
-    await page.goto('/')
+    await gotoViewer(page, mockRealisticRootPerson.gedcomId)
 
     await expect(page.getByTestId('toolbar-toggle')).toBeVisible({ timeout: 15_000 })
     await openMobileToolbar(page)
@@ -527,7 +527,7 @@ test.describe('mobile chrome at 360x640', () => {
 
   test('AC6: the truncation notice is reachable from the collapsed toolbar', async ({ page }) => {
     await mockPersonsAndTree(page, [mockRealisticRootPerson], buildRealisticTreeResponse())
-    await page.goto('/')
+    await gotoViewer(page, mockRealisticRootPerson.gedcomId)
 
     await expect(page.getByTestId('toolbar-toggle')).toBeVisible({ timeout: 15_000 })
     await openMobileToolbar(page)
@@ -552,7 +552,7 @@ test.describe('mobile chrome at 360x640', () => {
         }),
       })
     )
-    await page.goto('/')
+    await gotoViewer(page, mockRealisticRootPerson.gedcomId)
     await expect(page.getByTestId('toolbar-toggle')).toBeVisible({ timeout: 15_000 })
 
     // The realistic fixture stacks nodes at `x: i * 10`, so they overlap heavily;

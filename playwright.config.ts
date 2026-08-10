@@ -4,9 +4,13 @@ export default defineConfig({
   testDir: 'tests/e2e',
   use: {
     baseURL: 'http://localhost:3000',
-    // Seeds `family-tree-root-id` so specs load straight into the viewer
-    // canvas instead of the cold-start entry state (issue #232). Specs that
-    // need the entry state or default-root fallback override this per-file.
+    // Seeds `family-tree-root-id` with the default person (`@I85@`) so a bare
+    // `page.goto('/')` lands on the viewer canvas instead of the cold-start
+    // entry state (issue #232). `FamilyTree` resolves the URL `root`/`person`
+    // param ahead of localStorage, so specs targeting their own fixture data
+    // must navigate with `?root=`/`?person=` (see `gotoViewer` in
+    // `tests/e2e/helpers/viewer.ts`) rather than relying on this seed. Specs
+    // that need the entry state itself override storageState per-file.
     storageState: 'tests/e2e/helpers/viewer-storage.json',
   },
   projects: [

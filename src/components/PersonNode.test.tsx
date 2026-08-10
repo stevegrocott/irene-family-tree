@@ -158,6 +158,83 @@ describe('PersonNode lodVariant wiring', () => {
   })
 })
 
+/** Finds the element carrying the literal `⌂` glyph, or null if absent. */
+function findRootMarker(el: HTMLElement): Element | null {
+  return [...el.querySelectorAll('*')].find((node) => node.textContent?.trim() === '⌂') ?? null
+}
+
+describe('PersonNode root marker (DESIGN_SYSTEM.md §3.2 Root)', () => {
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('renders a brass ⌂ marker on the %s variant when isRoot is true', (lodVariant, testId) => {
+    const el = render({ isRoot: true, lodVariant })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    const marker = findRootMarker(node)
+    expect(marker).not.toBeNull()
+    expect(`${marker?.className ?? ''} ${marker?.getAttribute('style') ?? ''}`).toMatch(/brass/i)
+  })
+
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('renders no ⌂ marker on the %s variant when isRoot is false', (lodVariant, testId) => {
+    const el = render({ isRoot: false, lodVariant })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(findRootMarker(node)).toBeNull()
+  })
+})
+
+describe('PersonNode living/private background (DESIGN_SYSTEM.md §3.2 Living/private)', () => {
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('applies the --ft-private-soft background on the %s variant when living is true', (lodVariant, testId) => {
+    const el = render({ living: true, lodVariant })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(node.outerHTML).toMatch(/private-soft/i)
+  })
+
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('does not apply the --ft-private-soft background on the %s variant when living is false', (lodVariant, testId) => {
+    const el = render({ living: false, lodVariant })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(node.outerHTML).not.toMatch(/private-soft/i)
+  })
+})
+
+describe('PersonNode pending edit indicator (DESIGN_SYSTEM.md §3.2 Has pending edit)', () => {
+  it('renders a title="1 suggested edit awaiting review" element when pendingEdits is 1', () => {
+    const el = render({ pendingEdits: 1 })
+    const node = el.querySelector('[data-testid="person-node-full"]') as HTMLElement
+    const titled = [...node.querySelectorAll('[title]')].find(
+      (n) => n.getAttribute('title') === '1 suggested edit awaiting review'
+    )
+    expect(titled).toBeTruthy()
+    expect(node.outerHTML).toMatch(/pending/i)
+  })
+
+  it('renders no pending-edit indicator when pendingEdits is absent', () => {
+    const el = render()
+    const node = el.querySelector('[data-testid="person-node-full"]') as HTMLElement
+    const titled = [...node.querySelectorAll('[title]')].find((n) =>
+      /awaiting review/i.test(n.getAttribute('title') ?? '')
+    )
+    expect(titled).toBeUndefined()
+  })
+
+  it('renders no pending-edit indicator when pendingEdits is 0', () => {
+    const el = render({ pendingEdits: 0 })
+    const node = el.querySelector('[data-testid="person-node-full"]') as HTMLElement
+    const titled = [...node.querySelectorAll('[title]')].find((n) =>
+      /awaiting review/i.test(n.getAttribute('title') ?? '')
+    )
+    expect(titled).toBeUndefined()
+  })
+})
+
 describe('PersonNode keyboard accessibility (DESIGN_SYSTEM.md §7)', () => {
   it.each([
     ['dot', 'person-node-dot'],

@@ -40,7 +40,7 @@ import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import { computeLineage } from '@/lib/lineage'
 import { resolveArrowTarget, resolveShellAction, type ArrowKey, type ShellView } from '@/lib/keyboardNav'
 import type { TreeResponse, PersonData, UnionData, PersonDetailResponse, PersonSummary, FlowNode, FlowEdge } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, getDrawerContainerClass, DEFAULT_DRAWER_DETENT, type DrawerDetent, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS, EDGE_TYPES, EDGE_RENDER_TYPE, DEFAULT_DENSITY, getDefaultDensity } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, getDrawerContainerClass, DEFAULT_DRAWER_DETENT, type DrawerDetent, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS, EDGE_TYPES, EDGE_RENDER_TYPE, DEFAULT_DENSITY, getDefaultDensity } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
 import { parseTreeUrlState, buildTreeUrlPath, type TreeView } from '@/lib/treeUrlState'
 
@@ -1659,9 +1659,15 @@ export function PersonDrawer({
               className="w-12 h-12 rounded-full object-cover border border-line flex-shrink-0"
             />
           ) : (
+            // Neutral surface, not the sex tint. §3.2 specifies those two tints
+            // for a 3px tick — an element carrying no text, held to §2's 3:1 UI
+            // floor. Behind white initials they read as body text and are held
+            // to 4.5:1, which #4A7DB5 fails at 4.29:1. Matches the node avatar,
+            // which #243 made unconditionally neutral for the same reason. Sex
+            // stays carried by the tick and the drawer (§1: sex is not a colour).
             <div
               aria-hidden="true"
-              className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-semibold flex-shrink-0 ${SEX_AVATAR_BG[person.sex] ?? SEX_AVATAR_BG.default}`}
+              className="w-12 h-12 rounded-full flex items-center justify-center bg-surface-2 text-ink text-lg font-semibold flex-shrink-0"
             >
               {(person.name || '?').trim().charAt(0).toUpperCase()}
             </div>

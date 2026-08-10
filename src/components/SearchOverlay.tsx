@@ -45,7 +45,7 @@ interface NameMatch {
 }
 
 /** Finds the first case-insensitive occurrence of `query` in `name`, or `null` if absent. */
-function findMatch(name: string, query: string): NameMatch | null {
+export function findMatch(name: string, query: string): NameMatch | null {
   if (!query) return null
   const idx = name.toLowerCase().indexOf(query.toLowerCase())
   if (idx === -1) return null
@@ -166,7 +166,8 @@ export default function SearchOverlay({ open, persons, onSelect, onClose }: Sear
                   >
                     <span
                       aria-hidden="true"
-                      className={`w-0.5 self-stretch my-1 rounded-[var(--ft-r-sm)] flex-shrink-0 ${SEX_AVATAR_BG[p.sex ?? 'default'] ?? SEX_AVATAR_BG.default}`}
+                      className="w-0.5 self-stretch my-1 rounded-[var(--ft-r-sm)] flex-shrink-0"
+                      style={{ backgroundColor: SEX_AVATAR_BG[p.sex ?? 'default'] ?? SEX_AVATAR_BG.default }}
                     />
                     <span className="min-w-0 flex-1 block font-serif font-medium text-ink truncate">
                       {match ? (

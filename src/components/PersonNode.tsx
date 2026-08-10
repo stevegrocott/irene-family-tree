@@ -84,12 +84,14 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
         .join('')
     : '?'
 
-  const avatarBg =
-    (data.generation ?? 0) < 0
-      ? 'bg-indigo-900/40'
-      : (data.generation ?? 0) > 0
-        ? 'bg-emerald-900/40'
-        : 'bg-surface-2'
+  /**
+   * Per `docs/DESIGN_SYSTEM.md` §0/§1: generation must not be encoded as an
+   * avatar tint (an off-palette colour that neither survives a 400-person
+   * tree nor belongs to the semantic/sex colour set). The initials avatar
+   * always sits on the neutral `--ft-surface-2` token regardless of
+   * generation.
+   */
+  const avatarBg = 'bg-surface-2'
 
   const accessibleName = buildAccessibleName(data, sexLabel, dates)
 

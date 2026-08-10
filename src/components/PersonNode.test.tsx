@@ -57,18 +57,21 @@ describe('PersonNode avatar', () => {
     expect(el.textContent).toContain('IT')
   })
 
-  it('applies bg-indigo-900/40 when generation is -1', () => {
+  it('applies the neutral bg-surface-2 token when generation is -1', () => {
     const el = render({ generation: -1 })
-    expect(el.innerHTML).toContain('bg-indigo-900/40')
+    expect(el.innerHTML).toContain('bg-surface-2')
+    expect(el.innerHTML).not.toContain('bg-indigo-900/40')
   })
 
-  it('applies bg-emerald-900/40 when generation is 1', () => {
+  it('applies the neutral bg-surface-2 token when generation is 1', () => {
     const el = render({ generation: 1 })
-    expect(el.innerHTML).toContain('bg-emerald-900/40')
+    expect(el.innerHTML).toContain('bg-surface-2')
+    expect(el.innerHTML).not.toContain('bg-emerald-900/40')
   })
 
-  it('applies neither bg-indigo-900/40 nor bg-emerald-900/40 when generation is 0', () => {
+  it('applies the neutral bg-surface-2 token when generation is 0', () => {
     const el = render({ generation: 0 })
+    expect(el.innerHTML).toContain('bg-surface-2')
     expect(el.innerHTML).not.toContain('bg-indigo-900/40')
     expect(el.innerHTML).not.toContain('bg-emerald-900/40')
   })

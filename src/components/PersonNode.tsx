@@ -43,6 +43,14 @@ function buildAccessibleName(data: PersonData, sexLabel: string, dates: string):
 }
 
 /**
+ * Builds the `title` for the §3.2 "Has pending edit" indicator, e.g.
+ * `"1 suggested edit awaiting review"` / `"3 suggested edits awaiting review"`.
+ */
+function buildPendingEditTitle(count: number): string {
+  return `${count} suggested edit${count === 1 ? '' : 's'} awaiting review`
+}
+
+/**
  * PersonNode renders a single person card within the React Flow canvas.
  *
  * Renders one of three level-of-detail variants selected by canvas zoom
@@ -97,6 +105,10 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
 
   const accessibleName = buildAccessibleName(data, sexLabel, dates)
 
+  /** Per `docs/DESIGN_SYSTEM.md` §3.2 "Has pending edit": 6px violet dot, top-right, with an explanatory title. */
+  const pendingEdits = data.pendingEdits ?? 0
+  const pendingEditTitle = pendingEdits > 0 ? buildPendingEditTitle(pendingEdits) : null
+
   if (variant === 'dot') {
     return (
       <div
@@ -134,6 +146,13 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
             ⌂
           </span>
         )}
+        {pendingEditTitle && (
+          <span
+            data-testid="person-node-pending-dot"
+            title={pendingEditTitle}
+            className="absolute -top-[3px] -right-[3px] w-1.5 h-1.5 rounded-full bg-pending"
+          />
+        )}
         <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
         <div className="font-serif font-semibold text-ink text-sm tracking-wide overflow-hidden whitespace-nowrap text-ellipsis">
           {data.name || <span className="text-ink-3 italic">Unknown</span>}
@@ -162,6 +181,13 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
         <span aria-hidden="true" className="absolute top-1 right-1.5 text-brass text-sm leading-none">
           ⌂
         </span>
+      )}
+      {pendingEditTitle && (
+        <span
+          data-testid="person-node-pending-dot"
+          title={pendingEditTitle}
+          className="absolute -top-[3px] -right-[3px] w-1.5 h-1.5 rounded-full bg-pending"
+        />
       )}
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <div className="flex items-center gap-2">

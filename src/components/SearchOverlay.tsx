@@ -45,7 +45,7 @@ interface NameMatch {
 }
 
 /** Finds the first case-insensitive occurrence of `query` in `name`, or `null` if absent. */
-function findMatch(name: string, query: string): NameMatch | null {
+export function findMatch(name: string, query: string): NameMatch | null {
   if (!query) return null
   const idx = name.toLowerCase().indexOf(query.toLowerCase())
   if (idx === -1) return null

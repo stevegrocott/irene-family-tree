@@ -35,6 +35,13 @@ async function typeQuery(input: HTMLInputElement, value: string) {
   })
 }
 
+// Simulate a keydown on the search input (ArrowUp/ArrowDown/Enter).
+async function pressKey(input: HTMLInputElement, key: string) {
+  await act(async () => {
+    input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+  })
+}
+
 describe('SearchBar', () => {
   let container: HTMLDivElement
   let root: ReturnType<typeof createRoot>
@@ -96,6 +103,106 @@ describe('SearchBar', () => {
     expect(list!.textContent).toContain('Charlie White')
     expect(list!.textContent).not.toContain('Alice Brown')
     expect(list!.textContent).not.toContain('Bob Green')
+  })
+
+  describe('highlight and keyboard navigation (design system §4.3)', () => {
+    it('highlights the matched substring in brass-soft without bolding', async () => {
+      const input = container.querySelector('input')!
+      await typeQuery(input, 'Alice')
+      const name = container.querySelector('.search-results li .font-serif')!
+      const highlight = name.querySelector('span')!
+      expect(highlight).not.toBeNull()
+      expect(highlight.textContent).toBe('Alice')
+      expect(highlight.className).toMatch(/ft-brass-soft/)
+      expect(highlight.className).not.toMatch(/font-bold/)
+    })
+
+    it('does not mark any result as keyboard-active before ArrowDown/ArrowUp is pressed', async () => {
+      const input = container.querySelector('input')!
+      await typeQuery(input, 'Alice')
+      const item = container.querySelector('[data-testid="search-result-item"]')!
+      expect(item.getAttribute('aria-selected')).toBe('false')
+      expect(item.className).not.toMatch(/ft-accent-soft/)
+    })
+
+    it('ArrowDown marks the first result keyboard-active with accent-soft styling', async () => {
+      const input = container.querySelector('input')!
+      await typeQuery(input, 'Alice')
+      await pressKey(input, 'ArrowDown')
+
+      const item = container.querySelector('[data-testid="search-result-item"]')!
+      expect(item.getAttribute('aria-selected')).toBe('true')
+      expect(item.className).toMatch(/ft-accent-soft/)
+      const tick = item.querySelector('.sex-dot')!
+      expect(tick.className).toMatch(/ft-accent(?!-soft)/)
+    })
+
+    it('ArrowDown is a no-op when there are no results', async () => {
+      const input = container.querySelector('input')!
+      await pressKey(input, 'ArrowDown')
+      expect(container.querySelector('.search-results')).toBeNull()
+    })
+
+    it('Enter selects the keyboard-active result and closes the results', async () => {
+      const input = container.querySelector('input')!
+      await typeQuery(input, 'Alice')
+      await pressKey(input, 'ArrowDown')
+      await pressKey(input, 'Enter')
+
+      expect(onSelect).toHaveBeenCalledWith('@I1@')
+      expect(container.querySelector('.search-results')).toBeNull()
+    })
+
+    it('Enter does nothing before any result is keyboard-active', async () => {
+      const input = container.querySelector('input')!
+      await typeQuery(input, 'Alice')
+      await pressKey(input, 'Enter')
+
+      expect(onSelect).not.toHaveBeenCalled()
+      expect(container.querySelector('.search-results')).not.toBeNull()
+    })
+
+    it('ArrowDown then ArrowUp moves the active row between multiple results', async () => {
+      const multi: Person[] = [
+        { gedcomId: '@M1@', name: 'Anna Kim',  birthPlace: null, birthYear: null, sex: 'F' },
+        { gedcomId: '@M2@', name: 'Anand Roy', birthPlace: null, birthYear: null, sex: 'M' },
+      ]
+      const localOnSelect = jest.fn()
+      const localContainer = document.createElement('div')
+      document.body.appendChild(localContainer)
+      let localRoot: ReturnType<typeof createRoot>
+      await act(async () => {
+        localRoot = createRoot(localContainer)
+        localRoot.render(<SearchBar onSelect={localOnSelect} persons={multi} />)
+      })
+
+      try {
+        const input = localContainer.querySelector('input')!
+        await typeQuery(input, 'An')
+        await pressKey(input, 'ArrowDown')
+        let items = localContainer.querySelectorAll('[data-testid="search-result-item"]')
+        expect(items[0].getAttribute('aria-selected')).toBe('true')
+        expect(items[1].getAttribute('aria-selected')).toBe('false')
+
+        await pressKey(input, 'ArrowDown')
+        items = localContainer.querySelectorAll('[data-testid="search-result-item"]')
+        expect(items[0].getAttribute('aria-selected')).toBe('false')
+        expect(items[1].getAttribute('aria-selected')).toBe('true')
+
+        // Clamped at the last result — a further ArrowDown keeps it in place.
+        await pressKey(input, 'ArrowDown')
+        items = localContainer.querySelectorAll('[data-testid="search-result-item"]')
+        expect(items[1].getAttribute('aria-selected')).toBe('true')
+
+        await pressKey(input, 'ArrowUp')
+        items = localContainer.querySelectorAll('[data-testid="search-result-item"]')
+        expect(items[0].getAttribute('aria-selected')).toBe('true')
+        expect(items[1].getAttribute('aria-selected')).toBe('false')
+      } finally {
+        act(() => { localRoot.unmount() })
+        document.body.removeChild(localContainer)
+      }
+    })
   })
 
   describe('mobile collapse (AC2: below 640px search is an icon button that opens a sheet)', () => {

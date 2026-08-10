@@ -7,6 +7,7 @@
 
 'use client'
 import { useState, useEffect } from 'react'
+import { findMatch } from './SearchOverlay'
 
 /** Minimal person record used for search filtering. */
 interface Person { gedcomId: string; name: string; sex: string | null; birthYear: string | null; birthPlace: string | null }
@@ -34,6 +35,8 @@ export default function SearchBar({ onSelect, persons: personsProp }: Props) {
   // 44px icon button (AC2); at `sm` and up the panel is always shown via the
   // `sm:block` override below, regardless of this flag.
   const [mobileOpen, setMobileOpen]          = useState(false)
+  // -1 means no row is keyboard-active; set by ArrowDown/ArrowUp (§4.3).
+  const [activeIndex, setActiveIndex]        = useState(-1)
 
   useEffect(() => {
     if (personsProp) return
@@ -62,6 +65,22 @@ export default function SearchBar({ onSelect, persons: personsProp }: Props) {
     onSelect(gedcomId)
     setQuery('')
     setMobileOpen(false)
+    setActiveIndex(-1)
+  }
+
+  /** ArrowUp/ArrowDown move the keyboard-active row; Enter selects it (§4.3, §7). */
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (results.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIndex(i => Math.min(i + 1, results.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIndex(i => Math.max(i - 1, 0))
+    } else if (e.key === 'Enter' && activeIndex >= 0) {
+      e.preventDefault()
+      handleSelect(results[activeIndex].gedcomId)
+    }
   }
 
   return (
@@ -87,9 +106,14 @@ export default function SearchBar({ onSelect, persons: personsProp }: Props) {
         <div className="flex items-center gap-2">
           <input
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => { setQuery(e.target.value); setActiveIndex(-1) }}
+            onKeyDown={handleInputKeyDown}
             placeholder="Search by name, place or year…"
             data-testid="search-input"
+            role="combobox"
+            aria-expanded={results.length > 0}
+            aria-controls="search-results-listbox"
+            aria-activedescendant={activeIndex >= 0 ? `search-result-${results[activeIndex].gedcomId}` : undefined}
             className="w-full min-h-11 bg-surface border border-line rounded-[var(--ft-r-md)] px-3 py-2 text-sm text-ink placeholder-ink-3 focus:outline-none focus:border-[var(--ft-accent)] focus:shadow-[var(--ft-focus)] transition-colors"
           />
           <button
@@ -106,30 +130,55 @@ export default function SearchBar({ onSelect, persons: personsProp }: Props) {
           </button>
         </div>
         {results.length > 0 && (
-          <ul data-testid="search-results" className="search-results mt-2 space-y-0.5 max-h-48 overflow-y-auto">
-            {results.map(p => (
-              <li
-                key={p.gedcomId}
-                data-testid="search-result-item"
-                onClick={() => handleSelect(p.gedcomId)}
-                className="min-h-11 flex items-center gap-2 px-3 py-2 rounded-[var(--ft-r-sm)] text-sm text-ink-2 cursor-pointer hover:bg-surface-1 hover:text-ink transition-colors"
-              >
-                <span
-                  className={`sex-dot w-0.5 self-stretch rounded-[var(--ft-r-sm)] inline-block ${
-                    p.sex === 'F' ? 'bg-pink-400' :
-                    p.sex === 'M' ? 'bg-blue-400' :
-                    'bg-[var(--ft-border-strong)]'
+          <ul
+            id="search-results-listbox"
+            role="listbox"
+            data-testid="search-results"
+            className="search-results mt-2 space-y-0.5 max-h-48 overflow-y-auto"
+          >
+            {results.map((p, i) => {
+              const isActive = i === activeIndex
+              const match = findMatch(p.name, query)
+              return (
+                <li
+                  key={p.gedcomId}
+                  id={`search-result-${p.gedcomId}`}
+                  role="option"
+                  aria-selected={isActive}
+                  data-testid="search-result-item"
+                  onClick={() => handleSelect(p.gedcomId)}
+                  className={`min-h-11 flex items-center gap-2 px-3 py-2 rounded-[var(--ft-r-sm)] text-sm text-ink-2 cursor-pointer hover:bg-surface-1 hover:text-ink transition-colors ${
+                    isActive ? 'bg-[var(--ft-accent-soft)]' : ''
                   }`}
-                />
-                <span className="font-serif font-medium">{p.name}</span>
-                {p.birthYear && (
-                  <span className="font-mono text-ink-3 text-xs">{p.birthYear}</span>
-                )}
-                {p.birthPlace && (
-                  <span className="text-ink-3 text-xs">{p.birthPlace.slice(0, 20)}</span>
-                )}
-              </li>
-            ))}
+                >
+                  <span
+                    className={`sex-dot w-0.5 self-stretch rounded-[var(--ft-r-sm)] inline-block ${
+                      isActive ? 'bg-[var(--ft-accent)]' :
+                      p.sex === 'F' ? 'bg-pink-400' :
+                      p.sex === 'M' ? 'bg-blue-400' :
+                      'bg-[var(--ft-border-strong)]'
+                    }`}
+                  />
+                  <span className="font-serif font-medium">
+                    {match ? (
+                      <>
+                        {match.before}
+                        <span className="bg-[var(--ft-brass-soft)]">{match.match}</span>
+                        {match.after}
+                      </>
+                    ) : (
+                      p.name
+                    )}
+                  </span>
+                  {p.birthYear && (
+                    <span className="font-mono text-ink-3 text-xs">{p.birthYear}</span>
+                  )}
+                  {p.birthPlace && (
+                    <span className="text-ink-3 text-xs">{p.birthPlace.slice(0, 20)}</span>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>

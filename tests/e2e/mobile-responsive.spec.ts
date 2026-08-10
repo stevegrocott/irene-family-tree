@@ -156,6 +156,7 @@ async function openDrawer(page: Page) {
   await expect(page.getByTestId('toolbar-toggle')).toBeVisible({ timeout: 15_000 })
 
   const personNode = page.locator('.react-flow__node-person').first()
+  await expect(personNode).toBeVisible({ timeout: 10_000 })
   await personNode.tap()
 
   const drawer = page.getByTestId('person-drawer')

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { mockPersonsAndTree, mockSignedInSession } from './helpers/revert-mocks'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E tests for the PersonDrawer "Your edits to this person" list in edit mode
@@ -96,7 +97,7 @@ const mockDonaldCanvas = (page: import('@playwright/test').Page) =>
   mockPersonsAndTree(page, donaldPersonsList, donaldTreeResponse)
 
 async function openEditMode(page: import('@playwright/test').Page) {
-  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await gotoViewer(page, '@IDONALD@')
   await expect(page.getByTestId('toolbar-viewing')).toContainText('Donald', { timeout: 15_000 })
 
   const personNode = page.locator('.react-flow__node-person').first()

@@ -65,6 +65,8 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
   const tickColor = SEX_TICK_COLOR[data.sex] ?? 'var(--ft-border-strong)'
   const sexLabel = SEX_LABEL[data.sex] ?? 'Sex unknown'
   const borderClass = data.isRoot ? 'border-2 border-brass' : 'border border-line'
+  /** Per `docs/DESIGN_SYSTEM.md` §3.2 Living/private: `--ft-private-soft` background. */
+  const bgClass = data.living ? 'bg-[var(--ft-private-soft)]' : 'bg-surface'
 
   const dates = data.living
     ? 'Living'
@@ -120,7 +122,7 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
         tabIndex={0}
         aria-label={accessibleName}
         title={accessibleName}
-        className={`relative flex items-center bg-surface ${borderClass} rounded-node px-4 h-10 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
+        className={`relative flex items-center ${bgClass} ${borderClass} rounded-node px-4 h-10 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
       >
         <div
           aria-hidden="true"
@@ -149,7 +151,7 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
       tabIndex={0}
       aria-label={accessibleName}
       title={accessibleName}
-      className={`relative bg-surface ${borderClass} rounded-node px-4 py-3 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
+      className={`relative ${bgClass} ${borderClass} rounded-node px-4 py-3 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
     >
       <div
         aria-hidden="true"

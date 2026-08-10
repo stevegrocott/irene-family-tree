@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { mockPersonsAndTree, mockSignedInSession } from './helpers/revert-mocks'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E tests for the PersonDrawer "Delete this person" button (Task 11).
@@ -127,7 +128,7 @@ test.describe('Revert: delete-person button', () => {
       await route.continue()
     })
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, '@IALICE@')
     await expect(page.getByTestId('toolbar-viewing')).toContainText('Alice', { timeout: 15_000 })
 
     const personNode = page.locator('.react-flow__node-person').first()
@@ -197,7 +198,7 @@ test.describe('Revert: delete-person button', () => {
       })
     )
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, '@IALICE@')
     await expect(page.getByTestId('toolbar-viewing')).toContainText('Alice', { timeout: 15_000 })
 
     const personNode = page.locator('.react-flow__node-person').first()
@@ -239,7 +240,7 @@ test.describe('Revert: delete-person button', () => {
       })
     )
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, '@IALICE@')
     await expect(page.getByTestId('toolbar-viewing')).toContainText('Alice', { timeout: 15_000 })
 
     const personNode = page.locator('.react-flow__node-person').first()
@@ -287,7 +288,7 @@ test.describe('Revert: delete-person button', () => {
       })
     )
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, '@IALICE@')
     await expect(page.getByTestId('toolbar-viewing')).toContainText('Alice', { timeout: 15_000 })
 
     const personNode = page.locator('.react-flow__node-person').first()

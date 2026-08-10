@@ -8,6 +8,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { findMatch } from './SearchOverlay'
+import { SEX_AVATAR_BG } from '@/constants/tree'
 
 /** Minimal person record used for search filtering. */
 interface Person { gedcomId: string; name: string; sex: string | null; birthYear: string | null; birthPlace: string | null }
@@ -152,12 +153,12 @@ export default function SearchBar({ onSelect, persons: personsProp }: Props) {
                   }`}
                 >
                   <span
-                    className={`sex-dot w-0.5 self-stretch rounded-[var(--ft-r-sm)] inline-block ${
-                      isActive ? 'bg-[var(--ft-accent)]' :
-                      p.sex === 'F' ? 'bg-pink-400' :
-                      p.sex === 'M' ? 'bg-blue-400' :
-                      'bg-[var(--ft-border-strong)]'
-                    }`}
+                    className="sex-dot w-0.5 self-stretch rounded-[var(--ft-r-sm)] inline-block"
+                    style={{
+                      backgroundColor: isActive
+                        ? 'var(--ft-accent)'
+                        : (SEX_AVATAR_BG[p.sex ?? 'default'] ?? SEX_AVATAR_BG.default),
+                    }}
                   />
                   <span className="font-serif font-medium">
                     {match ? (

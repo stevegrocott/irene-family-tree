@@ -114,7 +114,10 @@ export const SEX_AVATAR_BG: Record<string, string> = {
   default: 'var(--ft-border-strong)',
 }
 
-/** Text-colour mirror of {@link SEX_AVATAR_BG} — same §3.2 tints, for foreground (not fill) usages. */
+/**
+ * Alias of {@link SEX_AVATAR_BG} for foreground (not fill) usages — same §3.2 tints.
+ * Raw hex/CSS values, not Tailwind classes; apply via inline `style`, not `className`.
+ */
 export const SEX_AVATAR_TEXT: Record<string, string> = SEX_AVATAR_BG
 
 /** Mobile bottom-sheet detent for the person drawer (docs/DESIGN_SYSTEM.md §6: "two detents (peek ≈ 30 vh, full 72 vh)"). */

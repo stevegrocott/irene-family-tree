@@ -67,6 +67,12 @@ test.describe('AuthButton on the canvas', () => {
     await page.goto('/')
 
     const authButton = page.getByTestId('auth-button')
+    // Regression guard for issue #241: AuthButton previously rendered once
+    // from the root layout and again from the ViewerShell top bar, so two
+    // identical `auth-button` elements landed at the same coordinates on the
+    // viewer. Assert the single-instance invariant explicitly rather than
+    // relying on strict-mode locator resolution to surface the duplicate.
+    await expect(authButton).toHaveCount(1)
     await expect(authButton).toBeVisible()
     await expect(authButton).toHaveText(/sign in/i)
 

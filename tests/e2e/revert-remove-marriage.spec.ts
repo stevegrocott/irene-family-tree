@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { mockPersonsAndTree, mockSignedInSession } from './helpers/revert-mocks'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E tests for the PersonDrawer per-marriage × remove button (Task 12).
@@ -133,7 +134,7 @@ test.describe('Revert: per-marriage remove (×) button', () => {
       })
     )
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, '@IDONALD@')
     await expect(page.getByTestId('toolbar-viewing')).toContainText('Donald', { timeout: 15_000 })
 
     const personNode = page.locator('.react-flow__node-person').first()
@@ -191,7 +192,7 @@ test.describe('Revert: per-marriage remove (×) button', () => {
       route.continue()
     })
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, '@IDONALD@')
     await expect(page.getByTestId('toolbar-viewing')).toContainText('Donald', { timeout: 15_000 })
 
     const personNode = page.locator('.react-flow__node-person').first()
@@ -248,7 +249,7 @@ test.describe('Revert: per-marriage remove (×) button', () => {
       })
     )
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, '@IDONALD@')
     await expect(page.getByTestId('toolbar-viewing')).toContainText('Donald', { timeout: 15_000 })
 
     const personNode = page.locator('.react-flow__node-person').first()

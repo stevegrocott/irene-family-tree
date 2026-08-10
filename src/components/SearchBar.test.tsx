@@ -133,8 +133,12 @@ describe('SearchBar', () => {
       const item = container.querySelector('[data-testid="search-result-item"]')!
       expect(item.getAttribute('aria-selected')).toBe('true')
       expect(item.className).toMatch(/ft-accent-soft/)
-      const tick = item.querySelector('.sex-dot')!
-      expect(tick.className).toMatch(/ft-accent(?!-soft)/)
+      // The tick's colour is an inline style, not a class — the sex tints are
+      // token/hex values applied via `style`, so the active accent is too.
+      // Asserting on className here tested the mechanism rather than the
+      // result, and failed while the rendered behaviour was correct.
+      const tick = item.querySelector('.sex-dot') as HTMLElement
+      expect(tick.style.backgroundColor).toBe('var(--ft-accent)')
     })
 
     it('ArrowDown is a no-op when there are no results', async () => {

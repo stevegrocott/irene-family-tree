@@ -90,7 +90,7 @@ export async function GET() {
               c.status      AS status,
               c.createdAt   AS createdAt
        ORDER BY c.createdAt DESC
-       SKIP $skip LIMIT $limit`,
+       SKIP toInteger($skip) LIMIT toInteger($limit)`,
       { skip: 0, limit: 20 }
     )
   } catch (err) {

@@ -206,28 +206,42 @@ describe('PersonNode living/private background (DESIGN_SYSTEM.md §3.2 Living/pr
 })
 
 describe('PersonNode pending edit indicator (DESIGN_SYSTEM.md §3.2 Has pending edit)', () => {
-  it('renders a title="1 suggested edit awaiting review" element when pendingEdits is 1', () => {
-    const el = render({ pendingEdits: 1 })
-    const node = el.querySelector('[data-testid="person-node-full"]') as HTMLElement
-    const titled = [...node.querySelectorAll('[title]')].find(
-      (n) => n.getAttribute('title') === '1 suggested edit awaiting review'
-    )
-    expect(titled).toBeTruthy()
-    expect(node.outerHTML).toMatch(/pending/i)
-  })
+  it.each([
+    ['compact', 'person-node-compact', 1, '1 suggested edit awaiting review'],
+    ['compact', 'person-node-compact', 3, '3 suggested edits awaiting review'],
+    ['full', 'person-node-full', 1, '1 suggested edit awaiting review'],
+    ['full', 'person-node-full', 3, '3 suggested edits awaiting review'],
+  ] as const)(
+    'renders a pending-edit title on the %s variant when pendingEdits is %i',
+    (lodVariant, testId, count, expectedTitle) => {
+      const el = render({ pendingEdits: count, lodVariant })
+      const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+      const titled = [...node.querySelectorAll('[title]')].find(
+        (n) => n.getAttribute('title') === expectedTitle
+      )
+      expect(titled).toBeTruthy()
+      expect(node.outerHTML).toMatch(/pending/i)
+    }
+  )
 
-  it('renders no pending-edit indicator when pendingEdits is absent', () => {
-    const el = render()
-    const node = el.querySelector('[data-testid="person-node-full"]') as HTMLElement
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('renders no pending-edit indicator on the %s variant when pendingEdits is absent', (lodVariant, testId) => {
+    const el = render({ lodVariant })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
     const titled = [...node.querySelectorAll('[title]')].find((n) =>
       /awaiting review/i.test(n.getAttribute('title') ?? '')
     )
     expect(titled).toBeUndefined()
   })
 
-  it('renders no pending-edit indicator when pendingEdits is 0', () => {
-    const el = render({ pendingEdits: 0 })
-    const node = el.querySelector('[data-testid="person-node-full"]') as HTMLElement
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('renders no pending-edit indicator on the %s variant when pendingEdits is 0', (lodVariant, testId) => {
+    const el = render({ pendingEdits: 0, lodVariant })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
     const titled = [...node.querySelectorAll('[title]')].find((n) =>
       /awaiting review/i.test(n.getAttribute('title') ?? '')
     )

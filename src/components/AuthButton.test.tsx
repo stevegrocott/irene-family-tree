@@ -38,13 +38,13 @@ describe('AuthButton', () => {
     expect(btn!.textContent).toContain('Sign in')
   })
 
-  it('is absolutely positioned top-right with z-10', async () => {
+  it('renders in normal document flow, not absolutely positioned', async () => {
     await render()
     const btn = container.querySelector('[data-testid="auth-button"]')!
-    expect(btn.className).toContain('absolute')
-    expect(btn.className).toContain('top-4')
-    expect(btn.className).toContain('right-4')
-    expect(btn.className).toContain('z-10')
+    expect(btn.className).not.toContain('absolute')
+    expect(btn.className).not.toContain('top-4')
+    expect(btn.className).not.toContain('right-4')
+    expect(btn.className).not.toContain('z-10')
   })
 
   it('shows user name and Sign out when authenticated with name', async () => {
@@ -62,7 +62,7 @@ describe('AuthButton', () => {
     expect(signout!.textContent).toContain('Sign out')
   })
 
-  it('authenticated pill is absolutely positioned top-right with z-10', async () => {
+  it('authenticated pill renders in normal document flow, not absolutely positioned', async () => {
     jest.spyOn(NextAuthReact, 'useSession').mockReturnValue({
       data: { user: { name: 'Alice Smith', email: 'alice@example.com', image: null } } as never,
       status: 'authenticated',
@@ -70,10 +70,10 @@ describe('AuthButton', () => {
     })
     await render()
     const pill = container.querySelector('[data-testid="auth-button"]')!
-    expect(pill.className).toContain('absolute')
-    expect(pill.className).toContain('top-4')
-    expect(pill.className).toContain('right-4')
-    expect(pill.className).toContain('z-10')
+    expect(pill.className).not.toContain('absolute')
+    expect(pill.className).not.toContain('top-4')
+    expect(pill.className).not.toContain('right-4')
+    expect(pill.className).not.toContain('z-10')
   })
 
   it('falls back to email when name is absent', async () => {

@@ -6,10 +6,12 @@ import { FLOATING_PANEL_BASE_CLASS } from '@/constants/tree'
 /**
  * AuthButton
  *
- * Absolute-positioned control (top-right) that shows either a "Sign in" button
- * or, when authenticated, an avatar pill with the user's name and a "Sign out"
- * action. Styling follows the solid surface/border/shadow treatment used
- * elsewhere in the canvas — see docs/DESIGN_SYSTEM.md §4.4.
+ * Position-agnostic, in-flow control that shows either a "Sign in" button or,
+ * when authenticated, an avatar pill with the user's name and a "Sign out"
+ * action. Renders in normal document flow — callers are responsible for
+ * placement (e.g. ViewerShell's top-bar avatar slot, or a positioned wrapper
+ * on routes without ViewerShell). Styling follows the solid surface/border/
+ * shadow treatment used elsewhere in the canvas — see docs/DESIGN_SYSTEM.md §4.4.
  */
 export default function AuthButton() {
   const { data: session, status } = useSession()

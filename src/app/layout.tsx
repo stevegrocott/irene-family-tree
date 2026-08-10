@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Source_Serif_4 } from "next/font/google";
 import Script from "next/script";
 import { SessionProvider } from "next-auth/react";
-import AuthButton from "@/components/AuthButton";
+import LayoutAuthButton from "@/components/LayoutAuthButton";
 import { APP_NAME, APP_DESCRIPTION, SITE_URL, THEME_COLOR } from "@/constants/branding";
 import "./globals.css";
 
@@ -100,7 +100,7 @@ export default function RootLayout({
           {THEME_INIT_SCRIPT}
         </Script>
         <SessionProvider>
-          <AuthButton />
+          <LayoutAuthButton />
           {children}
         </SessionProvider>
       </body>

@@ -125,7 +125,7 @@ describe('GET /api/admin/duplicates', () => {
     expect(cypher).toMatch(/toLower\(p1\.name\)/)
     expect(cypher).toMatch(/toLower\(p2\.name\)/)
     expect(cypher).toMatch(/p1\.gedcomId\s*<\s*p2\.gedcomId/)
-    expect(cypher).toContain('LIMIT')
+    expect(cypher).toMatch(/LIMIT\s+toInteger\(\$limit\)/)
     expect(params).toEqual(expect.objectContaining({ limit: expect.any(Number) }))
   })
 

@@ -179,8 +179,13 @@ export const FACT_ROW_VALUE_CLASS = '[font:var(--ft-body)] text-ink text-right m
  */
 export const FACT_ROW_GHOST_CLASS = '[font:var(--ft-body)] text-ink-2 hover:text-ink hover:bg-surface-2 rounded-lg px-2 -mr-2 py-0.5 transition-colors'
 
-/** Absolute-positioned top-right floating panel — see AuthButton.tsx. */
-export const FLOATING_PANEL_BASE_CLASS = 'absolute top-4 right-4 z-10 flex items-center gap-2 bg-surface border border-line rounded-[var(--ft-r-md)] shadow-[var(--ft-shadow-1)]'
+/**
+ * Solid surface/border/shadow treatment for a floating-panel-style control —
+ * see AuthButton.tsx. Position-agnostic: renders in normal flow; callers that
+ * need the control floated (e.g. non-viewer layout routes) wrap it in their
+ * own positioned container instead of this class baking in a position.
+ */
+export const FLOATING_PANEL_BASE_CLASS = 'flex items-center gap-2 bg-surface border border-line rounded-[var(--ft-r-md)] shadow-[var(--ft-shadow-1)]'
 
 /** Card container shared by ChangeHistory and SuggestionsReview list items. */
 export const ADMIN_CARD_CLASS = 'bg-surface border border-line rounded-panel p-5 shadow-[var(--ft-shadow-1)]'

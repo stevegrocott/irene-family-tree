@@ -97,17 +97,25 @@ export const EDGE_RENDER_TYPE: Partial<Record<string, string>> = {
   [EDGE_TYPES.CHILD]: 'step',
 }
 
+/**
+ * Sex tints per docs/DESIGN_SYSTEM.md §3.2 — "M #4A7DB5 · F #A85F86 · unknown
+ * var(--ft-border-strong) (these two are the ONLY tints outside the semantic
+ * set, and they appear nowhere else in the product)". Single source of truth
+ * for every sex-keyed colour in the product (avatar fill, avatar text, the
+ * person-node tick, the search-result tick) — do not redefine `#4A7DB5` /
+ * `#A85F86` anywhere else; import from here instead.
+ *
+ * Raw hex/CSS values, not Tailwind classes — apply via inline `style`, e.g.
+ * `style={{ backgroundColor: SEX_AVATAR_BG[sex] ?? SEX_AVATAR_BG.default }}`.
+ */
 export const SEX_AVATAR_BG: Record<string, string> = {
-  M: 'bg-indigo-500',
-  F: 'bg-pink-500',
-  default: 'bg-slate-500',
+  M: '#4A7DB5',
+  F: '#A85F86',
+  default: 'var(--ft-border-strong)',
 }
 
-export const SEX_AVATAR_TEXT: Record<string, string> = {
-  M: 'text-indigo-500',
-  F: 'text-pink-500',
-  default: 'text-slate-500',
-}
+/** Text-colour mirror of {@link SEX_AVATAR_BG} — same §3.2 tints, for foreground (not fill) usages. */
+export const SEX_AVATAR_TEXT: Record<string, string> = SEX_AVATAR_BG
 
 /** Mobile bottom-sheet detent for the person drawer (docs/DESIGN_SYSTEM.md §6: "two detents (peek ≈ 30 vh, full 72 vh)"). */
 export type DrawerDetent = 'peek' | 'full'

@@ -1661,7 +1661,8 @@ export function PersonDrawer({
           ) : (
             <div
               aria-hidden="true"
-              className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-semibold flex-shrink-0 ${SEX_AVATAR_BG[person.sex] ?? SEX_AVATAR_BG.default}`}
+              className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-semibold flex-shrink-0"
+              style={{ backgroundColor: SEX_AVATAR_BG[person.sex] ?? SEX_AVATAR_BG.default }}
             >
               {(person.name || '?').trim().charAt(0).toUpperCase()}
             </div>

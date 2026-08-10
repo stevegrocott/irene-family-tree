@@ -3,16 +3,7 @@
 import { memo, useCallback, useState } from 'react'
 import { Handle, Position, type NodeProps } from 'reactflow'
 import type { PersonData } from '@/types/tree'
-
-/**
- * Sex tick colours per `docs/DESIGN_SYSTEM.md` §3.2 — the only tints
- * permitted outside the semantic colour set. Falls back to the neutral
- * `--ft-border-strong` token when sex is unknown.
- */
-const SEX_TICK_COLOR: Record<string, string> = {
-  M: '#4A7DB5',
-  F: '#A85F86',
-}
+import { SEX_AVATAR_BG } from '@/constants/tree'
 
 /** Screen-reader label so sex is never carried by colour alone (§7). */
 const SEX_LABEL: Record<string, string> = {
@@ -62,7 +53,7 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
   const [photoFailed, setPhotoFailed] = useState(false)
   const handlePhotoError = useCallback(() => setPhotoFailed(true), [])
   const variant = data.lodVariant ?? DEFAULT_VARIANT
-  const tickColor = SEX_TICK_COLOR[data.sex] ?? 'var(--ft-border-strong)'
+  const tickColor = SEX_AVATAR_BG[data.sex] ?? SEX_AVATAR_BG.default
   const sexLabel = SEX_LABEL[data.sex] ?? 'Sex unknown'
   const borderClass = data.isRoot ? 'border-2 border-brass' : 'border border-line'
 

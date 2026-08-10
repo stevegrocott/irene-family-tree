@@ -48,7 +48,7 @@ RETURN p1.gedcomId    AS gedcomId1,
        p2.deathPlace  AS deathPlace2,
        p2.occupation  AS occupation2,
        p2.notes       AS notes2
-LIMIT $limit`
+LIMIT toInteger($limit)`
 
 /** Scalar Person fields returned for each side of a duplicate pair. */
 interface DuplicatePersonSide {

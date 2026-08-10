@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E tests for PersonDrawer CRUD operations (issue #54).
@@ -149,7 +150,7 @@ test.describe('PersonDrawer CRUD', () => {
       })
     })
 
-    await page.goto('/')
+    await gotoViewer(page, mockPersonDetail.gedcomId)
 
     // Wait for the tree to render — toolbar visibility is a reliable signal.
     await expect(page.getByTestId('toolbar-viewing')).toBeVisible({ timeout: 15_000 })
@@ -236,7 +237,7 @@ test.describe('PersonDrawer CRUD', () => {
       })
     })
 
-    await page.goto('/')
+    await gotoViewer(page, mockPersonDetail.gedcomId)
 
     // Wait for the tree to render.
     await expect(page.getByTestId('toolbar-viewing')).toBeVisible({ timeout: 15_000 })
@@ -320,7 +321,7 @@ test.describe('PersonDrawer CRUD', () => {
       })
     })
 
-    await page.goto('/')
+    await gotoViewer(page, mockPersonDetail.gedcomId)
 
     // Wait for the tree to render.
     await expect(page.getByTestId('toolbar-viewing')).toBeVisible({ timeout: 15_000 })
@@ -419,7 +420,7 @@ test.describe('PersonDrawer CRUD', () => {
       })
     })
 
-    await page.goto('/')
+    await gotoViewer(page, mockPersonDetail.gedcomId)
 
     // Toolbar confirms Alice Test is the root (from our mocked /api/persons).
     await expect(page.getByTestId('toolbar-viewing')).toContainText('Alice', {

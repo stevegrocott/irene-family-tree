@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { mockSignedInSession, mockPersonsAndTree } from './helpers/revert-mocks'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E tests for the docked person drawer structure (issue #199).
@@ -113,7 +114,7 @@ async function openDrawer(page: Page, detail: unknown) {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(detail) })
   )
 
-  await page.goto('/')
+  await gotoViewer(page, mockPerson.gedcomId)
   await expect(page.getByTestId('toolbar-viewing')).toBeVisible({ timeout: 15_000 })
 
   const personNode = page.locator('.react-flow__node-person').first()
@@ -197,7 +198,7 @@ test.describe('desktop toolbar with drawer open', () => {
     )
 
     await page.setViewportSize({ width: 1010, height: 780 })
-    await page.goto('/')
+    await gotoViewer(page, mockRealisticRootPerson.gedcomId)
 
     const toolbar = page.getByTestId('toolbar')
     await expect(toolbar).toBeVisible({ timeout: 15_000 })

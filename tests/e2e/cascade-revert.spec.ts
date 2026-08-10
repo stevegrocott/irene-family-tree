@@ -1,6 +1,7 @@
 import { test, expect, type BrowserContext } from '@playwright/test'
 import { encode } from '@auth/core/jwt'
 import { mockPersonsAndTree, mockSignedInSession } from './helpers/revert-mocks'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E tests for the cascade-revert flow (issue #127).
@@ -187,7 +188,7 @@ test.describe('cascade-revert: delete person', () => {
       })
     )
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, '@IALICE@')
     await expect(page.getByTestId('toolbar-viewing')).toContainText('Alice', { timeout: 15_000 })
 
     const personNode = page.locator('.react-flow__node-person').first()
@@ -250,7 +251,7 @@ test.describe('cascade-revert: delete person', () => {
       await route.continue()
     })
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, '@IALICE@')
     await expect(page.getByTestId('toolbar-viewing')).toContainText('Alice', { timeout: 15_000 })
 
     const personNode = page.locator('.react-flow__node-person').first()
@@ -295,7 +296,7 @@ test.describe('cascade-revert: delete person', () => {
       })
     )
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, '@IALICE@')
     await expect(page.getByTestId('toolbar-viewing')).toContainText('Alice', { timeout: 15_000 })
 
     const personNode = page.locator('.react-flow__node-person').first()

@@ -235,6 +235,24 @@ describe('PersonNode pending edit indicator (DESIGN_SYSTEM.md §3.2 Has pending 
   })
 })
 
+describe('PersonNode compact variant unknown name (DESIGN_SYSTEM.md §3.2)', () => {
+  it('renders "Unknown" in italic muted styling when name is empty', () => {
+    const el = render({ name: '', lodVariant: 'compact' })
+    const node = el.querySelector('[data-testid="person-node-compact"]') as HTMLElement
+    const matches = [...node.querySelectorAll('*')].filter((n) => n.textContent?.trim() === 'Unknown')
+    const unknownEl = matches[matches.length - 1]
+    expect(unknownEl).toBeTruthy()
+    expect(unknownEl?.className).toContain('italic')
+    expect(unknownEl?.className).toContain('text-ink-3')
+  })
+
+  it('does not render the italic "Unknown" placeholder when name is present', () => {
+    const el = render({ name: 'Irene Tunnicliffe', lodVariant: 'compact' })
+    const node = el.querySelector('[data-testid="person-node-compact"]') as HTMLElement
+    expect(node.textContent).not.toContain('Unknown')
+  })
+})
+
 describe('PersonNode keyboard accessibility (DESIGN_SYSTEM.md §7)', () => {
   it.each([
     ['dot', 'person-node-dot'],

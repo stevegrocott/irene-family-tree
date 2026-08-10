@@ -136,7 +136,7 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
         )}
         <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
         <div className="font-serif font-semibold text-ink text-sm tracking-wide overflow-hidden whitespace-nowrap text-ellipsis">
-          {data.name || 'Unknown'}
+          {data.name || <span className="text-ink-3 italic">Unknown</span>}
           {data.birthYear && <span className="text-ink-3 font-normal"> · b. {data.birthYear}</span>}
         </div>
         <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />

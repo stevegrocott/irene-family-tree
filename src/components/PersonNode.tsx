@@ -127,6 +127,11 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
           className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[3px]"
           style={{ backgroundColor: tickColor }}
         />
+        {data.isRoot && (
+          <span aria-hidden="true" className="absolute top-0.5 right-1.5 text-brass text-sm leading-none">
+            ⌂
+          </span>
+        )}
         <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
         <div className="font-serif font-semibold text-ink text-sm tracking-wide overflow-hidden whitespace-nowrap text-ellipsis">
           {data.name || 'Unknown'}
@@ -151,6 +156,11 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
         className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[3px]"
         style={{ backgroundColor: tickColor }}
       />
+      {data.isRoot && (
+        <span aria-hidden="true" className="absolute top-1 right-1.5 text-brass text-sm leading-none">
+          ⌂
+        </span>
+      )}
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <div className="flex items-center gap-2">
         {data.photoUrl && !photoFailed ? (

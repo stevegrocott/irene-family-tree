@@ -187,6 +187,66 @@ test.describe('person node states — design system §3.2', () => {
     expect(dot!.title).toMatch(/awaiting review/i)
   })
 
+  test('a selected node renders a 2px accent border and accent-soft background', async ({ page }) => {
+    // isRoot: false so this pins the Selected treatment in isolation, without
+    // the Root row's brass border competing for the same edge (that
+    // precedence is covered separately below).
+    await mockCanvas(page, { isRoot: false })
+    const node = fullNode(page)
+
+    await node.click()
+
+    // §3.2 Selected: "2 px `--ft-accent` border, `--ft-accent-soft` background".
+    await expect(node).toHaveCSS('border-top-width', '2px')
+    await expect(node).toHaveCSS('border-top-color', await resolved(page, 'var(--ft-accent)'))
+    await expect(node).toHaveCSS('background-color', await resolved(page, 'var(--ft-accent-soft)'))
+  })
+
+  test('selecting a different node clears the previous node’s selected treatment', async ({ page }) => {
+    const personA = { ...BASE }
+    const personB = { ...BASE, gedcomId: '@I2@', name: 'Albert Gullett', sex: 'M', birthYear: '1870', deathYear: '1940' }
+
+    await mockPersonsAndTree(page, [personA, personB], {
+      nodes: [
+        { id: 'node-@I1@', type: 'person', data: { ...personA, isRoot: false }, position: { x: 0, y: 0 } },
+        { id: 'node-@I2@', type: 'person', data: { ...personB, isRoot: false }, position: { x: 300, y: 0 } },
+      ],
+      edges: [],
+      totalNodes: 2,
+      truncated: false,
+    })
+    await gotoViewer(page, BASE.gedcomId)
+
+    const nodeA = page.getByTestId('rf__node-node-@I1@').getByTestId('person-node-full')
+    const nodeB = page.getByTestId('rf__node-node-@I2@').getByTestId('person-node-full')
+    const accent = await resolved(page, 'var(--ft-accent)')
+
+    await nodeA.click()
+    await expect(nodeA).toHaveCSS('border-top-color', accent)
+
+    // AC3: selecting a second node must clear the first node's treatment —
+    // the app derives selection from a single `selectedNodeId`, so only one
+    // node should ever carry the accent border at a time.
+    await nodeB.click()
+    await expect(nodeB).toHaveCSS('border-top-color', accent)
+    await expect(nodeA).not.toHaveCSS('border-top-color', accent)
+  })
+
+  test('a node that is both root and selected keeps its ⌂ marker visible', async ({ page }) => {
+    // §3.2 Root and Selected both claim a border treatment; AC4 only requires
+    // that the root marker — the "you are here" signal — survives the clash,
+    // not which colour wins the border. `mockCanvas`'s default node isRoot: true.
+    await mockCanvas(page)
+    const node = fullNode(page)
+
+    await node.click()
+    await expect(node).toHaveCSS('background-color', await resolved(page, 'var(--ft-accent-soft)'))
+
+    const marker = node.getByText('⌂')
+    await expect(marker).toBeVisible()
+    await expect(marker).toHaveCSS('color', await resolved(page, 'var(--ft-brass)'))
+  })
+
   test('the avatar tint does not encode generation with off-palette colours', async ({ page }) => {
     // Two ranks, because `applyDagreLayout` derives the signed generation from
     // laid-out y-positions and overwrites whatever the payload claimed

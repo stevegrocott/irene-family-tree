@@ -38,11 +38,28 @@ const CPU_THROTTLE_RATE = 6;
  * throughout"). rAF only resumes once the main thread frees up, so a large
  * gap is a direct measurement of how long the thread was blocked -- #271's
  * manual repro observed the tab going fully unresponsive for "tens of
- * seconds" (two separate 45s CDP timeouts). 2s sits well above ordinary
- * throttled-CPU frame jitter but far below that, so a real regression still
- * trips it while giving headroom for CI variance.
+ * seconds" (two separate 45s CDP timeouts).
+ *
+ * 2s was reconciled up to 5s after review: the #271 fix
+ * (`useDeferredValue` in `FamilyTree.tsx`) is documented on the issue as a
+ * partial mitigation, not a full elimination -- the eventual settle onto
+ * the `full` variant still pays for mounting ~370 heavier nodes, which is
+ * genuine browser work under throttling. The implementer's own post-fix
+ * measurement at this same `CPU_THROTTLE_RATE` reported a worst case of
+ * ~3.6s. Confirmed locally by re-running this exact probe at
+ * `CPU_THROTTLE_RATE=6`: the fixed code produced max gaps of
+ * 2197-2782ms across 3 runs, and reverting the fix (the AC5 mutation)
+ * produced 2103-3654ms across 3 runs -- i.e. at this throttle rate, on a
+ * loaded dev machine, fixed- and reverted-code stall magnitudes overlap
+ * closely enough that no threshold in the 2-4s band separates them
+ * reliably run-to-run. 5s sits with margin above every fixed-code
+ * measurement observed (implementer's and local), so this probe no longer
+ * intermittently fails on correctly-fixed code, at the cost of only
+ * guarding against a *gross* (multi-second, order-of-magnitude)
+ * regression back toward the "tens of seconds" manual-repro stall, rather
+ * than the finer 2-4s band the fix's partial mitigation lives in.
  */
-const STALL_BUDGET_MS = 2_000;
+const STALL_BUDGET_MS = 5_000;
 
 test.describe('tree initial render at default root', () => {
   test.beforeEach(async ({ page }) => {

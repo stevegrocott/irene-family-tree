@@ -32,13 +32,15 @@ const baseData: PersonData = {
   photoUrl: null,
 }
 
-function render(overrides: Partial<PersonData> = {}) {
+function render(overrides: Partial<PersonData> = {}, nodeProps: { selected?: boolean } = {}) {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   act(() => {
     root.render(
-      <PersonNode {...({ data: { ...baseData, ...overrides } } as unknown as Parameters<typeof PersonNode>[0])} />
+      <PersonNode
+        {...({ data: { ...baseData, ...overrides }, ...nodeProps } as unknown as Parameters<typeof PersonNode>[0])}
+      />
     )
   })
   return container
@@ -202,6 +204,44 @@ describe('PersonNode living/private background (DESIGN_SYSTEM.md §3.2 Living/pr
     const el = render({ living: false, lodVariant })
     const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
     expect(node.outerHTML).not.toMatch(/private-soft/i)
+  })
+})
+
+describe('PersonNode selected treatment (DESIGN_SYSTEM.md §3.2 Selected, issue #266)', () => {
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('renders a 2px accent border and accent-soft background on the %s variant when selected', (lodVariant, testId) => {
+    const el = render({ lodVariant }, { selected: true })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(node.className).toMatch(/\bborder-2\b/)
+    expect(node.className).toMatch(/\bborder-accent\b/)
+    expect(node.outerHTML).toMatch(/accent-soft/i)
+  })
+
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('renders no accent treatment on the %s variant when not selected', (lodVariant, testId) => {
+    const el = render({ lodVariant }, { selected: false })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(node.className).not.toMatch(/\bborder-accent\b/)
+    expect(node.outerHTML).not.toMatch(/accent-soft/i)
+  })
+
+  it('renders the accent border, not the brass root border, on a node that is both root and selected (AC4 precedence)', () => {
+    const el = render({ isRoot: true, lodVariant: 'full' }, { selected: true })
+    const node = el.querySelector('[data-testid="person-node-full"]') as HTMLElement
+    expect(node.className).toMatch(/\bborder-accent\b/)
+    expect(node.className).not.toMatch(/\bborder-brass\b/)
+  })
+
+  it('keeps the brass root ⌂ marker visible on a node that is both root and selected (AC4)', () => {
+    const el = render({ isRoot: true, lodVariant: 'full' }, { selected: true })
+    const node = el.querySelector('[data-testid="person-node-full"]') as HTMLElement
+    const marker = findRootMarker(node)
+    expect(marker).not.toBeNull()
+    expect(`${marker?.className ?? ''} ${marker?.getAttribute('style') ?? ''}`).toMatch(/brass/i)
   })
 })
 

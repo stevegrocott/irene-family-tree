@@ -36,6 +36,25 @@ function centerX(node: { type?: string; position: { x: number } }) {
   return node.position.x + w / 2
 }
 
+describe('applyDagreLayout — measured node dimensions', () => {
+  it('sets width/height on each laid-out node so React Flow treats it as pre-measured', () => {
+    // Arrange: one union with two parents, matching nodeSize's two branches (person, union).
+    const nodes: Node[] = [personNode('p1', '@I1@'), personNode('p2', '@I2@'), unionNode('u1')]
+    const edges: Edge[] = [unionEdge('e1', 'p1', 'u1'), unionEdge('e2', 'p2', 'u1')]
+
+    // Act
+    const { nodes: laidNodes } = applyDagreLayout(nodes, edges)
+
+    // Assert: dimensions land on the node itself, not just baked into `position`.
+    const p1 = laidNodes.find(n => n.id === 'p1')!
+    const u1 = laidNodes.find(n => n.id === 'u1')!
+    expect(p1.width).toBe(PERSON_W)
+    expect(p1.height).toBe(76)
+    expect(u1.width).toBe(UNION_W)
+    expect(u1.height).toBe(14)
+  })
+})
+
 describe('applyDagreLayout — CHILD edge orientation contract', () => {
   it('ranks a child below its parents\' union when CHILD is union→person', () => {
     // Arrange: grandparent generation unions, one child born of that union.
@@ -201,6 +220,40 @@ describe('applyDagreLayout — exposed generation y-levels', () => {
     const { generationLevels } = applyDagreLayout(nodes, edges)
 
     expect(generationLevels).toEqual([])
+  })
+})
+
+describe('applyDagreLayout — node dimensions for React Flow measurement', () => {
+  // Mirrors the private PERSON_H/UNION_H constants in src/lib/layout.ts.
+  const PERSON_H = 76
+  const UNION_H = 14
+
+  it('carries width and height on every laid-out node, matching its type (issue #230)', () => {
+    // Arrange: same family shape as the CHILD-orientation tests above.
+    const nodes: Node[] = [
+      personNode('p1', '@I1@'),
+      personNode('p2', '@I2@'),
+      unionNode('u1'),
+      personNode('c1', '@I3@'),
+    ]
+    const edges: Edge[] = [
+      unionEdge('e1', 'p1', 'u1'),
+      unionEdge('e2', 'p2', 'u1'),
+      childEdge('e3', 'u1', 'c1'),
+    ]
+
+    // Act
+    const { nodes: laidNodes } = applyDagreLayout(nodes, edges)
+
+    // Assert: React Flow only skips its ResizeObserver measurement pass — and reveals
+    // a node immediately — when the node object itself carries `width`/`height`.
+    // Without these, every node stays `visibility: hidden` (issue #230).
+    laidNodes.forEach(n => {
+      const [expectedW, expectedH] =
+        n.type === 'union' ? [UNION_W, UNION_H] : [PERSON_W, PERSON_H]
+      expect(n.width).toBe(expectedW)
+      expect(n.height).toBe(expectedH)
+    })
   })
 })
 

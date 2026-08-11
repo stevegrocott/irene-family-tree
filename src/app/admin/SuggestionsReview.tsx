@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { Change } from './types'
 import { buildTreeUrlPath, isValidGedcomId } from '@/lib/treeUrlState'
@@ -76,6 +76,20 @@ export function SuggestionsReview({ initialSuggestions }: { initialSuggestions: 
   const [suggestions, setSuggestions] = useState(initialSuggestions)
   const [pending, setPending] = useState<Record<string, 'approve' | 'decline' | undefined>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // Test-only override hook. `initialSuggestions` is a server component prop
+  // read directly from Neo4j (src/app/admin/page.tsx), so unlike this admin
+  // page's other client-fetched data it can't be driven by a Playwright
+  // `page.route` mock. E2E specs that need real suggestion cards to render —
+  // e.g. to exercise the "View in tree" link — call this after mount to
+  // inject a fixture. Gated behind a build-time flag so the hook is compiled
+  // out of the real production bundle (see playwright.config.ts webServer.env).
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_E2E !== '1') return
+    const win = window as unknown as { __setSuggestions?: (s: Change[]) => void }
+    win.__setSuggestions = setSuggestions
+    return () => { delete win.__setSuggestions }
+  }, [])
 
   async function handleAction(id: string, action: 'approve' | 'decline') {
     setPending(p => ({ ...p, [id]: action }))

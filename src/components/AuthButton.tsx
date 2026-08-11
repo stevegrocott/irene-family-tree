@@ -6,10 +6,12 @@ import { FLOATING_PANEL_BASE_CLASS } from '@/constants/tree'
 /**
  * AuthButton
  *
- * Absolute-positioned control (top-right) that shows either a "Sign in" button
- * or, when authenticated, an avatar pill with the user's name and a "Sign out"
- * action. Styling follows the solid surface/border/shadow treatment used
- * elsewhere in the canvas — see docs/DESIGN_SYSTEM.md §4.4.
+ * Position-agnostic, in-flow control that shows either a "Sign in" button or,
+ * when authenticated, an avatar pill with the user's name and a "Sign out"
+ * action. Renders in normal document flow — callers are responsible for
+ * placement (e.g. ViewerShell's top-bar avatar slot, or a positioned wrapper
+ * on routes without ViewerShell). Styling follows the solid surface/border/
+ * shadow treatment used elsewhere in the canvas — see docs/DESIGN_SYSTEM.md §4.4.
  */
 export default function AuthButton() {
   const { data: session, status } = useSession()
@@ -70,12 +72,32 @@ export default function AuthButton() {
   }
 
   return (
+    // #256 fix: below `sm` (640px) this collapses to a 44px icon-only tap
+    // target — docs/DESIGN_SYSTEM.md §6 ("auth → avatar only") — instead of
+    // the full "Sign in" text pill, whose ~59px intrinsic width was the
+    // element that overflowed ViewerShell's avatar slot and pushed
+    // `document.documentElement.scrollWidth` past the viewport at 360/390px.
+    // The full pill returns at `sm:` and up.
     <button
       data-testid="auth-button"
       onClick={() => signIn('google')}
-      className={`${FLOATING_PANEL_BASE_CLASS} px-4 py-2 text-xs text-ink-2 hover:text-ink hover:bg-surface-1 transition-colors`}
+      aria-label="Sign in"
+      className={`${FLOATING_PANEL_BASE_CLASS} w-11 h-11 justify-center px-0 py-0 sm:w-auto sm:h-auto sm:justify-start sm:px-4 sm:py-2 text-xs text-ink-2 hover:text-ink hover:bg-surface-1 transition-colors`}
     >
-      Sign in
+      <svg
+        viewBox="0 0 20 20"
+        width="16"
+        height="16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        aria-hidden="true"
+        className="flex-shrink-0 sm:hidden"
+      >
+        <circle cx="10" cy="7" r="3.25" />
+        <path d="M3.75 16.5c0-3.45 2.8-5.75 6.25-5.75s6.25 2.3 6.25 5.75" strokeLinecap="round" />
+      </svg>
+      <span className="hidden sm:inline">Sign in</span>
     </button>
   )
 }

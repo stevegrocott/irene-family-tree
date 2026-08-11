@@ -14,8 +14,10 @@ import { test, expect } from '@playwright/test';
 
 test.describe('relationship calculator', () => {
   test.beforeEach(async ({ page }) => {
+    // Seed the default root (Irene Tunnicliffe) explicitly so this spec lands on
+    // the viewer canvas rather than the cold-start entry state (issue #232).
     await page.addInitScript(() => {
-      localStorage.removeItem('family-tree-root-id');
+      localStorage.setItem('family-tree-root-id', '@I85@');
     });
     await page.goto('/');
   });
@@ -25,10 +27,10 @@ test.describe('relationship calculator', () => {
     await expect(toolbarViewing).toBeVisible({ timeout: 15_000 });
     await expect(toolbarViewing).toContainText('Irene', { timeout: 10_000 });
 
-    // Root node has ring-amber-400 on its inner card; non-root nodes do not.
+    // Root node is marked with border-brass on its inner card; non-root nodes are not.
     const nonRootPersonNode = page
       .locator('.react-flow__node-person')
-      .filter({ hasNot: page.locator('[class*="ring-amber"]') })
+      .filter({ hasNot: page.locator('[class*="border-brass"]') })
       .first();
     await expect(nonRootPersonNode).toBeVisible({ timeout: 10_000 });
     await nonRootPersonNode.click();
@@ -53,9 +55,12 @@ test.describe('relationship calculator', () => {
     const toolbarViewing = page.getByTestId('toolbar-viewing');
     await expect(toolbarViewing).toContainText('Irene', { timeout: 15_000 });
 
+    // Select by accessible name (root is seeded as Irene Tunnicliffe in
+    // beforeEach) rather than a CSS class — the old class-based filter
+    // targeted a design-system class PersonNode no longer applies.
     const rootPersonNode = page
       .locator('.react-flow__node-person')
-      .filter({ has: page.locator('[class*="ring-amber"]') })
+      .filter({ has: page.getByRole('button', { name: /^Irene Tunnicliffe\b/ }) })
       .first();
     await expect(rootPersonNode).toBeVisible({ timeout: 10_000 });
     await rootPersonNode.click();

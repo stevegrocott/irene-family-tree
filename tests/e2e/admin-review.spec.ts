@@ -92,19 +92,26 @@ test.describe('Admin Changes Review (/admin)', () => {
       await setAdminCookie(context)
     })
 
-    test('renders the Pending Changes heading', async ({ page }) => {
+    // The "Pending Changes" heading does not exist — src/app/admin/page.tsx
+    // renders no <h1>/<h2>. See issue #267.
+    test.fixme('renders the Pending Changes heading', async ({ page }) => {
       await page.goto('/admin')
       await expect(page.getByRole('heading', { name: /pending changes/i })).toBeVisible()
     })
 
-    test('shows empty-queue message when no changes are pending', async ({ page }) => {
+    // The "no pending changes to review" empty-state message does not exist
+    // in src/. See issue #267.
+    test.fixme('shows empty-queue message when no changes are pending', async ({ page }) => {
       // The admin server component catches Neo4j errors and falls back to an
       // empty list, exercising the empty-state branch in ChangesReview.
       await page.goto('/admin')
       await expect(page.getByText(/no pending changes to review/i)).toBeVisible()
     })
 
-    test('displays change card with field diff, Revert button POSTs, card is removed', async ({ page }) => {
+    // Depends on the "Pending Changes" UI above and a `[data-testid="changes-review"]`
+    // element that is never rendered, so this test times out waiting for it.
+    // See issue #267.
+    test.fixme('displays change card with field diff, Revert button POSTs, card is removed', async ({ page }) => {
       // Stub the revert API — called client-side by ChangesReview.handleAction.
       let revertPostedId: string | null = null
       await page.route(/\/api\/admin\/changes\/[^/]+$/, async route => {

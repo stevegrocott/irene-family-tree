@@ -38,13 +38,46 @@ describe('AuthButton', () => {
     expect(btn!.textContent).toContain('Sign in')
   })
 
-  it('is absolutely positioned top-right with z-10', async () => {
+  it('renders in normal document flow, not absolutely positioned', async () => {
     await render()
     const btn = container.querySelector('[data-testid="auth-button"]')!
-    expect(btn.className).toContain('absolute')
-    expect(btn.className).toContain('top-4')
-    expect(btn.className).toContain('right-4')
-    expect(btn.className).toContain('z-10')
+    expect(btn.className).not.toContain('absolute')
+    expect(btn.className).not.toContain('top-4')
+    expect(btn.className).not.toContain('right-4')
+    expect(btn.className).not.toContain('z-10')
+  })
+
+  it('collapses to a 44px icon-only tap target below sm, and an auto-sized pill at sm and up', async () => {
+    await render()
+    const btn = container.querySelector('[data-testid="auth-button"]')!
+    const classes = btn.className.split(/\s+/)
+    expect(classes).toContain('w-11')
+    expect(classes).toContain('h-11')
+    expect(classes).toContain('sm:w-auto')
+    expect(classes).toContain('sm:h-auto')
+  })
+
+  it('labels the icon-only sign-in button with an accessible name', async () => {
+    await render()
+    const btn = container.querySelector('[data-testid="auth-button"]')!
+    expect(btn.getAttribute('aria-label')).toBe('Sign in')
+  })
+
+  it('renders a decorative icon that is hidden at sm and up', async () => {
+    await render()
+    const btn = container.querySelector('[data-testid="auth-button"]')!
+    const icon = btn.querySelector('svg')
+    expect(icon).not.toBeNull()
+    expect(icon!.getAttribute('aria-hidden')).toBe('true')
+    expect(icon!.getAttribute('class')).toContain('sm:hidden')
+  })
+
+  it('hides the "Sign in" text label below sm', async () => {
+    await render()
+    const btn = container.querySelector('[data-testid="auth-button"]')!
+    const label = Array.from(btn.querySelectorAll('span')).find(el => el.textContent === 'Sign in')
+    expect(label).not.toBeUndefined()
+    expect(label!.className.split(/\s+/)).toEqual(expect.arrayContaining(['hidden', 'sm:inline']))
   })
 
   it('shows user name and Sign out when authenticated with name', async () => {
@@ -62,7 +95,7 @@ describe('AuthButton', () => {
     expect(signout!.textContent).toContain('Sign out')
   })
 
-  it('authenticated pill is absolutely positioned top-right with z-10', async () => {
+  it('authenticated pill renders in normal document flow, not absolutely positioned', async () => {
     jest.spyOn(NextAuthReact, 'useSession').mockReturnValue({
       data: { user: { name: 'Alice Smith', email: 'alice@example.com', image: null } } as never,
       status: 'authenticated',
@@ -70,10 +103,10 @@ describe('AuthButton', () => {
     })
     await render()
     const pill = container.querySelector('[data-testid="auth-button"]')!
-    expect(pill.className).toContain('absolute')
-    expect(pill.className).toContain('top-4')
-    expect(pill.className).toContain('right-4')
-    expect(pill.className).toContain('z-10')
+    expect(pill.className).not.toContain('absolute')
+    expect(pill.className).not.toContain('top-4')
+    expect(pill.className).not.toContain('right-4')
+    expect(pill.className).not.toContain('z-10')
   })
 
   it('falls back to email when name is absent', async () => {

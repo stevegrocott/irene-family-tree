@@ -32,13 +32,15 @@ const baseData: PersonData = {
   photoUrl: null,
 }
 
-function render(overrides: Partial<PersonData> = {}) {
+function render(overrides: Partial<PersonData> = {}, nodeProps: { selected?: boolean } = {}) {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   act(() => {
     root.render(
-      <PersonNode {...({ data: { ...baseData, ...overrides } } as unknown as Parameters<typeof PersonNode>[0])} />
+      <PersonNode
+        {...({ data: { ...baseData, ...overrides }, ...nodeProps } as unknown as Parameters<typeof PersonNode>[0])}
+      />
     )
   })
   return container
@@ -57,18 +59,21 @@ describe('PersonNode avatar', () => {
     expect(el.textContent).toContain('IT')
   })
 
-  it('applies bg-indigo-900/40 when generation is -1', () => {
+  it('applies the neutral bg-surface-2 token when generation is -1', () => {
     const el = render({ generation: -1 })
-    expect(el.innerHTML).toContain('bg-indigo-900/40')
+    expect(el.innerHTML).toContain('bg-surface-2')
+    expect(el.innerHTML).not.toContain('bg-indigo-900/40')
   })
 
-  it('applies bg-emerald-900/40 when generation is 1', () => {
+  it('applies the neutral bg-surface-2 token when generation is 1', () => {
     const el = render({ generation: 1 })
-    expect(el.innerHTML).toContain('bg-emerald-900/40')
+    expect(el.innerHTML).toContain('bg-surface-2')
+    expect(el.innerHTML).not.toContain('bg-emerald-900/40')
   })
 
-  it('applies neither bg-indigo-900/40 nor bg-emerald-900/40 when generation is 0', () => {
+  it('applies the neutral bg-surface-2 token when generation is 0', () => {
     const el = render({ generation: 0 })
+    expect(el.innerHTML).toContain('bg-surface-2')
     expect(el.innerHTML).not.toContain('bg-indigo-900/40')
     expect(el.innerHTML).not.toContain('bg-emerald-900/40')
   })
@@ -152,6 +157,153 @@ describe('PersonNode lodVariant wiring', () => {
   it('falls back to the full markup when data.lodVariant is absent', () => {
     const el = render()
     expect(el.querySelector('[data-testid="person-node-full"]')).not.toBeNull()
+  })
+})
+
+/** Finds the element carrying the literal `⌂` glyph, or null if absent. */
+function findRootMarker(el: HTMLElement): Element | null {
+  return [...el.querySelectorAll('*')].find((node) => node.textContent?.trim() === '⌂') ?? null
+}
+
+describe('PersonNode root marker (DESIGN_SYSTEM.md §3.2 Root)', () => {
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('renders a brass ⌂ marker on the %s variant when isRoot is true', (lodVariant, testId) => {
+    const el = render({ isRoot: true, lodVariant })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    const marker = findRootMarker(node)
+    expect(marker).not.toBeNull()
+    expect(`${marker?.className ?? ''} ${marker?.getAttribute('style') ?? ''}`).toMatch(/brass/i)
+  })
+
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('renders no ⌂ marker on the %s variant when isRoot is false', (lodVariant, testId) => {
+    const el = render({ isRoot: false, lodVariant })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(findRootMarker(node)).toBeNull()
+  })
+})
+
+describe('PersonNode living/private background (DESIGN_SYSTEM.md §3.2 Living/private)', () => {
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('applies the --ft-private-soft background on the %s variant when living is true', (lodVariant, testId) => {
+    const el = render({ living: true, lodVariant })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(node.outerHTML).toMatch(/private-soft/i)
+  })
+
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('does not apply the --ft-private-soft background on the %s variant when living is false', (lodVariant, testId) => {
+    const el = render({ living: false, lodVariant })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(node.outerHTML).not.toMatch(/private-soft/i)
+  })
+})
+
+describe('PersonNode selected treatment (DESIGN_SYSTEM.md §3.2 Selected, issue #266)', () => {
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('renders a 2px accent border and accent-soft background on the %s variant when selected', (lodVariant, testId) => {
+    const el = render({ lodVariant }, { selected: true })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(node.className).toMatch(/\bborder-2\b/)
+    expect(node.className).toMatch(/\bborder-accent\b/)
+    expect(node.outerHTML).toMatch(/accent-soft/i)
+  })
+
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('renders no accent treatment on the %s variant when not selected', (lodVariant, testId) => {
+    const el = render({ lodVariant }, { selected: false })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(node.className).not.toMatch(/\bborder-accent\b/)
+    expect(node.outerHTML).not.toMatch(/accent-soft/i)
+  })
+
+  it('renders the accent border, not the brass root border, on a node that is both root and selected (AC4 precedence)', () => {
+    const el = render({ isRoot: true, lodVariant: 'full' }, { selected: true })
+    const node = el.querySelector('[data-testid="person-node-full"]') as HTMLElement
+    expect(node.className).toMatch(/\bborder-accent\b/)
+    expect(node.className).not.toMatch(/\bborder-brass\b/)
+  })
+
+  it('keeps the brass root ⌂ marker visible on a node that is both root and selected (AC4)', () => {
+    const el = render({ isRoot: true, lodVariant: 'full' }, { selected: true })
+    const node = el.querySelector('[data-testid="person-node-full"]') as HTMLElement
+    const marker = findRootMarker(node)
+    expect(marker).not.toBeNull()
+    expect(`${marker?.className ?? ''} ${marker?.getAttribute('style') ?? ''}`).toMatch(/brass/i)
+  })
+})
+
+describe('PersonNode pending edit indicator (DESIGN_SYSTEM.md §3.2 Has pending edit)', () => {
+  it.each([
+    ['compact', 'person-node-compact', 1, '1 suggested edit awaiting review'],
+    ['compact', 'person-node-compact', 3, '3 suggested edits awaiting review'],
+    ['full', 'person-node-full', 1, '1 suggested edit awaiting review'],
+    ['full', 'person-node-full', 3, '3 suggested edits awaiting review'],
+  ] as const)(
+    'renders a pending-edit title on the %s variant when pendingEdits is %i',
+    (lodVariant, testId, count, expectedTitle) => {
+      const el = render({ pendingEdits: count, lodVariant })
+      const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+      const titled = [...node.querySelectorAll('[title]')].find(
+        (n) => n.getAttribute('title') === expectedTitle
+      )
+      expect(titled).toBeTruthy()
+      expect(node.outerHTML).toMatch(/pending/i)
+    }
+  )
+
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('renders no pending-edit indicator on the %s variant when pendingEdits is absent', (lodVariant, testId) => {
+    const el = render({ lodVariant })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    const titled = [...node.querySelectorAll('[title]')].find((n) =>
+      /awaiting review/i.test(n.getAttribute('title') ?? '')
+    )
+    expect(titled).toBeUndefined()
+  })
+
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('renders no pending-edit indicator on the %s variant when pendingEdits is 0', (lodVariant, testId) => {
+    const el = render({ pendingEdits: 0, lodVariant })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    const titled = [...node.querySelectorAll('[title]')].find((n) =>
+      /awaiting review/i.test(n.getAttribute('title') ?? '')
+    )
+    expect(titled).toBeUndefined()
+  })
+})
+
+describe('PersonNode compact variant unknown name (DESIGN_SYSTEM.md §3.2)', () => {
+  it('renders "Unknown" in italic muted styling when name is empty', () => {
+    const el = render({ name: '', lodVariant: 'compact' })
+    const node = el.querySelector('[data-testid="person-node-compact"]') as HTMLElement
+    const matches = [...node.querySelectorAll('*')].filter((n) => n.textContent?.trim() === 'Unknown')
+    const unknownEl = matches[matches.length - 1]
+    expect(unknownEl).toBeTruthy()
+    expect(unknownEl?.className).toContain('italic')
+    expect(unknownEl?.className).toContain('text-ink-3')
+  })
+
+  it('does not render the italic "Unknown" placeholder when name is present', () => {
+    const el = render({ name: 'Irene Tunnicliffe', lodVariant: 'compact' })
+    const node = el.querySelector('[data-testid="person-node-compact"]') as HTMLElement
+    expect(node.textContent).not.toContain('Unknown')
   })
 })
 

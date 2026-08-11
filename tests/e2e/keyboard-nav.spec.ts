@@ -151,8 +151,12 @@ async function focusNode(page: Page, id: string): Promise<void> {
 
 test.describe('keyboard navigation', () => {
   test.beforeEach(async ({ page }) => {
+    // Seed the mocked root (Bob, see `isRoot` above) explicitly — the suite-wide
+    // fixture seeds `@I85@`, which isn't in this spec's mocked persons, so an
+    // unresolved focus would render the cold-start entry state instead of the
+    // canvas (issue #232).
     await page.addInitScript(() => {
-      localStorage.removeItem('family-tree-root-id')
+      localStorage.setItem('family-tree-root-id', '@IBOB@')
     })
     await mockPersonsAndTree(page, mockPersons, mockTreeResponse)
     await page.goto('/', { waitUntil: 'domcontentloaded' })

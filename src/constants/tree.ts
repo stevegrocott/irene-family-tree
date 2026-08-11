@@ -97,17 +97,28 @@ export const EDGE_RENDER_TYPE: Partial<Record<string, string>> = {
   [EDGE_TYPES.CHILD]: 'step',
 }
 
+/**
+ * Sex tints per docs/DESIGN_SYSTEM.md §3.2 — "M #4A7DB5 · F #A85F86 · unknown
+ * var(--ft-border-strong) (these two are the ONLY tints outside the semantic
+ * set, and they appear nowhere else in the product)". Single source of truth
+ * for every sex-keyed colour in the product (avatar fill, avatar text, the
+ * person-node tick, the search-result tick) — do not redefine `#4A7DB5` /
+ * `#A85F86` anywhere else; import from here instead.
+ *
+ * Raw hex/CSS values, not Tailwind classes — apply via inline `style`, e.g.
+ * `style={{ backgroundColor: SEX_AVATAR_BG[sex] ?? SEX_AVATAR_BG.default }}`.
+ */
 export const SEX_AVATAR_BG: Record<string, string> = {
-  M: 'bg-indigo-500',
-  F: 'bg-pink-500',
-  default: 'bg-slate-500',
+  M: '#4A7DB5',
+  F: '#A85F86',
+  default: 'var(--ft-border-strong)',
 }
 
-export const SEX_AVATAR_TEXT: Record<string, string> = {
-  M: 'text-indigo-500',
-  F: 'text-pink-500',
-  default: 'text-slate-500',
-}
+/**
+ * Alias of {@link SEX_AVATAR_BG} for foreground (not fill) usages — same §3.2 tints.
+ * Raw hex/CSS values, not Tailwind classes; apply via inline `style`, not `className`.
+ */
+export const SEX_AVATAR_TEXT: Record<string, string> = SEX_AVATAR_BG
 
 /** Mobile bottom-sheet detent for the person drawer (docs/DESIGN_SYSTEM.md §6: "two detents (peek ≈ 30 vh, full 72 vh)"). */
 export type DrawerDetent = 'peek' | 'full'
@@ -179,8 +190,13 @@ export const FACT_ROW_VALUE_CLASS = '[font:var(--ft-body)] text-ink text-right m
  */
 export const FACT_ROW_GHOST_CLASS = '[font:var(--ft-body)] text-ink-2 hover:text-ink hover:bg-surface-2 rounded-lg px-2 -mr-2 py-0.5 transition-colors'
 
-/** Absolute-positioned top-right floating panel — see AuthButton.tsx. */
-export const FLOATING_PANEL_BASE_CLASS = 'absolute top-4 right-4 z-10 flex items-center gap-2 bg-surface border border-line rounded-[var(--ft-r-md)] shadow-[var(--ft-shadow-1)]'
+/**
+ * Solid surface/border/shadow treatment for a floating-panel-style control —
+ * see AuthButton.tsx. Position-agnostic: renders in normal flow; callers that
+ * need the control floated (e.g. non-viewer layout routes) wrap it in their
+ * own positioned container instead of this class baking in a position.
+ */
+export const FLOATING_PANEL_BASE_CLASS = 'flex items-center gap-2 bg-surface border border-line rounded-[var(--ft-r-md)] shadow-[var(--ft-shadow-1)]'
 
 /** Card container shared by ChangeHistory and SuggestionsReview list items. */
 export const ADMIN_CARD_CLASS = 'bg-surface border border-line rounded-panel p-5 shadow-[var(--ft-shadow-1)]'

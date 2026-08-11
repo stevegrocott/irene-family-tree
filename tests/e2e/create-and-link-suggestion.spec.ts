@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E tests for issue #115 — `handleCreateAndLink` must mirror the role-aware
@@ -132,7 +133,7 @@ async function mockTreeAndDetail(page: import('@playwright/test').Page) {
 }
 
 async function openAddParentCreateForm(page: import('@playwright/test').Page) {
-  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await gotoViewer(page, childFixture.gedcomId)
   await expect(page.getByTestId('toolbar-viewing')).toBeVisible({ timeout: 15_000 })
 
   const childNode = page.locator('.react-flow__node-person').first()

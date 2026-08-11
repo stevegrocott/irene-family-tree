@@ -3,16 +3,7 @@
 import { memo, useCallback, useState } from 'react'
 import { Handle, Position, type NodeProps } from 'reactflow'
 import type { PersonData } from '@/types/tree'
-
-/**
- * Sex tick colours per `docs/DESIGN_SYSTEM.md` §3.2 — the only tints
- * permitted outside the semantic colour set. Falls back to the neutral
- * `--ft-border-strong` token when sex is unknown.
- */
-const SEX_TICK_COLOR: Record<string, string> = {
-  M: '#4A7DB5',
-  F: '#A85F86',
-}
+import { SEX_AVATAR_BG } from '@/constants/tree'
 
 /** Screen-reader label so sex is never carried by colour alone (§7). */
 const SEX_LABEL: Record<string, string> = {
@@ -43,28 +34,63 @@ function buildAccessibleName(data: PersonData, sexLabel: string, dates: string):
 }
 
 /**
+ * Builds the `title` for the §3.2 "Has pending edit" indicator, e.g.
+ * `"1 suggested edit awaiting review"` / `"3 suggested edits awaiting review"`.
+ */
+function buildPendingEditTitle(count: number): string {
+  return `${count} suggested edit${count === 1 ? '' : 's'} awaiting review`
+}
+
+/**
  * PersonNode renders a single person card within the React Flow canvas.
  *
  * Renders one of three level-of-detail variants selected by canvas zoom
  * (`dot`, `compact`, `full`) so a zoomed-out canvas of hundreds of nodes
  * reads as shape rather than illegible text. Sex is encoded as a tick on the
  * leading edge (backed by an accessible name, never colour alone) and, when
- * the person is the current root, a brass border highlight. Invisible
- * top/bottom handles allow React Flow to connect edges while keeping the UI
- * clean. Wrapped in `memo` so a continuous zoom gesture only re-renders nodes
- * when the discrete variant actually changes, not on every frame.
+ * the person is the current root, a brass border highlight; when the node is
+ * the sticky selection (React Flow's own `selected`, wired up from
+ * `selectedNodeId` in `FamilyTree`), an accent border and tinted background
+ * take over per §3.2 — see the `borderClass`/`bgClass` precedence note below.
+ * Invisible top/bottom handles allow React Flow to connect edges while
+ * keeping the UI clean. Wrapped in `memo` so a continuous zoom gesture only
+ * re-renders nodes when the discrete variant actually changes, not on every
+ * frame.
  *
  * @component
- * @param {NodeProps<PersonNodeData>} props - React Flow node props carrying PersonData plus the LOD variant
+ * @param {NodeProps<PersonNodeData>} props - React Flow node props carrying PersonData, the LOD variant, and the `selected` flag
  * @returns {React.ReactElement} Styled person card sized for the active LOD variant
  */
-function PersonNode({ data }: NodeProps<PersonNodeData>) {
+function PersonNode({ data, selected }: NodeProps<PersonNodeData>) {
   const [photoFailed, setPhotoFailed] = useState(false)
   const handlePhotoError = useCallback(() => setPhotoFailed(true), [])
   const variant = data.lodVariant ?? DEFAULT_VARIANT
-  const tickColor = SEX_TICK_COLOR[data.sex] ?? 'var(--ft-border-strong)'
+  const tickColor = SEX_AVATAR_BG[data.sex] ?? SEX_AVATAR_BG.default
   const sexLabel = SEX_LABEL[data.sex] ?? 'Sex unknown'
-  const borderClass = data.isRoot ? 'border-2 border-brass' : 'border border-line'
+  /**
+   * Per `docs/DESIGN_SYSTEM.md` §3.2, both Selected and Root specify a 2px
+   * border, so a node that is both can only show one. Documented precedence
+   * (issue #266 AC4): Selected — the live, user-driven interaction state —
+   * wins the border and background. Root identity is never lost because its
+   * brass `⌂` marker (rendered unconditionally below on `data.isRoot`, wholly
+   * independent of `borderClass`) stays visible regardless of selection.
+   */
+  const borderClass = selected
+    ? 'border-2 border-accent'
+    : data.isRoot
+      ? 'border-2 border-brass'
+      : 'border border-line'
+  /**
+   * Per `docs/DESIGN_SYSTEM.md` §3.2 Living/private: `--ft-private-soft`
+   * background. Selected takes the same precedence as `borderClass` above —
+   * it wins over Living/private so the two 2px-border states stay visually
+   * paired (matching border + background change together).
+   */
+  const bgClass = selected
+    ? 'bg-[var(--ft-accent-soft)]'
+    : data.living
+      ? 'bg-[var(--ft-private-soft)]'
+      : 'bg-surface'
 
   const dates = data.living
     ? 'Living'
@@ -84,14 +110,20 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
         .join('')
     : '?'
 
-  const avatarBg =
-    (data.generation ?? 0) < 0
-      ? 'bg-indigo-900/40'
-      : (data.generation ?? 0) > 0
-        ? 'bg-emerald-900/40'
-        : 'bg-surface-2'
+  /**
+   * Per `docs/DESIGN_SYSTEM.md` §0/§1: generation must not be encoded as an
+   * avatar tint (an off-palette colour that neither survives a 400-person
+   * tree nor belongs to the semantic/sex colour set). The initials avatar
+   * always sits on the neutral `--ft-surface-2` token regardless of
+   * generation.
+   */
+  const avatarBg = 'bg-surface-2'
 
   const accessibleName = buildAccessibleName(data, sexLabel, dates)
+
+  /** Per `docs/DESIGN_SYSTEM.md` §3.2 "Has pending edit": 6px violet dot, top-right, with an explanatory title. */
+  const pendingEdits = data.pendingEdits ?? 0
+  const pendingEditTitle = pendingEdits > 0 ? buildPendingEditTitle(pendingEdits) : null
 
   if (variant === 'dot') {
     return (
@@ -118,16 +150,28 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
         tabIndex={0}
         aria-label={accessibleName}
         title={accessibleName}
-        className={`relative flex items-center bg-surface ${borderClass} rounded-node px-4 h-10 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
+        className={`relative flex items-center ${bgClass} ${borderClass} rounded-node px-4 h-10 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
       >
         <div
           aria-hidden="true"
           className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[3px]"
           style={{ backgroundColor: tickColor }}
         />
+        {data.isRoot && (
+          <span aria-hidden="true" className="absolute top-0.5 right-1.5 text-brass text-sm leading-none">
+            ⌂
+          </span>
+        )}
+        {pendingEditTitle && (
+          <span
+            data-testid="person-node-pending-dot"
+            title={pendingEditTitle}
+            className="absolute -top-[3px] -right-[3px] w-1.5 h-1.5 rounded-full bg-pending"
+          />
+        )}
         <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
         <div className="font-serif font-semibold text-ink text-sm tracking-wide overflow-hidden whitespace-nowrap text-ellipsis">
-          {data.name || 'Unknown'}
+          {data.name || <span className="text-ink-3 italic">Unknown</span>}
           {data.birthYear && <span className="text-ink-3 font-normal"> · b. {data.birthYear}</span>}
         </div>
         <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
@@ -142,13 +186,25 @@ function PersonNode({ data }: NodeProps<PersonNodeData>) {
       tabIndex={0}
       aria-label={accessibleName}
       title={accessibleName}
-      className={`relative bg-surface ${borderClass} rounded-node px-4 py-3 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
+      className={`relative ${bgClass} ${borderClass} rounded-node px-4 py-3 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
     >
       <div
         aria-hidden="true"
         className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[3px]"
         style={{ backgroundColor: tickColor }}
       />
+      {data.isRoot && (
+        <span aria-hidden="true" className="absolute top-1 right-1.5 text-brass text-sm leading-none">
+          ⌂
+        </span>
+      )}
+      {pendingEditTitle && (
+        <span
+          data-testid="person-node-pending-dot"
+          title={pendingEditTitle}
+          className="absolute -top-[3px] -right-[3px] w-1.5 h-1.5 rounded-full bg-pending"
+        />
+      )}
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <div className="flex items-center gap-2">
         {data.photoUrl && !photoFailed ? (

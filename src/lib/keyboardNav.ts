@@ -9,6 +9,7 @@
  */
 
 import type { FlowNode, FlowEdge } from '@/types/tree'
+import type { TreeView } from '@/lib/treeUrlState'
 
 /** The four navigation keys this module resolves; any other key is not handled here. */
 export type ArrowKey = 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight'
@@ -102,4 +103,56 @@ export function resolveArrowTarget(
   const idx = ordered.indexOf(currentId)
   if (key === 'ArrowLeft') return idx > 0 ? ordered[idx - 1] : null
   return idx < ordered.length - 1 ? ordered[idx + 1] : null
+}
+
+/** A `TreeView` reachable via the shell's 3-segment switcher (excludes `entry`). */
+export type ShellView = Exclude<TreeView, 'entry'>
+
+/** The action a `ViewerShell` key resolves to; `null` means the key is not handled. */
+export type ShellAction =
+  | { type: 'openSearch' }
+  | { type: 'closeSearch' }
+  | { type: 'setView'; view: ShellView }
+
+/** The subset of a `KeyboardEvent` the shell resolver reads. */
+export interface ShellKeyEvent {
+  key: string
+  metaKey?: boolean
+  ctrlKey?: boolean
+}
+
+/** The `ViewerShell` state the resolver needs to gate the view-switch keys. */
+export interface ShellKeyState {
+  /** Whether the search overlay currently has focus/is open. */
+  searchOpen: boolean
+  /** Whether a focus person is set (the switcher is disabled without one). */
+  hasFocus: boolean
+}
+
+const SHELL_VIEW_BY_DIGIT: Record<string, ShellView> = { '1': 'walk', '2': 'split', '3': 'tree' }
+
+/**
+ * Resolves a `ViewerShell` keydown to the action it triggers, or `null` if the key
+ * has no binding (or its precondition is not met).
+ *
+ * - `⌘K` / `Ctrl+K` — always opens search, regardless of current state.
+ * - `Esc` — closes search when it is open; otherwise a no-op.
+ * - `1` / `2` / `3` — switches to walk/split/tree, but only when search is closed
+ *   and a focus person is set; otherwise a no-op so the canvas keeps these keys
+ *   while search is open or before a person is focused.
+ */
+export function resolveShellAction(event: ShellKeyEvent, state: ShellKeyState): ShellAction | null {
+  const { key, metaKey, ctrlKey } = event
+
+  if (key === 'k' && (metaKey || ctrlKey)) return { type: 'openSearch' }
+
+  if (key === 'Escape') return state.searchOpen ? { type: 'closeSearch' } : null
+
+  const view = SHELL_VIEW_BY_DIGIT[key]
+  if (view) {
+    if (state.searchOpen || !state.hasFocus) return null
+    return { type: 'setView', view }
+  }
+
+  return null
 }

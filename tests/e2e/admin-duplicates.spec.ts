@@ -113,6 +113,9 @@ test.describe('Admin Duplicates (/admin)', () => {
   })
 
   test('switching to the Duplicates tab renders a candidate pair side by side', async ({ page }) => {
+    // The `duplicates-review` panel was never built — src/app/admin/page.tsx renders a
+    // "Duplicate detection is coming soon." placeholder instead. See issue #267.
+    test.fixme(true, 'duplicates-review panel not implemented (#267)')
     await mockDuplicatesRoute(page, [mockCandidate])
     await navigateToDuplicatesTab(page)
 
@@ -124,6 +127,8 @@ test.describe('Admin Duplicates (/admin)', () => {
   })
 
   test('shows empty state when no duplicate candidates are found', async ({ page }) => {
+    // The `duplicates-review` panel (and its empty state) was never built — see issue #267.
+    test.fixme(true, 'duplicates-review panel not implemented (#267)')
     await mockDuplicatesRoute(page)
     await navigateToDuplicatesTab(page)
 
@@ -132,6 +137,9 @@ test.describe('Admin Duplicates (/admin)', () => {
   })
 
   test('picking a survivor and confirming POSTs the merge with correct body; card is removed on success', async ({ page }) => {
+    // The `duplicates-review` panel (survivor picker + confirm merge UI) was never built —
+    // only the /api/admin/duplicates/merge endpoint exists. See issue #267.
+    test.fixme(true, 'duplicates-review panel not implemented (#267)')
     const mergePromise = page.waitForResponse(res =>
       res.url().includes('/api/admin/duplicates/merge')
     )

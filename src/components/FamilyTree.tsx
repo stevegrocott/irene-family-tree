@@ -31,15 +31,18 @@ import PersonNode from '@/components/PersonNode'
 import UnionNode from '@/components/UnionNode'
 import SearchBar from '@/components/SearchBar'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import EmptyState from '@/components/EmptyState'
+import SearchOverlay from '@/components/SearchOverlay'
+import ViewerShell from '@/components/ViewerShell'
 import { applyDagreLayout, GenerationLevel } from '@/lib/layout'
 import { formatLifespan } from '@/lib/person'
 import { buildTimeline, type TimelineEvent } from '@/lib/timeline'
 import { computeLineage } from '@/lib/lineage'
-import { resolveArrowTarget, type ArrowKey } from '@/lib/keyboardNav'
+import { resolveArrowTarget, resolveShellAction, type ArrowKey, type ShellView } from '@/lib/keyboardNav'
 import type { TreeResponse, PersonData, UnionData, PersonDetailResponse, PersonSummary, FlowNode, FlowEdge } from '@/types/tree'
-import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, getDrawerContainerClass, DEFAULT_DRAWER_DETENT, type DrawerDetent, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, SEX_AVATAR_BG, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS, EDGE_TYPES, EDGE_RENDER_TYPE, DEFAULT_DENSITY, getDefaultDensity } from '@/constants/tree'
+import { DEFAULT_HOPS, MIN_HOPS, MAX_HOPS, EDGE_STYLES, DEFAULT_ROOT_GEDCOM_ID, getDrawerContainerClass, DEFAULT_DRAWER_DETENT, type DrawerDetent, DRAWER_DRAG_HANDLE_CLASS, DRAWER_DRAG_HANDLE_BAR_CLASS, DRAWER_ACTIONS_CLASS, RESPONSIVE_BUTTON_BASE, BAND_VARS, LINEAGE_VARS, LINEAGE_DIM_TRANSITION_MS, getPersonLodVariant, STATUS_PILL_LIVING_CLASS, STATUS_PILL_PENDING_CLASS, STATUS_PILL_ROOT_CLASS, FACT_ROW_LABEL_CLASS, FACT_ROW_VALUE_CLASS, FACT_ROW_GHOST_CLASS, RELATIONSHIP_ROW_CLASS, EDGE_TYPES, EDGE_RENDER_TYPE, DEFAULT_DENSITY, getDefaultDensity } from '@/constants/tree'
 import { APP_NAME } from '@/constants/branding'
-import { parseTreeUrlState, buildTreeUrlPath } from '@/lib/treeUrlState'
+import { parseTreeUrlState, buildTreeUrlPath, type TreeView } from '@/lib/treeUrlState'
 
 /** Builds a minimal `PersonData` stub for a person id not present in the current tree view. */
 function personStub(gedcomId: string): PersonData {
@@ -53,8 +56,9 @@ function personStub(gedcomId: string): PersonData {
  * @property sex - Biological sex code ('M', 'F', or null)
  * @property birthYear - Four-digit birth year string, or null if unknown
  * @property birthPlace - Free-text birth location, or null if unknown
+ * @property deathYear - Four-digit death year string, or null if unknown/still living
  */
-interface Person { gedcomId: string; name: string; sex: string | null; birthYear: string | null; birthPlace: string | null }
+interface Person { gedcomId: string; name: string; sex: string | null; birthYear: string | null; birthPlace: string | null; deathYear: string | null }
 
 /** Map of custom node types for ReactFlow visualization. */
 const nodeTypes = { person: PersonNode, union: UnionNode }
@@ -1655,9 +1659,15 @@ export function PersonDrawer({
               className="w-12 h-12 rounded-full object-cover border border-line flex-shrink-0"
             />
           ) : (
+            // Neutral surface, not the sex tint. §3.2 specifies those two tints
+            // for a 3px tick — an element carrying no text, held to §2's 3:1 UI
+            // floor. Behind white initials they read as body text and are held
+            // to 4.5:1, which #4A7DB5 fails at 4.29:1. Matches the node avatar,
+            // which #243 made unconditionally neutral for the same reason. Sex
+            // stays carried by the tick and the drawer (§1: sex is not a colour).
             <div
               aria-hidden="true"
-              className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-semibold flex-shrink-0 ${SEX_AVATAR_BG[person.sex] ?? SEX_AVATAR_BG.default}`}
+              className="w-12 h-12 rounded-full flex items-center justify-center bg-surface-2 text-ink text-lg font-semibold flex-shrink-0"
             >
               {(person.name || '?').trim().charAt(0).toUpperCase()}
             </div>
@@ -2145,12 +2155,15 @@ function FlowCanvas({
   persons,
   treeVersion,
   initialUrlState,
+  view,
 }: {
   rootId: string
   onSelectRoot: (id: string) => void
   persons: Person[]
   treeVersion: number
   initialUrlState: ReturnType<typeof parseTreeUrlState>
+  /** Current display mode ('walk' | 'split' | 'tree'), included in the synced URL and share links. */
+  view: TreeView
 }) {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
@@ -2248,12 +2261,18 @@ function FlowCanvas({
     return computeLineage(flowNodes, flowEdges, focusNodeId)
   }, [flowNodes, flowEdges, focusNodeId])
 
-  /** Nodes as rendered by ReactFlow, with off-lineage nodes dimmed via `--ft-node-dim` while a focus is active. */
+  /**
+   * Nodes as rendered by ReactFlow, with off-lineage nodes dimmed via `--ft-node-dim` while a
+   * focus is active, and `selected` set from {@link selectedNodeId} — the sole source of truth
+   * for selection (the canvas is a fully controlled flow with no `onNodesChange`), so React Flow
+   * marks the clicked node `selected` and #266's §3.2 Selected treatment can render.
+   */
   const displayNodes = useMemo(() => {
     return nodesWithLod.map(n => {
       const dimmed = !!lineage && !lineage.nodeIds.has(n.id)
       return {
         ...n,
+        selected: n.id === selectedNodeId,
         style: {
           ...n.style,
           opacity: dimmed ? `var(${LINEAGE_VARS.dim})` : 1,
@@ -2261,7 +2280,7 @@ function FlowCanvas({
         },
       }
     })
-  }, [nodesWithLod, lineage])
+  }, [nodesWithLod, lineage, selectedNodeId])
 
   /**
    * Edges as rendered by ReactFlow: off-lineage edges dim via `--ft-node-dim` and in-lineage
@@ -2295,10 +2314,10 @@ function FlowCanvas({
     setHops(next)
   }, [])
 
-  /** Builds the canonical relative URL path for the current root/person/hops state. */
+  /** Builds the canonical relative URL path for the current root/person/hops/view state. */
   const buildPath = useCallback(
-    () => buildTreeUrlPath({ root: rootId || null, person: selectedPerson?.gedcomId ?? null, hops }),
-    [rootId, selectedPerson, hops]
+    () => buildTreeUrlPath({ root: rootId || null, person: selectedPerson?.gedcomId ?? null, hops, view }),
+    [rootId, selectedPerson, hops, view]
   )
 
   /** Builds the canonical shareable URL for the current root/person/hops state. */
@@ -2612,6 +2631,18 @@ function FlowCanvas({
 
 const TREE_ROOT_STORAGE_KEY = 'family-tree-root-id'
 
+/** Narrows a parsed URL `view` to a `ShellView` (excludes `entry`, which is never persisted as a choice). */
+function isShellView(view: TreeView | null): view is ShellView {
+  return view !== null && view !== 'entry'
+}
+
+/** Whether `el` is a form control (or contenteditable) that should keep single-key shortcuts from firing while it has focus. */
+function isEditableTarget(el: Element | null): boolean {
+  if (!el) return false
+  const tag = el.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el as HTMLElement).isContentEditable
+}
+
 /**
  * Root component for the interactive family tree visualization.
  * Fetches available people and renders the tree canvas with search and navigation.
@@ -2632,6 +2663,14 @@ export default function FamilyTree() {
   // null until mount so SSR/first paint uses DEFAULT_DENSITY, avoiding a hydration mismatch
   // (docs/DESIGN_SYSTEM.md §6: density defaults to dense below 640px, compact at/above it).
   const [viewportWidth, setViewportWidth] = useState<number | null>(null)
+  /** True once the initial focus-resolution pass (below) has run — gates the entry/viewer branch so it never flashes the entry state while that resolution is still in flight. */
+  const [focusResolved, setFocusResolved] = useState(false)
+  /** Explicit view chosen via the switcher/URL; `null` defers to 'walk' once a focus is set (see `view` below). */
+  const [shellView, setShellView] = useState<ShellView | null>(() =>
+    isShellView(initialUrlState.view) ? initialUrlState.view : null
+  )
+  /** Whether the global ⌘K/Ctrl+K search overlay is open. */
+  const [searchOpen, setSearchOpen] = useState(false)
 
   useEffect(() => {
     const updateViewportWidth = () => setViewportWidth(window.innerWidth)
@@ -2643,13 +2682,22 @@ export default function FamilyTree() {
   const density = viewportWidth === null ? DEFAULT_DENSITY : getDefaultDensity(viewportWidth)
 
   /**
+   * The tree viewer's current display mode. No focus person means the entry
+   * state is showing, regardless of any `shellView`/URL value — the switcher
+   * itself is disabled until a focus is set (see `ViewerShell`). Once a focus
+   * is set, `shellView` wins if the user (or the URL) picked one; otherwise
+   * choosing a focus defaults straight to `walk` (docs: issue #232 AC2).
+   */
+  const view: TreeView = rootId ? (shellView ?? 'walk') : 'entry'
+
+  /**
    * Updates the active root person and persists the selection to localStorage
    * so the same person is shown on next page load. Bumps `treeVersion` and
    * `personsVersion` so the tree and persons list re-fetch even when the
    * resolved root id is unchanged (e.g. after a delete).
    * @param {string} id - GEDCOM ID of the newly selected root person
    */
-  const handleSelectRoot = (id: string) => {
+  const handleSelectRoot = useCallback((id: string) => {
     const resolved = id || persons[0]?.gedcomId || ''
     setRootId(resolved)
     setTreeVersion(v => v + 1)
@@ -2657,7 +2705,62 @@ export default function FamilyTree() {
     if (typeof window !== 'undefined' && resolved) {
       localStorage.setItem(TREE_ROOT_STORAGE_KEY, resolved)
     }
-  }
+  }, [persons])
+
+  /**
+   * Sets the active focus person — from an entry-state row, a search result
+   * (overlay or entry-state field), or a breadcrumb entry. Entering focus for
+   * the first time (from the entry state) also enters `walk`; navigating
+   * while already focused preserves whatever view is active. Always closes
+   * the search overlay, since every one of its callers is a selection.
+   * @param {string} id - GEDCOM ID of the person to focus
+   */
+  const handleFocusPerson = useCallback((id: string) => {
+    const enteringFromEmptyState = !rootId
+    handleSelectRoot(id)
+    if (enteringFromEmptyState) setShellView('walk')
+    setSearchOpen(false)
+  }, [rootId, handleSelectRoot])
+
+  /**
+   * Clears the active focus, returning to the entry state. localStorage is
+   * left untouched (rather than removed) so the entry state's "resume where
+   * you left off" row can still offer the just-cleared person back.
+   */
+  const handleClearFocus = useCallback(() => {
+    setRootId('')
+    setShellView(null)
+  }, [])
+
+  // Global keyboard shortcuts available from any view (docs: issue #232 AC3):
+  // ⌘K/Ctrl+K opens the search overlay, Esc closes it, digit keys 1/2/3 switch
+  // views once focused, and Esc with no overlay open clears focus back to the
+  // entry state. Skipped while a form field has focus so typing (e.g. a birth
+  // year) is never hijacked.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const action = resolveShellAction(event, { searchOpen, hasFocus: !!rootId })
+      if (action?.type === 'openSearch') {
+        event.preventDefault()
+        setSearchOpen(true)
+        return
+      }
+      if (action?.type === 'closeSearch') {
+        setSearchOpen(false)
+        return
+      }
+      if (action?.type === 'setView') {
+        if (isEditableTarget(document.activeElement)) return
+        setShellView(action.view)
+        return
+      }
+      if (event.key === 'Escape' && !searchOpen && rootId && !isEditableTarget(document.activeElement)) {
+        handleClearFocus()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [searchOpen, rootId, handleClearFocus])
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -2668,24 +2771,60 @@ export default function FamilyTree() {
       })
       .then((data: Person[]) => {
         setPersons(data)
-        // Precedence: URL root param > localStorage > default person > first named > first available.
-        const urlPerson = initialUrlState.root ? data.find(p => p.gedcomId === initialUrlState.root) : null
+        // Precedence for the entry-vs-viewer branch: URL root/person > localStorage.
+        // Unlike before, there is no further fallback to DEFAULT_ROOT_GEDCOM_ID or
+        // the first named person — an unresolved focus now renders the entry state
+        // instead of silently landing on a default person (docs: issue #232 AC1).
+        const urlFocusId = initialUrlState.root ?? initialUrlState.person
+        const urlPerson = urlFocusId ? data.find(p => p.gedcomId === urlFocusId) : null
         const storedId = typeof window !== 'undefined' ? localStorage.getItem(TREE_ROOT_STORAGE_KEY) : null
         const storedPerson = storedId ? data.find(p => p.gedcomId === storedId) : null
-        const defaultPerson = urlPerson ?? storedPerson ?? data.find(p => p.gedcomId === DEFAULT_ROOT_GEDCOM_ID) ?? data.find(p => p.name?.trim()) ?? data[0]
-        if (defaultPerson) setRootId(defaultPerson.gedcomId)
+        const focusPerson = urlPerson ?? storedPerson ?? null
+        if (focusPerson) setRootId(focusPerson.gedcomId)
+        setFocusResolved(true)
       })
       .catch((err) => {
         if (err.name === 'AbortError') return
         console.error('Failed to load persons', err)
         setPersonsError('Could not load family members. Please check your database connection and refresh.')
+        setFocusResolved(true)
       })
     return () => ctrl.abort()
   }, [personsVersion, initialUrlState])
 
+  /** Resolves a person id to their display name for the breadcrumb trail; unknown ids render blank rather than the raw id. */
+  const getPersonName = useCallback((id: string) => persons.find(p => p.gedcomId === id)?.name ?? '', [persons])
+
+  /** The tree's designated root person, offered as the entry state's "Root person" row. */
+  const rootPersonForEntry = useMemo(
+    () => persons.find(p => p.gedcomId === DEFAULT_ROOT_GEDCOM_ID) ?? null,
+    [persons]
+  )
+  /** The earliest-born person with a known birth year, offered as the entry state's "Earliest ancestor" row. */
+  const earliestAncestorForEntry = useMemo(() => (
+    persons.reduce<Person | null>((earliest, p) => {
+      if (!p.birthYear) return earliest
+      if (!earliest || !earliest.birthYear || parseInt(p.birthYear, 10) < parseInt(earliest.birthYear, 10)) return p
+      return earliest
+    }, null)
+  ), [persons])
+  /**
+   * The last root persisted to localStorage, offered as the entry state's
+   * "Resume where you left off" row. Only ever visible once focus has been
+   * cleared (via Esc) without also clearing localStorage — re-reads on every
+   * `rootId` change since that's precisely when localStorage was last written
+   * or the entry state was last (re-)entered.
+   */
+  const resumePersonForEntry = useMemo(() => {
+    if (typeof window === 'undefined') return null
+    const storedId = localStorage.getItem(TREE_ROOT_STORAGE_KEY)
+    return storedId ? persons.find(p => p.gedcomId === storedId) ?? null : null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persons, rootId])
+
   if (personsError) {
     return (
-      <div className="relative w-full h-dvh bg-[#050a18] flex items-center justify-center">
+      <div className="relative w-full h-dvh bg-[var(--ft-canvas)] flex items-center justify-center">
         <div className="bg-slate-800 border border-red-400/30 rounded-lg p-6 max-w-sm text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
           <p className="text-red-300 text-sm">{personsError}</p>
         </div>
@@ -2693,11 +2832,76 @@ export default function FamilyTree() {
     )
   }
 
+  if (!focusResolved) {
+    return (
+      <div className="relative w-full h-dvh bg-[var(--ft-canvas)] flex items-center justify-center" data-density={density}>
+        <p className="text-ink-3 [font:var(--ft-body)]">Loading…</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="relative w-full h-dvh bg-[#050a18]" data-density={density}>
-      <ReactFlowProvider>
-        <FlowCanvas rootId={rootId} onSelectRoot={handleSelectRoot} persons={persons} treeVersion={treeVersion} initialUrlState={initialUrlState} />
-      </ReactFlowProvider>
+    // #256 task 1 finding: at 360/390px viewports (signed out, drawer/search/toolbar
+    // open) `document.documentElement.scrollWidth` is a constant 561px regardless of
+    // viewport width — measured via a temporary Playwright probe that walks every
+    // element, skips any clipped by an ancestor's `overflow`, and sorts by right edge.
+    // The unclipped element whose right edge lands at exactly 561.4px is
+    // `data-testid="auth-button"` (src/components/AuthButton.tsx:74-82, the signed-out
+    // "Sign in" state, className `${FLOATING_PANEL_BASE_CLASS} px-4 py-2 ...`, natural
+    // width ~58.7px). It renders inside ViewerShell's `viewer-shell-avatar-slot`
+    // (src/components/ViewerShell.tsx:191-196), a fixed `w-6 h-6` (24px) box sized only
+    // for the authenticated circular avatar — the wider "Sign in" button isn't clipped
+    // or shrunk there, so it spills out to the right past the viewport edge. Nothing
+    // between it and this root container constrains overflow (ViewerShell's `<header>`
+    // is a non-wrapping flex row with no `overflow-hidden`, and this container is
+    // `w-full` with no `max-w`/`overflow-x` clamp), so the overflow propagates all the
+    // way to `document.documentElement`. All contributing widths (180px search pill,
+    // ~146px switcher, the button's own padding) are fixed/intrinsic, not
+    // viewport-relative, which is why scrollWidth stays 561 at both 360px and 390px.
+    // Two previously-suspected candidates were ruled out: `LayoutAuthButton` renders
+    // null on the viewer route (`/`), and the react-flow canvas nodes at large
+    // transformed coordinates are clipped by the canvas pane's `overflow: hidden` and
+    // so don't contribute to document scrollWidth. Task 2 constrains this chain.
+    <div className="relative w-full h-dvh bg-[var(--ft-canvas)] flex flex-col" data-density={density}>
+      {rootId && (
+        <ViewerShell
+          focusId={rootId}
+          getPersonName={getPersonName}
+          view={view}
+          onViewChange={setShellView}
+          onNavigate={handleFocusPerson}
+          onSearchClick={() => setSearchOpen(true)}
+        />
+      )}
+      <div className="relative flex-1 min-h-0">
+        {rootId ? (
+          <ReactFlowProvider>
+            <FlowCanvas
+              rootId={rootId}
+              onSelectRoot={handleSelectRoot}
+              persons={persons}
+              treeVersion={treeVersion}
+              initialUrlState={initialUrlState}
+              view={view}
+            />
+          </ReactFlowProvider>
+        ) : (
+          <EmptyState
+            personCount={persons.length}
+            rootPerson={rootPersonForEntry}
+            earliestAncestor={earliestAncestorForEntry}
+            resumePerson={resumePersonForEntry}
+            onSelectPerson={handleFocusPerson}
+            onSearchClick={() => setSearchOpen(true)}
+          />
+        )}
+      </div>
+      <SearchOverlay
+        open={searchOpen}
+        persons={persons}
+        onSelect={handleFocusPerson}
+        onClose={() => setSearchOpen(false)}
+      />
     </div>
   )
 }

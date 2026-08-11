@@ -33,6 +33,7 @@ const MAX_NODES = 500
  * @property {string | null} [notes] - Free-text notes (Person nodes only)
  * @property {string | null} [photoUrl] - Profile photo URL (Person nodes only)
  * @property {string} gedcomId - GEDCOM cross-reference identifier
+ * @property {number} [pendingEdits] - Count of pending `PendingChange` suggestions targeting this person (Person nodes only)
  */
 interface Neo4jNode {
   _id: string
@@ -47,6 +48,7 @@ interface Neo4jNode {
   notes?: string | null
   photoUrl?: string | null
   gedcomId: string
+  pendingEdits?: number
 }
 
 /**
@@ -77,6 +79,10 @@ interface Neo4jRel {
  * The traversal's matched node count is capped at `MAX_NODES` to bound payload
  * size; the response reports the pre-cap total via `totalNodes` and whether the
  * cap was applied via `truncated`.
+ *
+ * Each person node also carries `pendingEdits`, the count of `PendingChange`
+ * suggestions with `status: 'pending'` targeting that person, aggregated in the
+ * same traversal query so the response costs no extra round trips per node.
  *
  * Query Parameters:
  * - `hops` (optional): Number of relationship hops to traverse from root person
@@ -117,18 +123,23 @@ export async function GET(
        WITH root, [root] + collect(DISTINCT other) AS foundNodes
        WITH size(foundNodes) AS totalNodes, foundNodes[0..$maxNodes] AS allNodes
 
+       OPTIONAL MATCH (pc:PendingChange {status: 'pending'})
+       WHERE pc.targetId IN [x IN allNodes | x.gedcomId]
+       WITH allNodes, totalNodes, collect(pc.targetId) AS pendingTargetIds
+
        UNWIND allNodes AS n
        OPTIONAL MATCH (n)-[r:CHILD|UNION]-(m)
        WHERE m IN allNodes
 
-       WITH allNodes, totalNodes, collect(DISTINCT r) AS allRels
+       WITH allNodes, totalNodes, pendingTargetIds, collect(DISTINCT r) AS allRels
 
        RETURN [n IN allNodes | CASE
          WHEN 'Person' IN labels(n) THEN
            {_id: elementId(n), _labels: labels(n), name: n.name, sex: n.sex,
             birthYear: n.birthYear, deathYear: n.deathYear, birthPlace: n.birthPlace,
             deathPlace: n.deathPlace, occupation: n.occupation, notes: n.notes,
-            photoUrl: n.photoUrl, gedcomId: n.gedcomId}
+            photoUrl: n.photoUrl, gedcomId: n.gedcomId,
+            pendingEdits: size([t IN pendingTargetIds WHERE t = n.gedcomId])}
          ELSE
            {_id: elementId(n), _labels: labels(n), gedcomId: n.gedcomId}
         END] AS nodes,
@@ -172,10 +183,14 @@ export async function GET(
       photoUrl: n.photoUrl ?? null,
     }
 
-    const data: PersonData =
-      isAnonymous && isLikelyLiving(person)
+    const data: PersonData = {
+      ...(isAnonymous && isLikelyLiving(person)
         ? { ...redactPerson(person), sex: person.sex ?? '' }
-        : { ...person, sex: person.sex ?? '' }
+        : { ...person, sex: person.sex ?? '' }),
+      // Not sensitive: the review-queue count is a workflow signal, not a
+      // fact about the person, so it survives redaction for anonymous viewers.
+      pendingEdits: n.pendingEdits ?? 0,
+    }
 
     return { id: n._id, type: 'person' as const, data, position: { x: 0, y: 0 } }
   })

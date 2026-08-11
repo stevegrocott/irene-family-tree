@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E test for issue #113 — add-parent suggestion flow with revert support.
@@ -200,7 +201,7 @@ test.describe('Add-parent suggestion → admin approval → revert', () => {
 
     // ───── Phase 1: non-admin adds a parent → suggestion submitted ─────────
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, childFixture.gedcomId)
     await expect(page.getByTestId('toolbar-viewing')).toBeVisible({ timeout: 15_000 })
 
     const childNode = page.locator('.react-flow__node-person').first()
@@ -254,7 +255,7 @@ test.describe('Add-parent suggestion → admin approval → revert', () => {
 
     // ───── Phase 3: child drawer shows parent in "Your Changes" + Revert ────
     // Reload so the drawer refetches detail and my-changes under the new state.
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, childFixture.gedcomId)
     await expect(page.getByTestId('toolbar-viewing')).toBeVisible({ timeout: 15_000 })
 
     const childNodeAfter = page.locator('.react-flow__node-person').first()

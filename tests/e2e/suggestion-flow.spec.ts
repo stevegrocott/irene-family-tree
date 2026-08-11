@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { encode } from '@auth/core/jwt'
+import { gotoViewer } from './helpers/viewer'
 
 /**
  * E2E tests for the suggestion submission flow (issue #47).
@@ -201,7 +202,7 @@ test.describe('Suggestion flow', () => {
 
     // ── Navigate and open drawer ─────────────────────────────────────────────
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, mockPerson.gedcomId)
 
     await expect(page.getByTestId('toolbar-viewing')).toBeVisible({ timeout: 15_000 })
 
@@ -295,7 +296,7 @@ test.describe('Suggestion flow', () => {
       })
     )
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoViewer(page, mockPerson.gedcomId)
     await expect(page.getByTestId('toolbar-viewing')).toBeVisible({ timeout: 15_000 })
 
     const personNode = page.locator('.react-flow__node-person').first()

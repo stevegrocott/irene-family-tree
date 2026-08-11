@@ -2261,12 +2261,18 @@ function FlowCanvas({
     return computeLineage(flowNodes, flowEdges, focusNodeId)
   }, [flowNodes, flowEdges, focusNodeId])
 
-  /** Nodes as rendered by ReactFlow, with off-lineage nodes dimmed via `--ft-node-dim` while a focus is active. */
+  /**
+   * Nodes as rendered by ReactFlow, with off-lineage nodes dimmed via `--ft-node-dim` while a
+   * focus is active, and `selected` set from {@link selectedNodeId} — the sole source of truth
+   * for selection (the canvas is a fully controlled flow with no `onNodesChange`), so React Flow
+   * marks the clicked node `selected` and #266's §3.2 Selected treatment can render.
+   */
   const displayNodes = useMemo(() => {
     return nodesWithLod.map(n => {
       const dimmed = !!lineage && !lineage.nodeIds.has(n.id)
       return {
         ...n,
+        selected: n.id === selectedNodeId,
         style: {
           ...n.style,
           opacity: dimmed ? `var(${LINEAGE_VARS.dim})` : 1,
@@ -2274,7 +2280,7 @@ function FlowCanvas({
         },
       }
     })
-  }, [nodesWithLod, lineage])
+  }, [nodesWithLod, lineage, selectedNodeId])
 
   /**
    * Edges as rendered by ReactFlow: off-lineage edges dim via `--ft-node-dim` and in-lineage

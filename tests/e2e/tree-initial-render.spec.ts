@@ -22,6 +22,28 @@ import { test, expect, type Page } from '@playwright/test';
 /** Mirrors the `MIN_ZOOM` the auto-fit effect in `FamilyTree.tsx` frames at. */
 const MIN_ZOOM = 0.18;
 
+/**
+ * CDP `Emulation.setCPUThrottlingRate` multiplier used by the issue #271 stall
+ * probe below -- matches Chrome DevTools' "Low-end mobile"/"Mid-tier mobile"
+ * throttling presets. #271's manual repro only surfaced on real (unthrottled)
+ * hardware, not under Playwright's leaner default environment; throttling the
+ * main thread is what makes an LOD threshold crossing's cost measurable here.
+ */
+const CPU_THROTTLE_RATE = 6;
+
+/**
+ * Max acceptable gap (ms) between two consecutive `requestAnimationFrame`
+ * callbacks while driving a zoom gesture through an LOD threshold crossing,
+ * per issue #271 AC2 ("keeps the tab responsive to JS evaluation
+ * throughout"). rAF only resumes once the main thread frees up, so a large
+ * gap is a direct measurement of how long the thread was blocked -- #271's
+ * manual repro observed the tab going fully unresponsive for "tens of
+ * seconds" (two separate 45s CDP timeouts). 2s sits well above ordinary
+ * throttled-CPU frame jitter but far below that, so a real regression still
+ * trips it while giving headroom for CI variance.
+ */
+const STALL_BUDGET_MS = 2_000;
+
 test.describe('tree initial render at default root', () => {
   test.beforeEach(async ({ page }) => {
     // Seed the default root (Irene Tunnicliffe) explicitly so this spec lands on
@@ -175,5 +197,112 @@ test.describe('tree initial render at default root', () => {
     const before = await depthValue.textContent();
     await page.getByTestId('toolbar-depth-decrement').click();
     await expect(depthValue).not.toHaveText(before ?? '', { timeout: 5_000 });
+  });
+
+  /**
+   * Installs a `requestAnimationFrame` loop, before any app code runs, that
+   * records the gap (ms) between consecutive frames into
+   * `window.__ft271FrameGaps`. rAF only fires once the main thread is free,
+   * so a blocked thread shows up as exactly one oversized gap the moment it
+   * resumes -- regardless of *when* during the gesture the block happens, so
+   * (unlike timing a single `page.evaluate()` call taken at a fixed point)
+   * it can't be raced past by a heavy render that lands between samples.
+   */
+  async function installFrameGapMonitor(page: Page) {
+    await page.addInitScript(() => {
+      (window as unknown as { __ft271FrameGaps: number[] }).__ft271FrameGaps = [];
+      let last = performance.now();
+      const tick = () => {
+        const now = performance.now();
+        (window as unknown as { __ft271FrameGaps: number[] }).__ft271FrameGaps.push(now - last);
+        last = now;
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+
+  /**
+   * Issue #271: zooming the real default-root tree (370 person nodes) stalls
+   * the renderer for tens of seconds in a real browser -- reproduced by hand
+   * twice, but not under Playwright's default environment (per #221's
+   * findings, confirmed again here). Closing that coverage gap needs CPU
+   * throttling (CDP `Emulation.setCPUThrottlingRate`) to make the LOD
+   * threshold crossing's cost observable, plus a responsiveness probe.
+   *
+   * The probe drives the same wheel-zoom gesture `node-lod.spec.ts` uses to
+   * cross the dot -> compact -> full thresholds under throttling, while
+   * `installFrameGapMonitor` continuously records how responsive the main
+   * thread stays. The largest recorded gap is a direct measurement of "how
+   * long did the tab stop responding" -- the exact symptom #271's manual
+   * repro observed via `Runtime.evaluate` timeouts.
+   *
+   * AC5 ("fails if the regression is reintroduced -- verified by mutation"):
+   * reverting the #271 fix in `FamilyTree.tsx`/`PersonNode.tsx` should push
+   * the max frame gap over `STALL_BUDGET_MS`; it must not pass on that
+   * mutation.
+   */
+  test('zoom threshold crossing under CPU throttling stays within the stall budget', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'CDP CPU throttling is a Chromium-only API');
+    // Generous outer timeout: CPU throttling itself slows down every
+    // Playwright-driven interaction in this test, not just the app's own
+    // work, so the default per-test timeout isn't enough headroom.
+    test.setTimeout(120_000);
+
+    await installFrameGapMonitor(page);
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+
+    const toolbarViewing = page.getByTestId('toolbar-viewing');
+    await expect(toolbarViewing).toContainText('Irene', { timeout: 15_000 });
+    await waitForCanvasSettled(page);
+    // Confirm we're starting from the dot variant (AC2: "from dot through
+    // compact to full") rather than already mid-sweep.
+    expect(await readCanvasZoom(page)).toBeCloseTo(MIN_ZOOM, 5);
+    await expect(page.getByTestId('person-node-dot').first()).toBeVisible();
+
+    const pane = page.locator('.react-flow');
+    await expect(pane).toBeVisible();
+    const box = await pane.boundingBox();
+    if (!box) throw new Error('react-flow pane has no bounding box');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE_RATE });
+
+    // Reset the recorder right before the gesture so navigation/throttle
+    // setup jank doesn't pollute the measurement.
+    await page.evaluate(() => {
+      (window as unknown as { __ft271FrameGaps: number[] }).__ft271FrameGaps.length = 0;
+    });
+
+    const fullNode = page.getByTestId('person-node-full').first();
+    try {
+      // Zoom in one wheel tick at a time -- crossing dotMax (0.45) then
+      // compactMax (0.85). `toPass` retries the whole gesture (accumulating
+      // more zoom) until a `full` node appears, the same pattern
+      // `node-lod.spec.ts` uses.
+      await expect(async () => {
+        await page.mouse.wheel(0, -120);
+        await expect(fullNode).toBeVisible({ timeout: 200 });
+      }).toPass({ timeout: 90_000 });
+    } finally {
+      // Restore normal CPU speed regardless of outcome so a failure here
+      // doesn't leave the browser throttled for whatever runs next.
+      await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    }
+
+    const gaps = await page.evaluate(
+      () => (window as unknown as { __ft271FrameGaps: number[] }).__ft271FrameGaps,
+    );
+    const maxGapMs = gaps.length > 0 ? Math.max(...gaps) : 0;
+
+    expect(
+      maxGapMs,
+      `main thread stalled for ${maxGapMs.toFixed(0)}ms (budget ${STALL_BUDGET_MS}ms) while crossing an LOD threshold`,
+    ).toBeLessThan(STALL_BUDGET_MS);
   });
 });

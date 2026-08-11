@@ -106,13 +106,43 @@ test.describe('tree initial render at default root', () => {
     expect(await readCanvasZoom(page)).toBeCloseTo(MIN_ZOOM, 5);
   });
 
-  test('stays responsive at DEFAULT_HOPS after a zoom gesture (AC1)', async ({ page }) => {
+  /**
+   * AC1 ("loads and remains interactive at DEFAULT_HOPS"): this test does
+   * NOT guard the #218 renderer-freeze regression -- investigation under
+   * #221 found the freeze doesn't reproduce under Playwright (the same
+   * unfixed build that hard-froze real Chrome ran to completion here). What
+   * it checks instead is that the wheel gesture and depth stepper each
+   * produce a real, state-sensitive effect. Guarding the freeze itself needs
+   * a CDP CPU-throttling environment or manual verification in a real
+   * browser.
+   *
+   * AC2 ("with `defaultViewport` removed, this test fails -- verified by
+   * mutation"): met by the pre-fit assertion below. React Flow applies
+   * `defaultViewport` on its very first render, whereas the auto-fit effect
+   * in `FamilyTree.tsx` is deferred (50ms) and then animates (300ms) -- so
+   * the mount zoom is observable before the fit overwrites it. Reading it
+   * *after* `waitForCanvasSettled()` is what made an earlier version of this
+   * test mutation-blind: by then every run has converged on `MIN_ZOOM`
+   * whatever `defaultViewport` said. Removing `defaultViewport` leaves React
+   * Flow's implicit zoom of 1.0 at mount, which this assertion catches.
+   */
+  test('wheel zoom and depth stepper remain interactive at DEFAULT_HOPS', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
+    // AC2: sample the mount zoom before the auto-fit effect can overwrite it.
+    // Waiting on the viewport element rather than on `toolbar-viewing` keeps
+    // this inside the pre-fit window -- the toolbar only fills in once the
+    // tree fetch resolves, which is already past the 50ms defer.
+    await expect(page.locator('.react-flow__viewport')).toBeAttached({ timeout: 15_000 });
+    expect(
+      await readCanvasZoom(page),
+      'mount zoom should come from defaultViewport, not React Flow\'s implicit 1.0',
+    ).toBeCloseTo(MIN_ZOOM, 5);
+
     // Load the real default-root tree -- DEFAULT_HOPS = 60, the heaviest
     // configuration in issue #218 (~370 person nodes after the MAX_NODES
-    // cap) -- and let the auto-fit effect settle before probing.
+    // cap) -- and let the auto-fit effect settle before probing interactivity.
     const toolbarViewing = page.getByTestId('toolbar-viewing');
     await expect(toolbarViewing).toContainText('Irene', { timeout: 15_000 });
     await waitForCanvasSettled(page);
@@ -124,15 +154,19 @@ test.describe('tree initial render at default root', () => {
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 
     // Drive a real zoom-in gesture with the mouse wheel -- the same input a
-    // user would send. Before the fix, the main thread was saturated by the
-    // full-LOD first paint and stayed unresponsive well past this point.
-    // Waiting for a wheel event to land and flip a node to the `full`
-    // variant is a direct probe for renderer responsiveness: it can only
-    // pass if the page is still processing input and re-rendering, and it
-    // times out (rather than silently passing) if the tab has hung.
+    // user would send -- and confirm it actually changes the viewport zoom.
+    // Reading the zoom before and after ties the assertion to the gesture's
+    // *effect* rather than to ambient state that could already satisfy it:
+    // a `full`-variant node visibility check used to pass here even when the
+    // page was not processing input at all, because in the unfixed world
+    // (`defaultViewport` removed) ~370 full-detail nodes are already in the
+    // DOM before the first wheel event lands (issue #221). Comparing against
+    // the captured baseline -- rather than a hard-coded target value --
+    // keeps this robust to exactly how far a given wheel tick zooms.
+    const zoomBefore = await readCanvasZoom(page);
     await expect(async () => {
       await page.mouse.wheel(0, -120);
-      await expect(page.getByTestId('person-node-full').first()).toBeVisible({ timeout: 200 });
+      expect(await readCanvasZoom(page)).not.toBeCloseTo(zoomBefore, 5);
     }).toPass({ timeout: 30_000 });
 
     // Confirm the rest of the UI -- not just the canvas -- is still taking

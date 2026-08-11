@@ -48,24 +48,49 @@ function buildPendingEditTitle(count: number): string {
  * (`dot`, `compact`, `full`) so a zoomed-out canvas of hundreds of nodes
  * reads as shape rather than illegible text. Sex is encoded as a tick on the
  * leading edge (backed by an accessible name, never colour alone) and, when
- * the person is the current root, a brass border highlight. Invisible
- * top/bottom handles allow React Flow to connect edges while keeping the UI
- * clean. Wrapped in `memo` so a continuous zoom gesture only re-renders nodes
- * when the discrete variant actually changes, not on every frame.
+ * the person is the current root, a brass border highlight; when the node is
+ * the sticky selection (React Flow's own `selected`, wired up from
+ * `selectedNodeId` in `FamilyTree`), an accent border and tinted background
+ * take over per §3.2 — see the `borderClass`/`bgClass` precedence note below.
+ * Invisible top/bottom handles allow React Flow to connect edges while
+ * keeping the UI clean. Wrapped in `memo` so a continuous zoom gesture only
+ * re-renders nodes when the discrete variant actually changes, not on every
+ * frame.
  *
  * @component
- * @param {NodeProps<PersonNodeData>} props - React Flow node props carrying PersonData plus the LOD variant
+ * @param {NodeProps<PersonNodeData>} props - React Flow node props carrying PersonData, the LOD variant, and the `selected` flag
  * @returns {React.ReactElement} Styled person card sized for the active LOD variant
  */
-function PersonNode({ data }: NodeProps<PersonNodeData>) {
+function PersonNode({ data, selected }: NodeProps<PersonNodeData>) {
   const [photoFailed, setPhotoFailed] = useState(false)
   const handlePhotoError = useCallback(() => setPhotoFailed(true), [])
   const variant = data.lodVariant ?? DEFAULT_VARIANT
   const tickColor = SEX_AVATAR_BG[data.sex] ?? SEX_AVATAR_BG.default
   const sexLabel = SEX_LABEL[data.sex] ?? 'Sex unknown'
-  const borderClass = data.isRoot ? 'border-2 border-brass' : 'border border-line'
-  /** Per `docs/DESIGN_SYSTEM.md` §3.2 Living/private: `--ft-private-soft` background. */
-  const bgClass = data.living ? 'bg-[var(--ft-private-soft)]' : 'bg-surface'
+  /**
+   * Per `docs/DESIGN_SYSTEM.md` §3.2, both Selected and Root specify a 2px
+   * border, so a node that is both can only show one. Documented precedence
+   * (issue #266 AC4): Selected — the live, user-driven interaction state —
+   * wins the border and background. Root identity is never lost because its
+   * brass `⌂` marker (rendered unconditionally below on `data.isRoot`, wholly
+   * independent of `borderClass`) stays visible regardless of selection.
+   */
+  const borderClass = selected
+    ? 'border-2 border-accent'
+    : data.isRoot
+      ? 'border-2 border-brass'
+      : 'border border-line'
+  /**
+   * Per `docs/DESIGN_SYSTEM.md` §3.2 Living/private: `--ft-private-soft`
+   * background. Selected takes the same precedence as `borderClass` above —
+   * it wins over Living/private so the two 2px-border states stay visually
+   * paired (matching border + background change together).
+   */
+  const bgClass = selected
+    ? 'bg-[var(--ft-accent-soft)]'
+    : data.living
+      ? 'bg-[var(--ft-private-soft)]'
+      : 'bg-surface'
 
   const dates = data.living
     ? 'Living'

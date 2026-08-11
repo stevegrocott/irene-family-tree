@@ -243,6 +243,15 @@ describe('PersonNode selected treatment (DESIGN_SYSTEM.md §3.2 Selected, issue 
     expect(marker).not.toBeNull()
     expect(`${marker?.className ?? ''} ${marker?.getAttribute('style') ?? ''}`).toMatch(/brass/i)
   })
+
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('renders no unconditional hover-border class on the %s variant when selected (issue #270)', (lodVariant, testId) => {
+    const el = render({ lodVariant }, { selected: true })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(node.className).not.toMatch(/hover:border-\[var\(--ft-border-strong\)\]/)
+  })
 })
 
 describe('PersonNode hover treatment (DESIGN_SYSTEM.md §3.2, issue #270)', () => {

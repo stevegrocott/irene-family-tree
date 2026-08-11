@@ -50,7 +50,7 @@ export default async function AdminPage() {
               c.status      AS status,
               c.createdAt   AS createdAt
        ORDER BY c.createdAt DESC
-       SKIP $skip LIMIT $limit`,
+       SKIP toInteger($skip) LIMIT toInteger($limit)`,
       { skip: 0, limit: PAGE_SIZE }
     )
     suggestions = rows.map(row => {

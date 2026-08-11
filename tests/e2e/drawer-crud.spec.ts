@@ -459,4 +459,45 @@ test.describe('PersonDrawer CRUD', () => {
     // The new child relationship is visible in the drawer.
     await expect(drawer).toContainText('Bob Test', { timeout: 5_000 })
   })
+
+  // ── Real tree (issue #230) ───────────────────────────────────────────────
+
+  test('real tree: a person node is visible on the default root and clicking it opens the drawer', async ({
+    page,
+  }) => {
+    // Deliberately no route mocks: every other test in this file mocks a
+    // single-node tree, which stayed green throughout issue #230 because
+    // React Flow renders a 1-2 node tree measured (and therefore visible)
+    // even when the underlying bug leaves every node `visibility: hidden`
+    // at real scale. This test hits the real Neo4j-backed API at the
+    // default root (Irene Tunnicliffe, ~370 person nodes after the
+    // MAX_NODES cap) — the coverage gap the issue calls out: "nothing
+    // asserts a node is visible on the real tree".
+    await gotoViewer(page, '@I85@')
+
+    const toolbarViewing = page.getByTestId('toolbar-viewing')
+    await expect(toolbarViewing).toContainText('Irene', { timeout: 15_000 })
+
+    const personNode = page.locator('.react-flow__node-person').first()
+    await expect(personNode).toBeVisible({ timeout: 15_000 })
+
+    // AC1: assert computed visibility directly rather than relying solely on
+    // Playwright's `toBeVisible()` — the regression this guards against
+    // (React Flow never clearing its own inline `visibility: hidden` because
+    // dagre's measured width/height never reached it) is specifically about
+    // computed style, and the issue notes existing specs only ever checked
+    // that a testid exists in the DOM, not that it is actually visible.
+    await expect(personNode).toHaveCSS('visibility', 'visible')
+
+    // AC2/AC3: the node must be hit-testable, not just visible — clicking it
+    // should open the drawer rather than the click passing through to
+    // `.react-flow__pane` behind it.
+    await personNode.click()
+
+    const drawer = page.getByTestId('person-drawer')
+    await expect(drawer).toBeVisible({ timeout: 5_000 })
+
+    // AC3: the clicked node also gains React Flow's own selection class.
+    await expect(personNode).toHaveClass(/\bselected\b/)
+  })
 })

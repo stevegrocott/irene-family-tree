@@ -243,6 +243,37 @@ describe('PersonNode selected treatment (DESIGN_SYSTEM.md §3.2 Selected, issue 
     expect(marker).not.toBeNull()
     expect(`${marker?.className ?? ''} ${marker?.getAttribute('style') ?? ''}`).toMatch(/brass/i)
   })
+
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('renders no unconditional hover-border class on the %s variant when selected (issue #270)', (lodVariant, testId) => {
+    const el = render({ lodVariant }, { selected: true })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(node.className).not.toMatch(/hover:border-\[var\(--ft-border-strong\)\]/)
+  })
+})
+
+describe('PersonNode hover treatment (DESIGN_SYSTEM.md §3.2, issue #270)', () => {
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('applies the hover border/shadow classes on the %s variant when not selected', (lodVariant, testId) => {
+    const el = render({ lodVariant }, { selected: false })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(node.className).toMatch(/hover:border-\[var\(--ft-border-strong\)\]/)
+    expect(node.className).toMatch(/hover:shadow-\[var\(--ft-shadow-2\)\]/)
+  })
+
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('omits the hover border class but keeps the hover shadow class on the %s variant when selected, so the accent border never gets clobbered on hover but elevation still applies (issue #270 AC5)', (lodVariant, testId) => {
+    const el = render({ lodVariant }, { selected: true })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(node.className).not.toMatch(/hover:border-\[var\(--ft-border-strong\)\]/)
+    expect(node.className).toMatch(/hover:shadow-\[var\(--ft-shadow-2\)\]/)
+  })
 })
 
 describe('PersonNode pending edit indicator (DESIGN_SYSTEM.md §3.2 Has pending edit)', () => {

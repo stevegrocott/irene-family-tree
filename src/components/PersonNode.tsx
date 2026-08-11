@@ -91,6 +91,17 @@ function PersonNode({ data, selected }: NodeProps<PersonNodeData>) {
     : data.living
       ? 'bg-[var(--ft-private-soft)]'
       : 'bg-surface'
+  /**
+   * Per `docs/DESIGN_SYSTEM.md` §3.2, hover shifts the border colour and
+   * elevation as a resting-state affordance. When the node is Selected it
+   * already carries the 2px accent border (see `borderClass` above); letting
+   * the hover border win on top of that would visibly replace the accent
+   * colour on mouseover, so the hover border is suppressed while selected.
+   * The hover elevation (shadow) is independent of the accent border and
+   * must still apply when selected, per issue #270 AC5.
+   */
+  const borderHoverClass = selected ? '' : 'hover:border-[var(--ft-border-strong)]'
+  const shadowHoverClass = 'hover:shadow-[var(--ft-shadow-2)]'
 
   const dates = data.living
     ? 'Living'
@@ -150,7 +161,7 @@ function PersonNode({ data, selected }: NodeProps<PersonNodeData>) {
         tabIndex={0}
         aria-label={accessibleName}
         title={accessibleName}
-        className={`relative flex items-center ${bgClass} ${borderClass} rounded-node px-4 h-10 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
+        className={`relative flex items-center ${bgClass} ${borderClass} rounded-node px-4 h-10 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] ${borderHoverClass} ${shadowHoverClass} transition-[border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
       >
         <div
           aria-hidden="true"
@@ -186,7 +197,7 @@ function PersonNode({ data, selected }: NodeProps<PersonNodeData>) {
       tabIndex={0}
       aria-label={accessibleName}
       title={accessibleName}
-      className={`relative ${bgClass} ${borderClass} rounded-node px-4 py-3 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] hover:border-[var(--ft-border-strong)] hover:shadow-[var(--ft-shadow-2)] transition-[border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
+      className={`relative ${bgClass} ${borderClass} rounded-node px-4 py-3 w-[240px] overflow-hidden shadow-[var(--ft-shadow-1)] ${borderHoverClass} ${shadowHoverClass} transition-[border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:[box-shadow:var(--ft-focus)]`}
     >
       <div
         aria-hidden="true"

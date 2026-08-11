@@ -204,6 +204,40 @@ describe('applyDagreLayout — exposed generation y-levels', () => {
   })
 })
 
+describe('applyDagreLayout — node dimensions for React Flow measurement', () => {
+  // Mirrors the private PERSON_H/UNION_H constants in src/lib/layout.ts.
+  const PERSON_H = 76
+  const UNION_H = 14
+
+  it('carries width and height on every laid-out node, matching its type (issue #230)', () => {
+    // Arrange: same family shape as the CHILD-orientation tests above.
+    const nodes: Node[] = [
+      personNode('p1', '@I1@'),
+      personNode('p2', '@I2@'),
+      unionNode('u1'),
+      personNode('c1', '@I3@'),
+    ]
+    const edges: Edge[] = [
+      unionEdge('e1', 'p1', 'u1'),
+      unionEdge('e2', 'p2', 'u1'),
+      childEdge('e3', 'u1', 'c1'),
+    ]
+
+    // Act
+    const { nodes: laidNodes } = applyDagreLayout(nodes, edges)
+
+    // Assert: React Flow only skips its ResizeObserver measurement pass — and reveals
+    // a node immediately — when the node object itself carries `width`/`height`.
+    // Without these, every node stays `visibility: hidden` (issue #230).
+    laidNodes.forEach(n => {
+      const [expectedW, expectedH] =
+        n.type === 'union' ? [UNION_W, UNION_H] : [PERSON_W, PERSON_H]
+      expect(n.width).toBe(expectedW)
+      expect(n.height).toBe(expectedH)
+    })
+  })
+})
+
 describe('applyDagreLayout — union horizontal centering', () => {
   it('centers a union node horizontally between its two parents, even when its own child count pulls it off the naive dagre position', () => {
     // Arrange: mirrors issue #219's Donald/John family. Donald's union u1 (with Irene) has one

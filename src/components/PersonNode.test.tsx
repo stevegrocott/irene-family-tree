@@ -268,11 +268,11 @@ describe('PersonNode hover treatment (DESIGN_SYSTEM.md §3.2, issue #270)', () =
   it.each([
     ['compact', 'person-node-compact'],
     ['full', 'person-node-full'],
-  ] as const)('omits the hover border/shadow classes on the %s variant when selected, so the accent border never gets clobbered on hover', (lodVariant, testId) => {
+  ] as const)('omits the hover border class but keeps the hover shadow class on the %s variant when selected, so the accent border never gets clobbered on hover but elevation still applies (issue #270 AC5)', (lodVariant, testId) => {
     const el = render({ lodVariant }, { selected: true })
     const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
     expect(node.className).not.toMatch(/hover:border-\[var\(--ft-border-strong\)\]/)
-    expect(node.className).not.toMatch(/hover:shadow-\[var\(--ft-shadow-2\)\]/)
+    expect(node.className).toMatch(/hover:shadow-\[var\(--ft-shadow-2\)\]/)
   })
 })
 

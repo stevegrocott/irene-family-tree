@@ -36,6 +36,25 @@ function centerX(node: { type?: string; position: { x: number } }) {
   return node.position.x + w / 2
 }
 
+describe('applyDagreLayout — measured node dimensions', () => {
+  it('sets width/height on each laid-out node so React Flow treats it as pre-measured', () => {
+    // Arrange: one union with two parents, matching nodeSize's two branches (person, union).
+    const nodes: Node[] = [personNode('p1', '@I1@'), personNode('p2', '@I2@'), unionNode('u1')]
+    const edges: Edge[] = [unionEdge('e1', 'p1', 'u1'), unionEdge('e2', 'p2', 'u1')]
+
+    // Act
+    const { nodes: laidNodes } = applyDagreLayout(nodes, edges)
+
+    // Assert: dimensions land on the node itself, not just baked into `position`.
+    const p1 = laidNodes.find(n => n.id === 'p1')!
+    const u1 = laidNodes.find(n => n.id === 'u1')!
+    expect(p1.width).toBe(PERSON_W)
+    expect(p1.height).toBe(76)
+    expect(u1.width).toBe(UNION_W)
+    expect(u1.height).toBe(14)
+  })
+})
+
 describe('applyDagreLayout — CHILD edge orientation contract', () => {
   it('ranks a child below its parents\' union when CHILD is union→person', () => {
     // Arrange: grandparent generation unions, one child born of that union.

@@ -363,7 +363,12 @@ export function applyDagreLayout(
 
   const rawPositionedNodes = nodes.map(n => {
     const { x, y, width: w, height: h } = g.node(n.id)
-    return { ...n, position: { x: x - w / 2, y: y - h / 2 } }
+    // Carry dagre's computed width/height onto the node itself (not just its position).
+    // React Flow uses node.width/height to know a node's dimensions are already known;
+    // without them, nodes are "unmeasured" until a ResizeObserver pass fires after first
+    // render, leaving stale/zero bounds in React Flow's internal node lookup in the
+    // meantime — which breaks click-to-select hit-testing on the very first interaction.
+    return { ...n, position: { x: x - w / 2, y: y - h / 2 }, width: w, height: h }
   })
 
   // Dagre positions each union node at the median x of its neighbours (parents AND

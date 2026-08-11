@@ -55,9 +55,13 @@ test.describe('relationship calculator', () => {
     const toolbarViewing = page.getByTestId('toolbar-viewing');
     await expect(toolbarViewing).toContainText('Irene', { timeout: 15_000 });
 
+    // Select by accessible name (root is seeded as Irene Tunnicliffe in
+    // beforeEach) rather than a CSS class — PersonNode marks the root via
+    // `border-brass`, not `ring-amber`, so the old class-based filter never
+    // matched anything.
     const rootPersonNode = page
       .locator('.react-flow__node-person')
-      .filter({ has: page.locator('[class*="ring-amber"]') })
+      .filter({ has: page.getByRole('button', { name: /^Irene Tunnicliffe\b/ }) })
       .first();
     await expect(rootPersonNode).toBeVisible({ timeout: 10_000 });
     await rootPersonNode.click();

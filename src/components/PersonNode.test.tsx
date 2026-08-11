@@ -245,6 +245,28 @@ describe('PersonNode selected treatment (DESIGN_SYSTEM.md §3.2 Selected, issue 
   })
 })
 
+describe('PersonNode hover treatment (DESIGN_SYSTEM.md §3.2, issue #270)', () => {
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('applies the hover border/shadow classes on the %s variant when not selected', (lodVariant, testId) => {
+    const el = render({ lodVariant }, { selected: false })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(node.className).toMatch(/hover:border-\[var\(--ft-border-strong\)\]/)
+    expect(node.className).toMatch(/hover:shadow-\[var\(--ft-shadow-2\)\]/)
+  })
+
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)('omits the hover border/shadow classes on the %s variant when selected, so the accent border never gets clobbered on hover', (lodVariant, testId) => {
+    const el = render({ lodVariant }, { selected: true })
+    const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+    expect(node.className).not.toMatch(/hover:border-\[var\(--ft-border-strong\)\]/)
+    expect(node.className).not.toMatch(/hover:shadow-\[var\(--ft-shadow-2\)\]/)
+  })
+})
+
 describe('PersonNode pending edit indicator (DESIGN_SYSTEM.md §3.2 Has pending edit)', () => {
   it.each([
     ['compact', 'person-node-compact', 1, '1 suggested edit awaiting review'],

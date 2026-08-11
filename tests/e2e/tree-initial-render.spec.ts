@@ -117,22 +117,32 @@ test.describe('tree initial render at default root', () => {
    * browser.
    *
    * AC2 ("with `defaultViewport` removed, this test fails -- verified by
-   * mutation"): NOT met, and cannot be as worded. `zoomBefore` below is read
-   * after `waitForCanvasSettled()`, by which point the auto-fit effect in
-   * `FamilyTree.tsx` has already forced the viewport to `MIN_ZOOM`
-   * regardless of the initial `defaultViewport` (mutation-verified). The
-   * only assertion in this spec that's genuinely mutation-sensitive to
-   * `defaultViewport` is `renders only dot-variant nodes on first paint,
-   * never full` above (AC5). Sign-off to relax AC2 to reflect that is
-   * requested on #221 and still pending as of this commit.
+   * mutation"): met by the pre-fit assertion below. React Flow applies
+   * `defaultViewport` on its very first render, whereas the auto-fit effect
+   * in `FamilyTree.tsx` is deferred (50ms) and then animates (300ms) -- so
+   * the mount zoom is observable before the fit overwrites it. Reading it
+   * *after* `waitForCanvasSettled()` is what made an earlier version of this
+   * test mutation-blind: by then every run has converged on `MIN_ZOOM`
+   * whatever `defaultViewport` said. Removing `defaultViewport` leaves React
+   * Flow's implicit zoom of 1.0 at mount, which this assertion catches.
    */
   test('wheel zoom and depth stepper remain interactive at DEFAULT_HOPS', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
+    // AC2: sample the mount zoom before the auto-fit effect can overwrite it.
+    // Waiting on the viewport element rather than on `toolbar-viewing` keeps
+    // this inside the pre-fit window -- the toolbar only fills in once the
+    // tree fetch resolves, which is already past the 50ms defer.
+    await expect(page.locator('.react-flow__viewport')).toBeAttached({ timeout: 15_000 });
+    expect(
+      await readCanvasZoom(page),
+      'mount zoom should come from defaultViewport, not React Flow\'s implicit 1.0',
+    ).toBeCloseTo(MIN_ZOOM, 5);
+
     // Load the real default-root tree -- DEFAULT_HOPS = 60, the heaviest
     // configuration in issue #218 (~370 person nodes after the MAX_NODES
-    // cap) -- and let the auto-fit effect settle before probing.
+    // cap) -- and let the auto-fit effect settle before probing interactivity.
     const toolbarViewing = page.getByTestId('toolbar-viewing');
     await expect(toolbarViewing).toContainText('Irene', { timeout: 15_000 });
     await waitForCanvasSettled(page);

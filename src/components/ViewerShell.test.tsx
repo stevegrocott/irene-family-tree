@@ -69,14 +69,41 @@ describe('ViewerShell', () => {
       expect(wordmark!.textContent).toBe(APP_NAME)
     })
 
+    it('hides the wordmark below sm to avoid overflowing narrow viewports', () => {
+      renderShell()
+      const wordmark = container.querySelector('[data-testid="viewer-shell-wordmark"]')!
+      const classes = wordmark.className.split(/\s+/)
+      expect(classes).toContain('hidden')
+      expect(classes).toContain('sm:inline-block')
+    })
+
     it('renders a divider between the wordmark and the breadcrumb', () => {
       renderShell()
       expect(container.querySelector('[data-testid="viewer-shell-divider"]')).not.toBeNull()
     })
 
+    it('hides the divider below sm to avoid overflowing narrow viewports', () => {
+      renderShell()
+      const divider = container.querySelector('[data-testid="viewer-shell-divider"]')!
+      const classes = divider.className.split(/\s+/)
+      expect(classes).toContain('hidden')
+      expect(classes).toContain('sm:block')
+    })
+
     it('renders a search pill', () => {
       renderShell()
       expect(container.querySelector('[data-testid="viewer-shell-search"]')).not.toBeNull()
+    })
+
+    it('hides the search label and kbd hint below sm, collapsing to an icon-only button', () => {
+      renderShell()
+      const search = container.querySelector('[data-testid="viewer-shell-search"]')!
+      const label = Array.from(search.querySelectorAll('span')).find(el => el.textContent === 'Search')
+      const kbd = search.querySelector('kbd')
+      expect(label).not.toBeUndefined()
+      expect(label!.className.split(/\s+/)).toEqual(expect.arrayContaining(['hidden', 'sm:inline']))
+      expect(kbd).not.toBeNull()
+      expect(kbd!.className.split(/\s+/)).toEqual(expect.arrayContaining(['hidden', 'sm:inline']))
     })
 
     it('renders all three switcher segments', () => {
@@ -99,6 +126,15 @@ describe('ViewerShell', () => {
       const authButton = slot!.querySelector('[data-testid="auth-button"]')
       expect(authButton!.parentElement).toBe(slot)
       expect(authButton!.className.split(/\s+/)).not.toContain('absolute')
+    })
+
+    it('sizes the avatar slot to its content instead of a fixed box, so AuthButton is never clipped', () => {
+      renderShell()
+      const slot = container.querySelector('[data-testid="viewer-shell-avatar-slot"]')!
+      const classes = slot.className.split(/\s+/)
+      expect(classes).toContain('flex-shrink-0')
+      expect(classes).not.toContain('w-6')
+      expect(classes).not.toContain('h-6')
     })
   })
 

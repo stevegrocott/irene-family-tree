@@ -2835,6 +2835,27 @@ export default function FamilyTree() {
   }
 
   return (
+    // #256 task 1 finding: at 360/390px viewports (signed out, drawer/search/toolbar
+    // open) `document.documentElement.scrollWidth` is a constant 561px regardless of
+    // viewport width — measured via a temporary Playwright probe that walks every
+    // element, skips any clipped by an ancestor's `overflow`, and sorts by right edge.
+    // The unclipped element whose right edge lands at exactly 561.4px is
+    // `data-testid="auth-button"` (src/components/AuthButton.tsx:74-82, the signed-out
+    // "Sign in" state, className `${FLOATING_PANEL_BASE_CLASS} px-4 py-2 ...`, natural
+    // width ~58.7px). It renders inside ViewerShell's `viewer-shell-avatar-slot`
+    // (src/components/ViewerShell.tsx:191-196), a fixed `w-6 h-6` (24px) box sized only
+    // for the authenticated circular avatar — the wider "Sign in" button isn't clipped
+    // or shrunk there, so it spills out to the right past the viewport edge. Nothing
+    // between it and this root container constrains overflow (ViewerShell's `<header>`
+    // is a non-wrapping flex row with no `overflow-hidden`, and this container is
+    // `w-full` with no `max-w`/`overflow-x` clamp), so the overflow propagates all the
+    // way to `document.documentElement`. All contributing widths (180px search pill,
+    // ~146px switcher, the button's own padding) are fixed/intrinsic, not
+    // viewport-relative, which is why scrollWidth stays 561 at both 360px and 390px.
+    // Two previously-suspected candidates were ruled out: `LayoutAuthButton` renders
+    // null on the viewer route (`/`), and the react-flow canvas nodes at large
+    // transformed coordinates are clipped by the canvas pane's `overflow: hidden` and
+    // so don't contribute to document scrollWidth. Task 2 constrains this chain.
     <div className="relative w-full h-dvh bg-[var(--ft-canvas)] flex flex-col" data-density={density}>
       {rootId && (
         <ViewerShell

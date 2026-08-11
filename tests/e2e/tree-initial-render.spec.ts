@@ -105,42 +105,24 @@ test.describe('tree initial render at default root', () => {
   });
 
   /**
-   * NOTE on #218's AC1 ("loads and remains interactive at DEFAULT_HOPS"):
-   * this test does NOT guard the renderer-freeze regression that AC1 was
-   * written for. Investigation under issue #221 found that the freeze does
-   * not reproduce under Playwright at all -- the same unfixed build that
-   * hard-froze real Chrome (CDP `Runtime.evaluate` and screenshot injection
-   * both timing out) ran to completion here, wheel gesture and depth-stepper
-   * click included. No assertion written against this environment can
-   * observe the freeze, so none is claimed below. What this test does check
-   * is that the wheel gesture and toolbar control both produce a real,
-   * state-sensitive effect (as opposed to passing on ambient state that was
-   * already true beforehand, which the pre-#221 version of this test did).
-   * Guarding the actual freeze needs either an environment change (e.g. CDP
-   * CPU throttling, spiked separately) or manual verification in a real
+   * AC1 ("loads and remains interactive at DEFAULT_HOPS"): this test does
+   * NOT guard the #218 renderer-freeze regression -- investigation under
+   * #221 found the freeze doesn't reproduce under Playwright (the same
+   * unfixed build that hard-froze real Chrome ran to completion here). What
+   * it checks instead is that the wheel gesture and depth stepper each
+   * produce a real, state-sensitive effect. Guarding the freeze itself needs
+   * a CDP CPU-throttling environment or manual verification in a real
    * browser.
    *
-   * NOTE on #221's AC2 ("with `defaultViewport` removed from
-   * `FamilyTree.tsx`, this test fails -- verified by mutation, not by
-   * inspection"): AC2 is **not met by this test, as worded, and cannot be**.
-   * `zoomBefore` below is captured after `waitForCanvasSettled()`, i.e.
-   * after the auto-fit effect (`FamilyTree.tsx`) has already called
-   * `setViewport(..., MIN_ZOOM)` unconditionally -- it converges the
-   * settled viewport to the same value regardless of the initial
-   * `defaultViewport`. Mutation-verified: removing `defaultViewport` still
-   * leaves this test passing, because the wheel/depth-stepper checks below
-   * only observe state from that already-converged point onward. Reading
-   * `zoomBefore` earlier (before auto-fit settles) does not fix this either
-   * -- interactivity is orthogonal to the initial viewport value, so an
-   * earlier read would still pass under the mutation.
-   * The only assertion in this spec that is genuinely mutation-sensitive to
+   * AC2 ("with `defaultViewport` removed, this test fails -- verified by
+   * mutation"): NOT met, and cannot be as worded. `zoomBefore` below is read
+   * after `waitForCanvasSettled()`, by which point the auto-fit effect in
+   * `FamilyTree.tsx` has already forced the viewport to `MIN_ZOOM`
+   * regardless of the initial `defaultViewport` (mutation-verified). The
+   * only assertion in this spec that's genuinely mutation-sensitive to
    * `defaultViewport` is `renders only dot-variant nodes on first paint,
-   * never full` above (AC5), which does fail under this mutation. AC2 as
-   * literally worded is therefore unsatisfiable by any test written after
-   * `waitForCanvasSettled()`; see the decision request posted on #221 for
-   * sign-off on relaxing it. Guarding it for real needs the CDP
-   * CPU-throttling spike noted above, applied to a *different* probe than
-   * this one.
+   * never full` above (AC5). Sign-off to relax AC2 to reflect that is
+   * requested on #221 and still pending as of this commit.
    */
   test('wheel zoom and depth stepper remain interactive at DEFAULT_HOPS', async ({ page }) => {
     await page.goto('/');

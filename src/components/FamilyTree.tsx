@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo, useDeferredValue } from 'react'
 import type React from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -2197,8 +2197,26 @@ function FlowCanvas({
    * variant below, not this raw float, reaches node data.
    */
   const zoom = useStore(selectZoom)
-  /** Discrete LOD variant for the current zoom, memoised so it only changes at a threshold crossing. */
-  const lodVariant = useMemo(() => getPersonLodVariant(zoom), [zoom])
+  /**
+   * Deferred copy of {@link zoom} (React 19 `useDeferredValue`) — see issue #271.
+   * A threshold crossing swaps `lodVariant` for all ~370 person nodes at once;
+   * profiling a zoom-control click burst (CDP trace, `Tracing.start` with the
+   * V8 CPU profiler category) showed the cost is real DOM/element creation for
+   * the `full` variant's richer markup (`React.createElement` self time — the
+   * single largest non-idle contributor in the trace, well above any one
+   * app-level function), committed synchronously once per crossing. Rapid
+   * clicks queue several of these full-tree commits back-to-back with no
+   * chance for the main thread to answer input or `Runtime.evaluate` in
+   * between, which is the stall in #271. Deferring `zoom` — instead of
+   * subscribing `lodVariant` straight to it — lets React keep rendering the
+   * previous (cheaper) variant while it computes the new one at background
+   * priority, coalescing a rapid click burst into far fewer committed
+   * crossings and yielding the main thread between them, without changing the
+   * variant nodes eventually settle on.
+   */
+  const deferredZoom = useDeferredValue(zoom)
+  /** Discrete LOD variant for the current (deferred) zoom, memoised so it only changes at a threshold crossing. */
+  const lodVariant = useMemo(() => getPersonLodVariant(deferredZoom), [deferredZoom])
   /**
    * `nodes` with the current {@link lodVariant} injected into person node data.
    * Memoised on `[nodes, lodVariant]` so a continuous zoom gesture only produces

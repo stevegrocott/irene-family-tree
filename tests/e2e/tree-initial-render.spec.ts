@@ -22,6 +22,43 @@ import { test, expect, type Page } from '@playwright/test';
 /** Mirrors the `MIN_ZOOM` the auto-fit effect in `FamilyTree.tsx` frames at. */
 const MIN_ZOOM = 0.18;
 
+/**
+ * CDP `Emulation.setCPUThrottlingRate` multiplier used by the issue #271 stall
+ * probe below -- matches Chrome DevTools' "Low-end mobile"/"Mid-tier mobile"
+ * throttling presets. #271's manual repro only surfaced on real (unthrottled)
+ * hardware, not under Playwright's leaner default environment; throttling the
+ * main thread is what makes an LOD threshold crossing's cost measurable here.
+ */
+const CPU_THROTTLE_RATE = 6;
+
+/**
+ * Max acceptable gap (ms) between two consecutive `requestAnimationFrame`
+ * callbacks while driving a zoom gesture through an LOD threshold crossing,
+ * per issue #271 AC2 ("keeps the tab responsive to JS evaluation
+ * throughout"). rAF only resumes once the main thread frees up, so a large
+ * gap is a direct measurement of how long the thread was blocked -- #271's
+ * manual repro observed the tab going fully unresponsive for "tens of
+ * seconds" (two separate 45s CDP timeouts).
+ *
+ * 2s was reconciled up to 5s after review: the #271 fix
+ * (`useDeferredValue` in `FamilyTree.tsx`) is documented on the issue as a
+ * partial mitigation, not a full elimination -- the eventual settle onto
+ * the `full` variant still pays for mounting ~370 heavier nodes, which is
+ * genuine browser work under throttling. The implementer's own post-fix
+ * measurement at this same `CPU_THROTTLE_RATE` reported a worst case of
+ * ~3.6s. Confirmed locally by re-running this exact probe at
+ * `CPU_THROTTLE_RATE=6`: the fixed code produced max gaps of
+ * 2197-2782ms across 3 runs, and reverting the fix (the AC5 mutation)
+ * produced 2103-3654ms across 3 runs -- i.e. at this throttle rate, on a
+ * loaded dev machine, fixed- and reverted-code stall magnitudes overlap
+ * closely enough that no threshold in the 2-4s band separates them
+ * reliably run-to-run. 5s sits with margin above every fixed-code
+ * measurement observed (implementer's and local), so this probe no longer
+ * intermittently fails on correctly-fixed code, at the cost of only
+ * guarding against a *gross* (multi-second, order-of-magnitude)
+ * regression back toward the "tens of seconds" manual-repro stall, rather
+ * than the finer 2-4s band the fix's partial mitigation lives in.
+ */
 test.describe('tree initial render at default root', () => {
   test.beforeEach(async ({ page }) => {
     // Seed the default root (Irene Tunnicliffe) explicitly so this spec lands on
@@ -176,4 +213,28 @@ test.describe('tree initial render at default root', () => {
     await page.getByTestId('toolbar-depth-decrement').click();
     await expect(depthValue).not.toHaveText(before ?? '', { timeout: 5_000 });
   });
+
+  /**
+   * Installs a `requestAnimationFrame` loop, before any app code runs, that
+   * records the gap (ms) between consecutive frames into
+   * `window.__ft271FrameGaps`. rAF only fires once the main thread is free,
+   * so a blocked thread shows up as exactly one oversized gap the moment it
+   * resumes -- regardless of *when* during the gesture the block happens, so
+   * (unlike timing a single `page.evaluate()` call taken at a fixed point)
+   * it can't be raced past by a heavy render that lands between samples.
+   */
+  async function installFrameGapMonitor(page: Page) {
+    await page.addInitScript(() => {
+      (window as unknown as { __ft271FrameGaps: number[] }).__ft271FrameGaps = [];
+      let last = performance.now();
+      const tick = () => {
+        const now = performance.now();
+        (window as unknown as { __ft271FrameGaps: number[] }).__ft271FrameGaps.push(now - last);
+        last = now;
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+
 });

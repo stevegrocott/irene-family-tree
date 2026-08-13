@@ -61,6 +61,8 @@ export function findMatch(name: string, query: string): NameMatch | null {
  */
 export default function SearchOverlay({ open, persons, onSelect, onClose }: SearchOverlayProps) {
   const [query, setQuery] = useState('')
+  // -1 means no row is keyboard-active; set by ArrowDown/ArrowUp (§4.3).
+  const [activeIndex, setActiveIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null)
 
@@ -70,7 +72,10 @@ export default function SearchOverlay({ open, persons, onSelect, onClose }: Sear
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) {
     setWasOpen(open)
-    if (open) setQuery('')
+    if (open) {
+      setQuery('')
+      setActiveIndex(-1)
+    }
   }
 
   useEffect(() => {
@@ -105,9 +110,17 @@ export default function SearchOverlay({ open, persons, onSelect, onClose }: Sear
     : persons.slice(0, MAX_EMPTY_QUERY_RESULTS)
   const showNoResults = trimmedQuery.length > 0 && results.length === 0
 
+  /** ArrowUp/ArrowDown move the keyboard-active row; Enter selects it (§4.3, §7). */
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && results.length > 0) {
-      onSelect(results[0].gedcomId)
+    if (results.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIndex(i => Math.min(i + 1, results.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIndex(i => Math.max(i - 1, 0))
+    } else if (e.key === 'Enter') {
+      onSelect(results[activeIndex >= 0 ? activeIndex : 0].gedcomId)
     }
   }
 
@@ -133,10 +146,14 @@ export default function SearchOverlay({ open, persons, onSelect, onClose }: Sear
           <input
             ref={inputRef}
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => { setQuery(e.target.value); setActiveIndex(-1) }}
             onKeyDown={handleInputKeyDown}
             placeholder="Search by name…"
             aria-label="Search by name"
+            role="combobox"
+            aria-expanded={results.length > 0}
+            aria-controls="search-overlay-results"
+            aria-activedescendant={activeIndex >= 0 ? `search-overlay-result-${results[activeIndex].gedcomId}` : undefined}
             data-testid="search-overlay-input"
             className="flex-1 h-[52px] bg-transparent text-ink [font:var(--ft-body)] placeholder-ink-3 focus:outline-none"
           />
@@ -159,21 +176,36 @@ export default function SearchOverlay({ open, persons, onSelect, onClose }: Sear
             No one matches “{trimmedQuery}”.
           </p>
         ) : (
-          <ul data-testid="search-overlay-results" className="max-h-[60vh] overflow-y-auto py-2 list-none">
-            {results.map(p => {
+          <ul
+            id="search-overlay-results"
+            role="listbox"
+            data-testid="search-overlay-results"
+            className="max-h-[60vh] overflow-y-auto py-2 list-none"
+          >
+            {results.map((p, i) => {
+              const isActive = i === activeIndex
               const match = findMatch(p.name, trimmedQuery)
               return (
-                <li key={p.gedcomId}>
+                <li key={p.gedcomId} role="presentation">
                   <button
                     type="button"
+                    id={`search-overlay-result-${p.gedcomId}`}
+                    role="option"
+                    aria-selected={isActive}
                     onClick={() => onSelect(p.gedcomId)}
                     data-testid="search-overlay-result"
-                    className="w-full min-h-[48px] flex items-center gap-3 pl-3 pr-4 text-left hover:bg-surface-1 focus:outline-none focus:bg-surface-1 transition-colors"
+                    className={`w-full min-h-[48px] flex items-center gap-3 pl-3 pr-4 text-left hover:bg-surface-1 focus:outline-none focus:bg-surface-1 transition-colors ${
+                      isActive ? 'bg-[var(--ft-accent-soft)]' : ''
+                    }`}
                   >
                     <span
                       aria-hidden="true"
                       className="w-0.5 self-stretch my-1 rounded-[var(--ft-r-sm)] flex-shrink-0"
-                      style={{ backgroundColor: SEX_AVATAR_BG[p.sex ?? 'default'] ?? SEX_AVATAR_BG.default }}
+                      style={{
+                        backgroundColor: isActive
+                          ? 'var(--ft-accent)'
+                          : (SEX_AVATAR_BG[p.sex ?? 'default'] ?? SEX_AVATAR_BG.default),
+                      }}
                     />
                     <span className="min-w-0 flex-1 block font-serif font-medium text-ink truncate">
                       {match ? (

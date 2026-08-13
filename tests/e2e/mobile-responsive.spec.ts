@@ -361,7 +361,7 @@ test.describe('mobile responsive toolbar and search', () => {
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth)
   })
 
-  test('toolbar stays within the viewport at 1010px and 800px with realistic content', async ({
+  test('toolbar stays within the viewport at 1010px, 800px, and the 640-800px band with realistic content', async ({
     page,
   }) => {
     // Issue #190: with real data the toolbar is a fixed ~1067px row, clipped
@@ -381,10 +381,19 @@ test.describe('mobile responsive toolbar and search', () => {
     await expect(toolbar).toBeVisible({ timeout: 15_000 })
     const notice = page.getByTestId('toolbar-truncation-notice')
     await expect(notice).toBeVisible()
+    const appName = page.getByTestId('toolbar-app-name')
+    const viewing = page.getByTestId('toolbar-viewing')
 
     const baselineBox = await toolbar.boundingBox()
     expect(baselineBox).not.toBeNull()
     const baselineHeight = baselineBox!.height
+
+    // Issue #275: at the wide baseline (well above the 800px reappearance
+    // point) the app name is visible and the viewing label's max-width is
+    // unbounded — the `min-[800px]:inline` / `min-[800px]:max-w-none`
+    // classes are in effect.
+    await expect(appName).toBeVisible()
+    expect(await viewing.evaluate((el) => getComputedStyle(el).maxWidth)).toBe('none')
 
     // AC1: at 1010×780 — above Tailwind's `sm` (640px) breakpoint, where
     // `sm:flex-nowrap` applies, so the row cannot escape by wrapping — the
@@ -394,6 +403,11 @@ test.describe('mobile responsive toolbar and search', () => {
     expect(toolbarBoxAt1010).not.toBeNull()
     expect(toolbarBoxAt1010!.x).toBeGreaterThanOrEqual(0)
     expect(toolbarBoxAt1010!.x + toolbarBoxAt1010!.width).toBeLessThanOrEqual(1010 + LAYOUT_TOLERANCE_PX)
+
+    // Issue #275: still above 800px — the app name stays visible and the
+    // viewing label stays unbounded.
+    await expect(appName).toBeVisible()
+    expect(await viewing.evaluate((el) => getComputedStyle(el).maxWidth)).toBe('none')
 
     // AC3: height stays within ~1.3x the wide-viewport baseline — #187's
     // single-row fix must not regress while the width bound is added.
@@ -413,6 +427,46 @@ test.describe('mobile responsive toolbar and search', () => {
     // AC4: the truncation warning (or its node count) remains available at
     // the narrowest width too.
     await expect(notice).toBeVisible()
+
+    // Issue #275: exactly at the 800px breakpoint boundary — `min-[800px]:`
+    // applies at min-width:800px, so the app name is still visible and the
+    // viewing label is still unbounded here.
+    await expect(appName).toBeVisible()
+    expect(await viewing.evaluate((el) => getComputedStyle(el).maxWidth)).toBe('none')
+
+    // Issue #275: 640-800px is the previously-uncovered band where
+    // `sm:flex-nowrap` (640px) is already active — so the row cannot escape
+    // by wrapping — but nothing above sampled a width below 800px. #256
+    // separately covers 360/390px, leaving this band the only gap. Sample
+    // 780px, 700px, and 660px so the fix is verified across the band rather
+    // than at a single point.
+    for (const width of [780, 700, 660]) {
+      await page.setViewportSize({ width, height: 780 })
+
+      // AC1/AC2: neither edge of the toolbar is clipped at this width.
+      const toolbarBoxInBand = await toolbar.boundingBox()
+      expect(toolbarBoxInBand).not.toBeNull()
+      expect(toolbarBoxInBand!.x).toBeGreaterThanOrEqual(0)
+      expect(toolbarBoxInBand!.x + toolbarBoxInBand!.width).toBeLessThanOrEqual(width + LAYOUT_TOLERANCE_PX)
+
+      // AC1: the page itself does not scroll horizontally at this width.
+      const overflowInBand = await getHorizontalOverflow(page)
+      expect(overflowInBand.scrollWidth).toBeLessThanOrEqual(overflowInBand.clientWidth)
+
+      // AC4: the truncation warning still renders (ellipsised, not collapsed).
+      await expect(notice).toBeVisible()
+
+      // Issue #275: below 800px the app name is dropped entirely (not just
+      // truncated) and the viewing label is bounded to 7rem with ellipsis
+      // truncation rather than left unbounded — verify both directly rather
+      // than relying only on the toolbar's aggregate bounding box.
+      await expect(appName).toBeHidden()
+      expect(await viewing.evaluate((el) => getComputedStyle(el).maxWidth)).toBe('112px')
+      expect(await viewing.evaluate((el) => getComputedStyle(el).textOverflow)).toBe('ellipsis')
+      const viewingBoxInBand = await viewing.boundingBox()
+      expect(viewingBoxInBand).not.toBeNull()
+      expect(viewingBoxInBand!.width).toBeLessThanOrEqual(112 + LAYOUT_TOLERANCE_PX)
+    }
   })
 
   test('toolbar depth stepper and search result rows meet the 44px touch target minimum', async ({

@@ -60,7 +60,7 @@ function getHorizontalOverflow(page: Page) {
 
 // Subpixel rendering and font metric variance; ensures element bounding-box assertions stay within expected bounds.
 const LAYOUT_TOLERANCE_PX = 4
-// Responsive viewport widths: mobile, tablet, desktop.
+// Responsive viewport widths: tablet, desktop. (Mobile is NARROW_VIEWPORT below.)
 const RESPONSIVE_BREAKPOINTS = [700, 1280]
 const NARROW_VIEWPORT = 360
 
@@ -143,6 +143,9 @@ test.describe('/stats — responsive layout (issue #281)', () => {
     const backLink = page.getByTestId('stats-back-link')
     await expect(heading).toBeVisible()
     await expect(backLink).toBeVisible()
+
+    const overflow = await getHorizontalOverflow(page)
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth)
 
     const [headingBox, backLinkBox] = await Promise.all([heading.boundingBox(), backLink.boundingBox()])
     expect(headingBox && backLinkBox).toBeTruthy()

@@ -19,6 +19,7 @@ export interface SearchOverlayPerson {
   name: string
   sex: string | null
   birthYear?: string | null
+  birthPlace?: string | null
 }
 
 /** Props for {@link SearchOverlay}. */
@@ -94,8 +95,13 @@ export default function SearchOverlay({ open, persons, onSelect, onClose }: Sear
   if (!open) return null
 
   const trimmedQuery = query.trim()
+  const lowerQuery = trimmedQuery.toLowerCase()
   const results = trimmedQuery
-    ? persons.filter(p => p.name.toLowerCase().includes(trimmedQuery.toLowerCase())).slice(0, MAX_RESULTS)
+    ? persons.filter(p =>
+        p.name.toLowerCase().includes(lowerQuery) ||
+        (p.birthPlace?.toLowerCase() ?? '').includes(lowerQuery) ||
+        (p.birthYear?.toLowerCase() ?? '').includes(lowerQuery)
+      ).slice(0, MAX_RESULTS)
     : persons.slice(0, MAX_EMPTY_QUERY_RESULTS)
   const showNoResults = trimmedQuery.length > 0 && results.length === 0
 

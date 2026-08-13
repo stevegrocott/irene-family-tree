@@ -101,7 +101,7 @@ function ChartSection({
 }) {
   return (
     <section className="bg-surface border border-line rounded-panel p-5 shadow-[var(--ft-shadow-1)]">
-      <h2 className="text-ink text-sm font-semibold mb-4">{title}</h2>
+      <h2 className="text-ink [font:var(--ft-title)] mb-4">{title}</h2>
       <BarChart testId={testId} items={items} />
     </section>
   )
@@ -171,7 +171,7 @@ export default function StatsPage() {
     <main data-testid="stats-page" className="min-h-screen w-full bg-canvas px-4 py-8 sm:px-8">
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="flex items-center justify-between">
-          <h1 className="text-ink text-xl font-semibold tracking-wide">Family Statistics</h1>
+          <h1 className="text-ink [font:var(--ft-display)]">Family Statistics</h1>
           <BackLink />
         </div>
 

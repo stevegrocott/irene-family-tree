@@ -50,6 +50,16 @@ async function gotoStats(page: Page): Promise<void> {
   await expect(page.getByTestId('stats-page')).toBeVisible()
 }
 
+/** Measures document scroll/client width to detect horizontal overflow. */
+function getHorizontalOverflow(page: Page) {
+  return page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }))
+}
+
+const LAYOUT_TOLERANCE_PX = 4
+
 test.describe('/stats — design system §0/§1/§2', () => {
   test('the page heading uses the --ft-display serif scale, not a sans family', async ({ page }) => {
     await gotoStats(page)
@@ -100,5 +110,46 @@ test.describe('/stats — design system §0/§1/§2', () => {
     // above, but assert `none` explicitly so a token colour layered under a
     // leftover gradient utility doesn't slip through.
     expect(fill!.backgroundImage).toBe('none')
+  })
+})
+
+test.describe('/stats — responsive layout (issue #281)', () => {
+  // The h1 moved to the --ft-display serif scale (28/700, larger than the
+  // Geist default it replaced) in issue #277. A wider heading is more likely
+  // to force the header row past the viewport edge, so re-check the no-scroll
+  // invariant at the app's narrow, mid, and wide reference widths.
+  for (const width of [360, 700, 1280]) {
+    test(`no horizontal scroll at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 })
+      await gotoStats(page)
+
+      const overflow = await getHorizontalOverflow(page)
+      expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth)
+    })
+  }
+
+  test('the header row (h1 + BackLink) wraps or truncates rather than overflowing at 360px', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 800 })
+    await gotoStats(page)
+
+    const heading = page.getByRole('heading', { level: 1, name: 'Family Statistics' })
+    const backLink = page.getByTestId('stats-back-link')
+    await expect(heading).toBeVisible()
+    await expect(backLink).toBeVisible()
+
+    const [headingBox, backLinkBox] = await Promise.all([heading.boundingBox(), backLink.boundingBox()])
+    expect(headingBox).not.toBeNull()
+    expect(backLinkBox).not.toBeNull()
+
+    // Whether the row wraps (BackLink drops below the heading) or the
+    // heading truncates, neither element's right edge should escape the
+    // 360px viewport and force a scrollbar.
+    expect(headingBox!.x + headingBox!.width).toBeLessThanOrEqual(360 + LAYOUT_TOLERANCE_PX)
+    expect(backLinkBox!.x + backLinkBox!.width).toBeLessThanOrEqual(360 + LAYOUT_TOLERANCE_PX)
+
+    const overflow = await getHorizontalOverflow(page)
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth)
   })
 })

@@ -65,7 +65,7 @@ function BarChart({ items, testId }: { items: BarItem[]; testId: string }) {
           </span>
           <div className="flex-1 h-3.5 bg-surface-2 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 rounded-full"
+              className="h-full bg-accent rounded-full"
               style={{ width: `${max > 0 ? (item.value / max) * 100 : 0}%` }}
             />
           </div>

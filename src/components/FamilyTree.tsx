@@ -29,7 +29,6 @@ import 'reactflow/dist/style.css'
 
 import PersonNode from '@/components/PersonNode'
 import UnionNode from '@/components/UnionNode'
-import SearchBar from '@/components/SearchBar'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import EmptyState from '@/components/EmptyState'
 import SearchOverlay from '@/components/SearchOverlay'
@@ -2164,19 +2163,16 @@ function GenerationBands({ generationLevels }: { generationLevels: GenerationLev
  *
  * @param {string} rootId - GEDCOM ID of the tree root person
  * @param {Function} onSelectRoot - Called when user selects a new root person
- * @param {Person[]} persons - Available people for search/selection
  */
 function FlowCanvas({
   rootId,
   onSelectRoot,
-  persons,
   treeVersion,
   initialUrlState,
   view,
 }: {
   rootId: string
   onSelectRoot: (id: string) => void
-  persons: Person[]
   treeVersion: number
   initialUrlState: ReturnType<typeof parseTreeUrlState>
   /** Current display mode ('walk' | 'split' | 'tree'), included in the synced URL and share links. */
@@ -2593,7 +2589,6 @@ function FlowCanvas({
 
   return (
     <>
-      <SearchBar onSelect={onSelectRoot} persons={persons} />
       <Toolbar
         nodes={nodes}
         rootName={rootName}
@@ -2914,7 +2909,6 @@ export default function FamilyTree() {
             <FlowCanvas
               rootId={rootId}
               onSelectRoot={handleSelectRoot}
-              persons={persons}
               treeVersion={treeVersion}
               initialUrlState={initialUrlState}
               view={view}

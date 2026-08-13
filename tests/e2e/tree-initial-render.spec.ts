@@ -273,19 +273,18 @@ test.describe('tree initial render at default root', () => {
         await sleep(3000);
         observer.disconnect();
 
-        const viewport = document.querySelector('.react-flow__viewport');
-        const scale = viewport?.getAttribute('style')?.match(/scale\(([\d.]+)\)/);
         return {
           maxLongTask: longTasks.length ? Math.max(...longTasks) : 0,
           longTaskCount: longTasks.length,
-          zoom: scale ? Number(scale[1]) : null,
         };
       },
       { clicks: ZOOM_BURST_CLICKS, delayMs: ZOOM_BURST_CLICK_DELAY_MS }
     );
 
     // A burst that never changed zoom would pass the assertion vacuously.
-    expect(measurement.zoom, 'burst must actually have zoomed in').toBeGreaterThan(MIN_ZOOM);
+    expect(await readCanvasZoom(page), 'burst must actually have zoomed in').toBeGreaterThan(
+      MIN_ZOOM
+    );
     expect(
       measurement.longTaskCount,
       'no long tasks at all means the observer never sampled the burst'

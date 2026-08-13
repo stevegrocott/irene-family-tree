@@ -164,6 +164,24 @@ describe('SearchOverlay', () => {
       expect(list).toHaveLength(1)
       expect(list[0].textContent).toContain('Bob Green')
     })
+
+    it('does not match a person whose birth place differs from the query', async () => {
+      renderOverlay()
+      const input = container.querySelector('input')!
+      await typeQuery(input, 'Sheffield')
+      const list = results()
+      expect(list.map(r => r.textContent)).not.toEqual(
+        expect.arrayContaining([expect.stringContaining('Bob Green')])
+      )
+    })
+
+    it('does not throw when filtering a person with a null birth place', async () => {
+      renderOverlay()
+      const input = container.querySelector('input')!
+      await typeQuery(input, 'Bob')
+      expect(results()).toHaveLength(1)
+      expect(results()[0].textContent).toContain('Bob Green')
+    })
   })
 
   describe('no-match copy', () => {

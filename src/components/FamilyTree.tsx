@@ -242,7 +242,14 @@ export function Toolbar({
         </button>
         <span
         data-testid="toolbar-app-name"
-        className="text-xs text-white font-semibold select-none pr-4 border-r border-white/20 tracking-wide flex-shrink-0 whitespace-nowrap"
+        // Issue #275: between the `sm` breakpoint (640px, where `sm:flex-nowrap`
+        // forbids wrapping) and ~800px, the toolbar's unshrinkable content
+        // overflows both viewport edges. The app name is pure branding — it
+        // carries no functional information the rest of the toolbar doesn't
+        // already convey — so it's the safest item to drop entirely below
+        // ~800px rather than fight for space with the stepper/counts that do
+        // carry the toolbar's function.
+        className="hidden min-[800px]:inline text-xs text-white font-semibold select-none pr-4 border-r border-white/20 tracking-wide flex-shrink-0 whitespace-nowrap"
       >
         {APP_NAME}
       </span>
@@ -273,7 +280,17 @@ export function Toolbar({
       <span data-testid="toolbar-gen-down" className="text-xs text-white/60 select-none flex-shrink-0 whitespace-nowrap">
         <span className="text-white font-medium">{descendants}</span> gen down
       </span>
-      <span data-testid="toolbar-viewing" className="text-xs text-white/60 select-none flex-shrink-0 whitespace-nowrap">
+      <span
+        data-testid="toolbar-viewing"
+        // Issue #275: the other widest non-essential contributor (see the
+        // app-name comment above) between `sm` (640px) and ~800px. Unlike the
+        // app name this still carries useful context, so instead of hiding it
+        // outright it's bounded to a max-width with ellipsis truncation below
+        // ~800px — the same one-line-with-ellipsis treatment already used for
+        // `toolbar-truncation-notice` (#190) — and unbounded again at ~800px
+        // and up, matching this row's existing behavior there.
+        className="text-xs text-white/60 select-none flex-shrink-0 whitespace-nowrap overflow-hidden text-ellipsis max-w-[9rem] min-[800px]:max-w-none"
+      >
         VIEWING: <span className="text-white font-medium">{rootName}</span>
       </span>
       <div

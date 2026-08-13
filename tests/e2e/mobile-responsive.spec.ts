@@ -361,7 +361,7 @@ test.describe('mobile responsive toolbar and search', () => {
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth)
   })
 
-  test('toolbar stays within the viewport at 1010px and 800px with realistic content', async ({
+  test('toolbar stays within the viewport at 1010px, 800px, and the 640-800px band with realistic content', async ({
     page,
   }) => {
     // Issue #190: with real data the toolbar is a fixed ~1067px row, clipped
@@ -413,6 +413,29 @@ test.describe('mobile responsive toolbar and search', () => {
     // AC4: the truncation warning (or its node count) remains available at
     // the narrowest width too.
     await expect(notice).toBeVisible()
+
+    // Issue #275: 640-800px is the previously-uncovered band where
+    // `sm:flex-nowrap` (640px) is already active — so the row cannot escape
+    // by wrapping — but nothing above sampled a width below 800px. #256
+    // separately covers 360/390px, leaving this band the only gap. Sample
+    // 780px, 700px, and 660px so the fix is verified across the band rather
+    // than at a single point.
+    for (const width of [780, 700, 660]) {
+      await page.setViewportSize({ width, height: 780 })
+
+      // AC1/AC2: neither edge of the toolbar is clipped at this width.
+      const toolbarBoxInBand = await toolbar.boundingBox()
+      expect(toolbarBoxInBand).not.toBeNull()
+      expect(toolbarBoxInBand!.x).toBeGreaterThanOrEqual(0)
+      expect(toolbarBoxInBand!.x + toolbarBoxInBand!.width).toBeLessThanOrEqual(width + LAYOUT_TOLERANCE_PX)
+
+      // AC1: the page itself does not scroll horizontally at this width.
+      const overflowInBand = await getHorizontalOverflow(page)
+      expect(overflowInBand.scrollWidth).toBeLessThanOrEqual(overflowInBand.clientWidth)
+
+      // AC4: the truncation warning still renders (ellipsised, not collapsed).
+      await expect(notice).toBeVisible()
+    }
   })
 
   test('toolbar depth stepper and search result rows meet the 44px touch target minimum', async ({

@@ -10,9 +10,9 @@ import { createRoot } from 'react-dom/client'
 import SearchOverlay, { type SearchOverlayPerson } from './SearchOverlay'
 
 const PERSONS: SearchOverlayPerson[] = [
-  { gedcomId: '@I1@', name: 'Alice Brown', sex: 'F', birthYear: '1850' },
-  { gedcomId: '@I2@', name: 'Bob Green', sex: 'M', birthYear: '1920' },
-  { gedcomId: '@I3@', name: 'Charlie White', sex: 'U', birthYear: null },
+  { gedcomId: '@I1@', name: 'Alice Brown', sex: 'F', birthYear: '1850', birthPlace: 'Sheffield' },
+  { gedcomId: '@I2@', name: 'Bob Green', sex: 'M', birthYear: '1920', birthPlace: null },
+  { gedcomId: '@I3@', name: 'Charlie White', sex: 'U', birthYear: null, birthPlace: null },
 ]
 
 const MANY_PERSONS: SearchOverlayPerson[] = Array.from({ length: 12 }, (_, i) => ({
@@ -143,6 +143,42 @@ describe('SearchOverlay', () => {
       renderOverlay()
       const input = container.querySelector('input')!
       await typeQuery(input, '  bob  ')
+      expect(results()).toHaveLength(1)
+      expect(results()[0].textContent).toContain('Bob Green')
+    })
+
+    it('filters results by case-insensitive substring match against birth place', async () => {
+      renderOverlay()
+      const input = container.querySelector('input')!
+      await typeQuery(input, 'sheff')
+      const list = results()
+      expect(list).toHaveLength(1)
+      expect(list[0].textContent).toContain('Alice Brown')
+    })
+
+    it('filters results by substring match against birth year', async () => {
+      renderOverlay()
+      const input = container.querySelector('input')!
+      await typeQuery(input, '1920')
+      const list = results()
+      expect(list).toHaveLength(1)
+      expect(list[0].textContent).toContain('Bob Green')
+    })
+
+    it('does not match a person whose birth place differs from the query', async () => {
+      renderOverlay()
+      const input = container.querySelector('input')!
+      await typeQuery(input, 'Sheffield')
+      const list = results()
+      expect(list.map(r => r.textContent)).not.toEqual(
+        expect.arrayContaining([expect.stringContaining('Bob Green')])
+      )
+    })
+
+    it('does not throw when filtering a person with a null birth place', async () => {
+      renderOverlay()
+      const input = container.querySelector('input')!
+      await typeQuery(input, 'Bob')
       expect(results()).toHaveLength(1)
       expect(results()[0].textContent).toContain('Bob Green')
     })

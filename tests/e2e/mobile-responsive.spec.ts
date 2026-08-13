@@ -170,10 +170,16 @@ async function openMobileToolbar(page: Page) {
   await expect(page.getByTestId('toolbar')).toBeVisible()
 }
 
-/** Taps the collapsed search icon button to reveal the search panel below the `sm` breakpoint. */
+/**
+ * Taps the `viewer-shell-search` icon button to open the `SearchOverlay`.
+ *
+ * Issue #276 replaced the floating `SearchBar` (`search-toggle` /
+ * `search-panel`) with the single ⌘K `SearchOverlay` as the one search
+ * affordance — this helper opens that overlay instead.
+ */
 async function openMobileSearch(page: Page) {
-  await page.getByTestId('search-toggle').tap()
-  await expect(page.getByTestId('search-panel')).toBeVisible()
+  await page.getByTestId('viewer-shell-search').tap()
+  await expect(page.getByTestId('search-overlay-panel')).toBeVisible()
 }
 
 /**
@@ -321,42 +327,38 @@ test.describe('mobile responsive toolbar and search', () => {
     await mockPersonsAndTree(page, [mockPerson], mockTreeResponse)
     await gotoViewer(page, mockPerson.gedcomId)
 
-    // Below `sm` (640px) both start collapsed behind icon buttons (issue #202).
+    // Below `sm` (640px) the toolbar starts collapsed behind an icon button
+    // (issue #202); the search trigger (`viewer-shell-search`) is icon-only
+    // at this width unconditionally (issue #276/#256).
     await expect(page.getByTestId('toolbar-toggle')).toBeVisible({ timeout: 15_000 })
     await openMobileToolbar(page)
     await openMobileSearch(page)
 
     const toolbar = page.getByTestId('toolbar')
-    const searchPanel = page.getByTestId('search-panel')
-    const searchInput = page.getByTestId('search-input')
-    await expect(searchInput).toBeVisible()
+    const searchOverlayPanel = page.getByTestId('search-overlay-panel')
+    const searchOverlayInput = page.getByTestId('search-overlay-input')
+    await expect(searchOverlayInput).toBeVisible()
 
     const viewport = page.viewportSize()
     expect(viewport).not.toBeNull()
     const viewportWidth = viewport!.width
 
-    const [toolbarBox, panelBox, searchBox, overflow] = await Promise.all([
+    const [toolbarBox, panelBox, overflow] = await Promise.all([
       toolbar.boundingBox(),
-      searchPanel.boundingBox(),
-      searchInput.boundingBox(),
+      searchOverlayPanel.boundingBox(),
       getHorizontalOverflow(page),
     ])
     expect(toolbarBox).not.toBeNull()
     expect(panelBox).not.toBeNull()
-    expect(searchBox).not.toBeNull()
 
-    // Both floating panels stay fully inside the viewport width.
+    // Both the toolbar and the search overlay's panel stay fully inside the
+    // viewport width — the overlay is centred with `px-4` side margins
+    // rather than anchored like the old floating SearchBar, so it's checked
+    // against its own box rather than the removed search-input's.
     expect(toolbarBox!.x).toBeGreaterThanOrEqual(0)
     expect(toolbarBox!.x + toolbarBox!.width).toBeLessThanOrEqual(viewportWidth + LAYOUT_TOLERANCE_PX)
-    expect(searchBox!.x).toBeGreaterThanOrEqual(0)
-    expect(searchBox!.x + searchBox!.width).toBeLessThanOrEqual(viewportWidth + LAYOUT_TOLERANCE_PX)
-
-    // The search panel spans most of the available width rather than a fixed
-    // desktop-sized panel (w-64 = 256px would be much narrower than this).
-    // Measured on the panel, not the input: since #202 the input shares its row
-    // with a 44px close button, so the input alone is ~52px narrower.
-    expect(panelBox!.width).toBeGreaterThan(300)
-    expect(searchBox!.width).toBeGreaterThan(panelBox!.width - 100)
+    expect(panelBox!.x).toBeGreaterThanOrEqual(0)
+    expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(viewportWidth + LAYOUT_TOLERANCE_PX)
 
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth)
   })
@@ -469,7 +471,7 @@ test.describe('mobile responsive toolbar and search', () => {
     }
   })
 
-  test('toolbar depth stepper and search result rows meet the 44px touch target minimum', async ({
+  test('toolbar depth stepper, search trigger, and search result rows meet the 44px touch target minimum', async ({
     page,
   }) => {
     await mockPersonsAndTree(page, [mockPerson], mockTreeResponse)
@@ -491,10 +493,20 @@ test.describe('mobile responsive toolbar and search', () => {
     expect(decrementBox!.height).toBeGreaterThanOrEqual(44)
     expect(incrementBox!.height).toBeGreaterThanOrEqual(44)
 
+    // AC5: the single remaining search affordance (issue #276's
+    // `viewer-shell-search`, replacing the removed floating SearchBar) is
+    // icon-only below `sm` and must itself clear the 44px touch target.
+    const searchTrigger = page.getByTestId('viewer-shell-search')
+    await expect(searchTrigger).toBeVisible()
+    const searchTriggerBox = await searchTrigger.boundingBox()
+    expect(searchTriggerBox).not.toBeNull()
+    expect(searchTriggerBox!.height).toBeGreaterThanOrEqual(44)
+    expect(searchTriggerBox!.width).toBeGreaterThanOrEqual(44)
+
     await openMobileSearch(page)
-    const searchInput = page.getByTestId('search-input')
-    await searchInput.fill('Mobile')
-    const resultItem = page.getByTestId('search-result-item').first()
+    const searchOverlayInput = page.getByTestId('search-overlay-input')
+    await searchOverlayInput.fill('Mobile')
+    const resultItem = page.getByTestId('search-overlay-result').first()
     await expect(resultItem).toBeVisible()
     const resultBox = await resultItem.boundingBox()
     expect(resultBox).not.toBeNull()
@@ -516,27 +528,31 @@ test.describe('mobile chrome at 360x640', () => {
     await mockPersonsAndTree(page, [mockRealisticRootPerson], buildRealisticTreeResponse())
     await gotoViewer(page, mockRealisticRootPerson.gedcomId)
 
-    // AC1/AC2: below `sm` both chrome panels start collapsed behind icon buttons.
+    // AC1/AC2: below `sm` the toolbar starts collapsed behind an icon
+    // button, and the search trigger (`viewer-shell-search`, issue #276's
+    // replacement for the removed floating SearchBar's `search-toggle`) is
+    // icon-only unconditionally rather than expanding a floating panel.
     const toolbarToggle = page.getByTestId('toolbar-toggle')
-    const searchToggle = page.getByTestId('search-toggle')
+    const searchTrigger = page.getByTestId('viewer-shell-search')
     await expect(toolbarToggle).toBeVisible({ timeout: 15_000 })
-    await expect(searchToggle).toBeVisible()
+    await expect(searchTrigger).toBeVisible()
     await expect(page.getByTestId('toolbar')).toBeHidden()
-    await expect(page.getByTestId('search-panel')).toBeHidden()
+    await expect(page.getByTestId('search-overlay-panel')).toBeHidden()
 
-    // Both toggles clear the 44px touch-target floor.
-    const [toolbarToggleBox, searchToggleBox] = await Promise.all([
+    // Both clear the 44px touch-target floor.
+    const [toolbarToggleBox, searchTriggerBox] = await Promise.all([
       toolbarToggle.boundingBox(),
-      searchToggle.boundingBox(),
+      searchTrigger.boundingBox(),
     ])
     expect(toolbarToggleBox).not.toBeNull()
-    expect(searchToggleBox).not.toBeNull()
+    expect(searchTriggerBox).not.toBeNull()
     expect(toolbarToggleBox!.height).toBeGreaterThanOrEqual(44)
     expect(toolbarToggleBox!.width).toBeGreaterThanOrEqual(44)
-    expect(searchToggleBox!.height).toBeGreaterThanOrEqual(44)
-    expect(searchToggleBox!.width).toBeGreaterThanOrEqual(44)
+    expect(searchTriggerBox!.height).toBeGreaterThanOrEqual(44)
+    expect(searchTriggerBox!.width).toBeGreaterThanOrEqual(44)
 
-    // AC7: expanding both sheets must not push the page wider than 360px.
+    // AC7: expanding the toolbar sheet and opening the search overlay must
+    // not push the page wider than 360px.
     await openMobileToolbar(page)
     await openMobileSearch(page)
 
@@ -545,7 +561,7 @@ test.describe('mobile chrome at 360x640', () => {
 
     const [toolbarBox, searchBox] = await Promise.all([
       page.getByTestId('toolbar').boundingBox(),
-      page.getByTestId('search-panel').boundingBox(),
+      page.getByTestId('search-overlay-panel').boundingBox(),
     ])
     expect(toolbarBox).not.toBeNull()
     expect(searchBox).not.toBeNull()

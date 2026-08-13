@@ -23,6 +23,14 @@ import { gotoViewer } from './helpers/viewer'
  *
  * Data: the API is mocked, as in every other spec here — the E2E dev server
  * has no Neo4j connection.
+ *
+ * Target: issue #276 removes the floating `SearchBar` (`search-input` /
+ * `search-result-item`) in favour of the single `⌘K` `SearchOverlay` as the
+ * one search affordance (§4.2). These specs are retargeted at the overlay's
+ * `search-overlay-input` / `search-overlay-result` testids and open it via
+ * the real `viewer-shell-search` button rather than the removed panel — the
+ * §4.3 assertions themselves are unchanged, since they were always written
+ * against computed style rather than the panel's markup.
  */
 
 /** Both surnames match "Gullett" so the substring-highlight case has a real target. */
@@ -57,9 +65,15 @@ test.describe('search results — design system §4.3', () => {
     })
 
     await gotoViewer(page, PERSONS[0].gedcomId)
-    await page.getByTestId('search-input').fill(QUERY)
 
-    results = page.getByTestId('search-result-item')
+    // Open the one search affordance (§4.2) through its real UI control,
+    // then drive the query through the overlay's own input.
+    await page.getByTestId('viewer-shell-search').click()
+    const overlayInput = page.getByTestId('search-overlay-input')
+    await expect(overlayInput).toBeVisible()
+    await overlayInput.fill(QUERY)
+
+    results = page.getByTestId('search-overlay-result')
     await expect(results.first()).toBeVisible()
   })
 
@@ -137,7 +151,7 @@ test.describe('search results — design system §4.3', () => {
   })
 
   test('ArrowDown makes a result keyboard-active with accent-soft and an accent leading bar', async ({ page }) => {
-    await page.getByTestId('search-input').press('ArrowDown')
+    await page.getByTestId('search-overlay-input').press('ArrowDown')
 
     // §4.3: "keyboard-active `--ft-accent-soft` with a 2 px accent leading bar".
     // §7 also requires a keyboard path to anything clickable.
@@ -149,5 +163,38 @@ test.describe('search results — design system §4.3', () => {
       'background-color',
       await resolved(page, 'var(--ft-accent)')
     )
+  })
+})
+
+test.describe('search affordance — regression guard', () => {
+  test('exactly one search affordance renders on the page (AC6)', async ({ page }) => {
+    await mockPersonsAndTree(page, PERSONS, {
+      nodes: [
+        {
+          id: 'node-@I1@',
+          type: 'person',
+          data: { ...PERSONS[0], isRoot: true },
+          position: { x: 0, y: 0 },
+        },
+      ],
+      edges: [],
+      totalNodes: 1,
+      truncated: false,
+    })
+
+    await gotoViewer(page, PERSONS[0].gedcomId)
+
+    // Issue #276 removes the floating SearchBar (`search-toggle` /
+    // `search-panel` / `search-input`) in favour of the single ⌘K
+    // `SearchOverlay` trigger (`viewer-shell-search`) as the one search
+    // affordance (§4.2). Regression guard mirroring #241's AuthButton
+    // duplicate-instance guard: assert the single-affordance invariant
+    // explicitly so a reintroduced second search entry point fails this test
+    // rather than silently coexisting alongside the overlay trigger.
+    const searchAffordances = page.locator(
+      '[data-testid="viewer-shell-search"], [data-testid="search-toggle"], [data-testid="search-panel"], [data-testid="search-input"], [data-testid="search-overlay-trigger"]'
+    )
+    await expect(searchAffordances).toHaveCount(1)
+    await expect(page.getByTestId('viewer-shell-search')).toBeVisible()
   })
 })

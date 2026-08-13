@@ -24,7 +24,6 @@ jest.mock('reactflow', () => ({
 jest.mock('reactflow/dist/style.css', () => ({}))
 jest.mock('@/components/PersonNode', () => ({ default: () => null }))
 jest.mock('@/components/UnionNode', () => ({ default: () => null }))
-jest.mock('@/components/SearchBar', () => ({ default: () => null }))
 jest.mock('@/lib/layout', () => ({
   applyDagreLayout: (nodes: unknown[], edges: unknown[]) => ({ nodes, edges }),
 }))

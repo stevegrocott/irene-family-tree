@@ -165,3 +165,36 @@ test.describe('search results — design system §4.3', () => {
     )
   })
 })
+
+test.describe('search affordance — regression guard', () => {
+  test('exactly one search affordance renders on the page (AC6)', async ({ page }) => {
+    await mockPersonsAndTree(page, PERSONS, {
+      nodes: [
+        {
+          id: 'node-@I1@',
+          type: 'person',
+          data: { ...PERSONS[0], isRoot: true },
+          position: { x: 0, y: 0 },
+        },
+      ],
+      edges: [],
+      totalNodes: 1,
+      truncated: false,
+    })
+
+    await gotoViewer(page, PERSONS[0].gedcomId)
+
+    // Issue #276 removes the floating SearchBar (`search-toggle` /
+    // `search-panel` / `search-input`) in favour of the single ⌘K
+    // `SearchOverlay` trigger (`viewer-shell-search`) as the one search
+    // affordance (§4.2). Regression guard mirroring #241's AuthButton
+    // duplicate-instance guard: assert the single-affordance invariant
+    // explicitly so a reintroduced second search entry point fails this test
+    // rather than silently coexisting alongside the overlay trigger.
+    const searchAffordances = page.locator(
+      '[data-testid="viewer-shell-search"], [data-testid="search-toggle"], [data-testid="search-panel"], [data-testid="search-input"], [data-testid="search-overlay-trigger"]'
+    )
+    await expect(searchAffordances).toHaveCount(1)
+    await expect(page.getByTestId('viewer-shell-search')).toBeVisible()
+  })
+})

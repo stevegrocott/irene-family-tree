@@ -120,7 +120,9 @@ export default function SearchOverlay({ open, persons, onSelect, onClose }: Sear
       e.preventDefault()
       setActiveIndex(i => Math.max(i - 1, 0))
     } else if (e.key === 'Enter') {
-      onSelect(results[activeIndex >= 0 ? activeIndex : 0].gedcomId)
+      // Clamp: `activeIndex` only resets on query change, so a shrinking
+      // `persons` list can leave it pointing past the end of `results`.
+      onSelect(results[activeIndex >= 0 ? Math.min(activeIndex, results.length - 1) : 0].gedcomId)
     }
   }
 
@@ -153,7 +155,7 @@ export default function SearchOverlay({ open, persons, onSelect, onClose }: Sear
             role="combobox"
             aria-expanded={results.length > 0}
             aria-controls="search-overlay-results"
-            aria-activedescendant={activeIndex >= 0 ? `search-overlay-result-${results[activeIndex].gedcomId}` : undefined}
+            aria-activedescendant={activeIndex >= 0 && activeIndex < results.length ? `search-overlay-result-${results[activeIndex].gedcomId}` : undefined}
             data-testid="search-overlay-input"
             className="flex-1 h-[52px] bg-transparent text-ink [font:var(--ft-body)] placeholder-ink-3 focus:outline-none"
           />

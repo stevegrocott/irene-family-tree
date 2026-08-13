@@ -289,7 +289,7 @@ export function Toolbar({
         // ~800px — the same one-line-with-ellipsis treatment already used for
         // `toolbar-truncation-notice` (#190) — and unbounded again at ~800px
         // and up, matching this row's existing behavior there.
-        className="text-xs text-white/60 select-none flex-shrink-0 whitespace-nowrap overflow-hidden text-ellipsis max-w-[9rem] min-[800px]:max-w-none"
+        className="text-xs text-white/60 select-none flex-shrink-0 whitespace-nowrap overflow-hidden text-ellipsis max-w-[7rem] min-[800px]:max-w-none"
       >
         VIEWING: <span className="text-white font-medium">{rootName}</span>
       </span>

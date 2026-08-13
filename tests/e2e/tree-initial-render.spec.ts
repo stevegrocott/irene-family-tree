@@ -23,42 +23,49 @@ import { test, expect, type Page } from '@playwright/test';
 const MIN_ZOOM = 0.18;
 
 /**
- * CDP `Emulation.setCPUThrottlingRate` multiplier used by the issue #271 stall
- * probe below -- matches Chrome DevTools' "Low-end mobile"/"Mid-tier mobile"
- * throttling presets. #271's manual repro only surfaced on real (unthrottled)
- * hardware, not under Playwright's leaner default environment; throttling the
- * main thread is what makes an LOD threshold crossing's cost measurable here.
- */
-const CPU_THROTTLE_RATE = 6;
-
-/**
- * Max acceptable gap (ms) between two consecutive `requestAnimationFrame`
- * callbacks while driving a zoom gesture through an LOD threshold crossing,
- * per issue #271 AC2 ("keeps the tab responsive to JS evaluation
- * throughout"). rAF only resumes once the main thread frees up, so a large
- * gap is a direct measurement of how long the thread was blocked -- #271's
- * manual repro observed the tab going fully unresponsive for "tens of
- * seconds" (two separate 45s CDP timeouts).
+ * Max acceptable duration (ms) of any single `longtask` while a zoom-control
+ * click burst drives the canvas through its LOD threshold crossings (issue
+ * #274, guarding the issue #271 `useDeferredValue` fix).
  *
- * 2s was reconciled up to 5s after review: the #271 fix
- * (`useDeferredValue` in `FamilyTree.tsx`) is documented on the issue as a
- * partial mitigation, not a full elimination -- the eventual settle onto
- * the `full` variant still pays for mounting ~370 heavier nodes, which is
- * genuine browser work under throttling. The implementer's own post-fix
- * measurement at this same `CPU_THROTTLE_RATE` reported a worst case of
- * ~3.6s. Confirmed locally by re-running this exact probe at
- * `CPU_THROTTLE_RATE=6`: the fixed code produced max gaps of
- * 2197-2782ms across 3 runs, and reverting the fix (the AC5 mutation)
- * produced 2103-3654ms across 3 runs -- i.e. at this throttle rate, on a
- * loaded dev machine, fixed- and reverted-code stall magnitudes overlap
- * closely enough that no threshold in the 2-4s band separates them
- * reliably run-to-run. 5s sits with margin above every fixed-code
- * measurement observed (implementer's and local), so this probe no longer
- * intermittently fails on correctly-fixed code, at the cost of only
- * guarding against a *gross* (multi-second, order-of-magnitude)
- * regression back toward the "tens of seconds" manual-repro stall, rather
- * than the finer 2-4s band the fix's partial mitigation lives in.
+ * **Why a long task and not a frame gap.** The deleted #271 probe measured max
+ * rAF gap *under `Emulation.setCPUThrottlingRate: 6`* and could not separate
+ * the arms (fixed 2197-2782ms vs reverted 2103-3654ms -- overlapping), which
+ * is why it was removed rather than retuned. The throttling was the problem:
+ * it inflates every frame, so the signal drowns in noise. Measured
+ * **unthrottled** on the real ~370-node default root, the arms separate
+ * cleanly and the single largest long task is the sharpest discriminator --
+ * it isolates the one synchronous full-tree commit the fix exists to break up,
+ * rather than summing unrelated work the way total blocking time does.
+ *
+ * **Observed, `npm run dev`, 15 zoom-in clicks at 120ms, 5 runs per arm,
+ * headless (how the suite runs):**
+ *
+ * | arm      | max long task | max rAF gap | total blocking |
+ * |----------|---------------|-------------|----------------|
+ * | fixed    | 227-241ms     | 227-241ms   | 322-333ms      |
+ * | reverted | 372-391ms     | 377-396ms   | 485-526ms      |
+ *
+ * Headed runs agree (fixed 183-305ms, reverted 366-420ms) but are noisier;
+ * total blocking time overlaps across arms and is therefore NOT used.
+ *
+ * 300ms sits between the two headless populations with ~60ms of margin on the
+ * fixed side and ~70ms on the reverted side. AC2 was demonstrated by running
+ * this test both ways, not asserted: it passes on `main` and fails with
+ * `lodVariant` resubscribed to raw `zoom`.
+ *
+ * **Scope, stated plainly:** this guards the *mechanism* (one oversized
+ * synchronous commit per threshold crossing), not the 45s total-unresponsiveness
+ * symptom from #271's manual repro -- that did not reproduce here in either
+ * arm, headed or headless, at any point. A revert is caught because it moves
+ * this number from ~230ms to ~380ms, not because the tab freezes.
  */
+const MAX_ZOOM_BURST_LONG_TASK_MS = 300;
+
+/** Zoom-in clicks in the burst; #271's manual repro stalled after 7 and after 12. */
+const ZOOM_BURST_CLICKS = 15;
+
+/** Delay between clicks (ms) -- fast enough to queue commits back-to-back. */
+const ZOOM_BURST_CLICK_DELAY_MS = 120;
 test.describe('tree initial render at default root', () => {
   test.beforeEach(async ({ page }) => {
     // Seed the default root (Irene Tunnicliffe) explicitly so this spec lands on
@@ -215,26 +222,78 @@ test.describe('tree initial render at default root', () => {
   });
 
   /**
-   * Installs a `requestAnimationFrame` loop, before any app code runs, that
-   * records the gap (ms) between consecutive frames into
-   * `window.__ft271FrameGaps`. rAF only fires once the main thread is free,
-   * so a blocked thread shows up as exactly one oversized gap the moment it
-   * resumes -- regardless of *when* during the gesture the block happens, so
-   * (unlike timing a single `page.evaluate()` call taken at a fixed point)
-   * it can't be raced past by a heavy render that lands between samples.
+   * Issue #274: the regression guard #271 shipped without.
+   *
+   * Drives the documented repro -- a rapid zoom-control click burst on the
+   * real ~370-node default root -- and asserts no single main-thread task
+   * exceeds {@link MAX_ZOOM_BURST_LONG_TASK_MS}. See that constant for the
+   * per-arm measurements the threshold comes from and for what this does and
+   * does not guard.
+   *
+   * The observer is installed *after* the canvas settles, so the initial
+   * render's own long tasks (which dwarf anything the burst produces) stay out
+   * of the sample.
    */
-  async function installFrameGapMonitor(page: Page) {
-    await page.addInitScript(() => {
-      (window as unknown as { __ft271FrameGaps: number[] }).__ft271FrameGaps = [];
-      let last = performance.now();
-      const tick = () => {
-        const now = performance.now();
-        (window as unknown as { __ft271FrameGaps: number[] }).__ft271FrameGaps.push(now - last);
-        last = now;
-        requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
-    });
-  }
+  test('a zoom-control click burst commits without an oversized main-thread task', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForFunction(
+      () => document.querySelectorAll('.react-flow__node-person').length > 0,
+      undefined,
+      { timeout: 30_000 }
+    );
+    await waitForCanvasSettled(page);
 
+    // The burst's cost comes from swapping LOD variant across the whole tree,
+    // so the guard is only meaningful with the full node set actually mounted.
+    const nodeCount = await page.locator('.react-flow__node-person').count();
+    expect(nodeCount, 'guard needs the full default-root tree to be meaningful').toBeGreaterThan(
+      300
+    );
+
+    const measurement = await page.evaluate(
+      async ({ clicks, delayMs }) => {
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        const longTasks: number[] = [];
+        const observer = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) longTasks.push(Math.round(entry.duration));
+        });
+        observer.observe({ entryTypes: ['longtask'] });
+
+        const zoomIn = document.querySelector<HTMLButtonElement>('.react-flow__controls-zoomin');
+        if (!zoomIn) throw new Error('no zoom-in control on the canvas');
+
+        for (let i = 0; i < clicks; i++) {
+          zoomIn.click();
+          await sleep(delayMs);
+        }
+        // Let the last crossing's commit land before reading the sample.
+        await sleep(3000);
+        observer.disconnect();
+
+        const viewport = document.querySelector('.react-flow__viewport');
+        const scale = viewport?.getAttribute('style')?.match(/scale\(([\d.]+)\)/);
+        return {
+          maxLongTask: longTasks.length ? Math.max(...longTasks) : 0,
+          longTaskCount: longTasks.length,
+          zoom: scale ? Number(scale[1]) : null,
+        };
+      },
+      { clicks: ZOOM_BURST_CLICKS, delayMs: ZOOM_BURST_CLICK_DELAY_MS }
+    );
+
+    // A burst that never changed zoom would pass the assertion vacuously.
+    expect(measurement.zoom, 'burst must actually have zoomed in').toBeGreaterThan(MIN_ZOOM);
+    expect(
+      measurement.longTaskCount,
+      'no long tasks at all means the observer never sampled the burst'
+    ).toBeGreaterThan(0);
+    expect(
+      measurement.maxLongTask,
+      `largest main-thread task during the zoom burst (${measurement.longTaskCount} long tasks); ` +
+        'a revert of the #271 useDeferredValue fix moves this to ~380ms'
+    ).toBeLessThan(MAX_ZOOM_BURST_LONG_TASK_MS);
+  });
 });

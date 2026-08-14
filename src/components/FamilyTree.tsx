@@ -982,10 +982,21 @@ export function PersonDrawer({
   )
 
   // True when connections exist that the current user did not author — determined
-  // client-side by comparing the user's own relationship changes against the total
-  // connection count, avoiding a server round-trip.
-  const hasForeignConnections = detailHasRelationships && !!myChanges &&
-    myChanges.relationshipChanges.length < (detail!.parents.length + detail!.marriages.length)
+  // client-side by checking each live parent/spouse connection against the user's
+  // own relationship changes, avoiding a server round-trip. Must compare per
+  // connection (by type + targetId) rather than by count: an equal tally can still
+  // hide foreign connections when the user's changes reference different people
+  // (e.g. a child added elsewhere) than the person's current parents/spouse.
+  const authoredConnectionTargetIds = new Set(
+    (myChanges?.relationshipChanges ?? [])
+      .filter(c => c.newValue?.type === 'parent' || c.newValue?.type === 'spouse')
+      .map(c => c.newValue?.targetId as string | undefined)
+      .filter((id): id is string => !!id)
+  )
+  const hasForeignConnections = detailHasRelationships && !!myChanges && (
+    detail!.parents.some(p => !authoredConnectionTargetIds.has(p.gedcomId)) ||
+    detail!.marriages.some(m => !m.spouse?.gedcomId || !authoredConnectionTargetIds.has(m.spouse.gedcomId))
+  )
 
   /**
    * Calls the cascade-revert endpoint to atomically remove the person and all

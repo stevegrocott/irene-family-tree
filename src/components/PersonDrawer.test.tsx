@@ -587,6 +587,68 @@ describe('PersonDrawer', () => {
       expect(onClose).toHaveBeenCalledTimes(1)
     })
 
+    it('a single connection authored by the same user leaves delete enabled (no admin warning)', async () => {
+      const oneParentDetail = {
+        ...mockDetailResponse,
+        parents: [mockDetailResponse.parents[0]],
+        siblings: [],
+        marriages: [],
+      }
+      installDeleteFetchMock({
+        detail: oneParentDetail,
+        relationshipChanges: [
+          { id: 'rc1', newValue: { type: 'parent', targetId: '@I2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+        ],
+      })
+      await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
+
+      const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
+      expect(deleteBtn.disabled).toBe(false)
+      expect(container.querySelector('[data-testid="person-drawer-action-error"]')).toBeNull()
+    })
+
+    it('disables delete and shows a contact-admin message when one of several connections was authored by another user', async () => {
+      // mockDetailResponse has 2 parents (@I2@, @I3@) + 1 marriage (@I5@) = 3 connections.
+      // This user authored both parent links but not the marriage — @I5@ is foreign.
+      installDeleteFetchMock({
+        detail: mockDetailResponse,
+        relationshipChanges: [
+          { id: 'rc1', newValue: { type: 'parent', targetId: '@I2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc2', newValue: { type: 'parent', targetId: '@I3@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+        ],
+      })
+      await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
+
+      const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
+      expect(deleteBtn.disabled).toBe(true)
+
+      const warning = container.querySelector('[data-testid="person-drawer-action-error"]')
+      expect(warning?.textContent).toBe('Some connections cannot be removed. Contact an admin.')
+    })
+
+    it('disables delete when every live connection is unaccounted for even though the change count matches', async () => {
+      // 3 relationshipChanges vs 3 total connections (2 parents + 1 marriage) — a naive
+      // count comparison reads this as "fully self-authored". But none of these three
+      // changes actually reference this person's current parents/spouse (@I2@, @I3@,
+      // @I5@); they're unrelated entries (e.g. a child added elsewhere). Authorship
+      // must be checked per-connection, not by tallying totals.
+      installDeleteFetchMock({
+        detail: mockDetailResponse,
+        relationshipChanges: [
+          { id: 'rc1', newValue: { type: 'child', targetId: '@I90@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc2', newValue: { type: 'child', targetId: '@I91@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc3', newValue: { type: 'child', targetId: '@I92@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+        ],
+      })
+      await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
+
+      const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
+      expect(deleteBtn.disabled).toBe(true)
+
+      const warning = container.querySelector('[data-testid="person-drawer-action-error"]')
+      expect(warning?.textContent).toBe('Some connections cannot be removed. Contact an admin.')
+    })
+
     it('shows conflictingChange.detail from a 409 revert response as the action error', async () => {
       const personPath = `/api/person/${encodeURIComponent('@I1@')}`
       const fetchMock = jest.fn().mockImplementation(async (url: string) => {

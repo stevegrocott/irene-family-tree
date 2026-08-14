@@ -2725,17 +2725,23 @@ export default function FamilyTree() {
    * so the same person is shown on next page load. Bumps `treeVersion` and
    * `personsVersion` so the tree and persons list re-fetch even when the
    * resolved root id is unchanged (e.g. after a delete).
+   *
+   * An empty `id` (e.g. after deleting the current root with no other known
+   * connection — see `PersonDrawer`'s delete handlers) falls back to the
+   * first available person other than the outgoing root, so a successful
+   * delete never re-roots onto the person that was just removed. Only when
+   * no other person exists does it fall through to `''` (entry state).
    * @param {string} id - GEDCOM ID of the newly selected root person
    */
   const handleSelectRoot = useCallback((id: string) => {
-    const resolved = id || persons[0]?.gedcomId || ''
+    const resolved = id || persons.find(p => p.gedcomId !== rootId)?.gedcomId || ''
     setRootId(resolved)
     setTreeVersion(v => v + 1)
     setPersonsVersion(v => v + 1)
     if (typeof window !== 'undefined' && resolved) {
       localStorage.setItem(TREE_ROOT_STORAGE_KEY, resolved)
     }
-  }, [persons])
+  }, [persons, rootId])
 
   /**
    * Sets the active focus person — from an entry-state row, a search result

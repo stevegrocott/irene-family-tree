@@ -143,8 +143,8 @@ test.describe('Revert: delete-person button', () => {
     await expect(deleteBtn).toBeVisible({ timeout: 5_000 })
     await expect(deleteBtn).toBeEnabled()
 
-    page.once('dialog', d => d.accept())
     await deleteBtn.click()
+    await page.getByTestId('confirm-dialog-confirm').click()
 
     await expect(drawer).not.toBeVisible({ timeout: 5_000 })
     expect(revertPostCount).toBe(1)
@@ -213,8 +213,8 @@ test.describe('Revert: delete-person button', () => {
     await expect(deleteBtn).toBeVisible()
     await expect(deleteBtn).toBeEnabled()
 
-    page.once('dialog', d => d.accept())
     await deleteBtn.click()
+    await page.getByTestId('confirm-dialog-confirm').click()
 
     await expect(drawer).not.toBeVisible({ timeout: 5_000 })
     expect(cascadeRevertCount).toBe(1)

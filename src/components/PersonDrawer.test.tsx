@@ -402,6 +402,23 @@ describe('PersonDrawer', () => {
       expect(confirmation).not.toBeNull()
       expect(confirmation!.textContent).toContain('Suggestion submitted')
     })
+
+    it('non-admin: dismisses the "Suggestion submitted" confirmation when Done is clicked', async () => {
+      mockSession('user')
+      installFetchMock()
+      await renderDrawer()
+      await openAddParentAndSelect()
+
+      expect(container.querySelector('[data-testid="suggestion-submitted"]')).not.toBeNull()
+
+      const doneBtn = Array.from(container.querySelectorAll('button'))
+        .find(btn => btn.textContent === 'Done') as HTMLElement
+      expect(doneBtn).toBeDefined()
+
+      await act(async () => { doneBtn.click() })
+
+      expect(container.querySelector('[data-testid="suggestion-submitted"]')).toBeNull()
+    })
   })
 
   describe('Add parent via create-and-link — role-based routing', () => {

@@ -1844,7 +1844,16 @@ export function PersonDrawer({
         )}
 
         {suggestionSubmitted && (
-          <p data-testid="suggestion-submitted" className="text-emerald-400 text-xs">Suggestion submitted for admin review.</p>
+          <div className="flex items-center justify-between gap-2 bg-[var(--ft-approved-soft)] rounded-lg px-3 py-2">
+            <p data-testid="suggestion-submitted" className="text-[var(--ft-approved)] text-xs">Suggestion submitted for admin review.</p>
+            <button
+              type="button"
+              onClick={() => setSuggestionSubmitted(false)}
+              className="text-xs text-ink-2 hover:text-ink font-medium transition-colors shrink-0"
+            >
+              Done
+            </button>
+          </div>
         )}
 
         {detailLoading && (

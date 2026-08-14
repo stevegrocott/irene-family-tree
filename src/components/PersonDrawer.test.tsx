@@ -586,6 +586,58 @@ describe('PersonDrawer', () => {
       expect(cascadeCall!.init?.method).toBe('POST')
       expect(onClose).toHaveBeenCalledTimes(1)
     })
+
+    it('shows conflictingChange.detail from a 409 revert response as the action error', async () => {
+      const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+      const fetchMock = jest.fn().mockImplementation(async (url: string) => {
+        if (url === `${personPath}/my-changes`) {
+          return {
+            ok: true,
+            json: async () => ({
+              createChange: {
+                id: 'chg-create',
+                changeType: 'CREATE_PERSON',
+                targetId: '@I1@',
+                newValue: {},
+                appliedAt: '2024-01-01T00:00:00.000Z',
+              },
+              relationshipChanges: [],
+              updateChanges: [],
+            }),
+          }
+        }
+        if (url.startsWith('/api/changes/') && url.endsWith('/revert')) {
+          return {
+            ok: false,
+            status: 409,
+            json: async () => ({
+              error: 'Conflict',
+              conflictingChange: { detail: 'Jane Doe already reverted this change.' },
+            }),
+          }
+        }
+        if (url.startsWith(personPath)) {
+          return { ok: true, json: async () => noRelDetail }
+        }
+        return { ok: true, json: async () => ({}) }
+      })
+      global.fetch = fetchMock as unknown as typeof fetch
+      const onClose = jest.fn()
+      await renderDrawer({ onClose, onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
+
+      const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
+      await act(async () => { deleteBtn.click() })
+
+      const confirmBtn = container.querySelector('[data-testid="confirm-dialog-confirm"]') as HTMLButtonElement
+      await act(async () => { confirmBtn.click() })
+      await act(async () => { await Promise.resolve() })
+      await act(async () => { await Promise.resolve() })
+
+      const error = container.querySelector('[data-testid="person-drawer-action-error"]')
+      expect(error?.textContent).toBe('Jane Doe already reverted this change.')
+      // Nothing closes the drawer on a conflict — the user stays put with the error visible.
+      expect(onClose).not.toHaveBeenCalled()
+    })
   })
 
   describe('Photo', () => {

@@ -121,6 +121,25 @@ test.describe('Person drawer Timeline', () => {
       })
     )
 
+    // Investigation (issue #294, task 1): captured a Playwright trace of this
+    // spec and confirmed clicking the spouse link *does* issue
+    // `GET /api/person/%40ISPOUSE%40`, and this route mock *does* match it —
+    // response is `200` with the `spouseDetail` body below. So neither of the
+    // issue's two hypothesized causes applies: `FamilyTree`'s person-detail
+    // `useEffect` already re-fetches on `person.gedcomId` change, and the
+    // fetch resolves successfully against this mock (no mock fix needed).
+    //
+    // The actual defect is downstream, in the render layer: the drawer
+    // header, the re-root button label, and the "How related to" text all
+    // read `person.name` (the summary prop) rather than `detail.name` (the
+    // record this fetch populates). When a Timeline link targets someone not
+    // already in the current tree view, `onSelectPerson` builds `person` from
+    // `personStub()`, which hardcodes `name: ''` — so those elements keep
+    // showing "?Unknown" even after `detail` loads correctly with
+    // "Bob Spouse". See src/components/FamilyTree.tsx:1707 (header), :2020
+    // (re-root button), :1834 ("How related to"). Fixing that render-layer
+    // read is tracked as the follow-up task on issue #294; no production code
+    // or mock is changed by this task.
     await page.route(/\/api\/person\//, async (route) => {
       const url = route.request().url()
       if (url.includes('/relationships')) {

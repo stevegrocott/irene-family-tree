@@ -2,6 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: 'tests/e2e',
+  // Verifies the server under test actually booted with the flags below —
+  // see the reuse caveat on `webServer.env` (issue #284).
+  globalSetup: './tests/e2e/helpers/global-setup.ts',
   use: {
     baseURL: 'http://localhost:3000',
     // Seeds `family-tree-root-id` with the default person (`@I85@`) so a bare
@@ -23,6 +26,18 @@ export default defineConfig({
     command: 'npm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
+    // CAVEAT: `env` below is applied only when Playwright *spawns* the
+    // server. When `reuseExistingServer` reuses an already-running
+    // `npm run dev` (e.g. one a developer or agent left up on :3000), this
+    // entire block is silently discarded — the reused server keeps
+    // whatever env it originally booted with, no warning is printed, and
+    // specs relying on these flags fail for reasons unrelated to the code
+    // under test (issue #284). `globalSetup` above guards against this by
+    // asserting the running server actually has these flags live and
+    // failing loudly, naming the reuse cause, if it doesn't. If you hit
+    // that failure: either free port 3000 so Playwright spawns its own
+    // server, or export these same env vars before starting `npm run dev`
+    // manually.
     env: {
       // Hides the Next.js dev overlay indicator, which otherwise sits bottom-left
       // and intercepts taps on the collapsed mobile toolbar toggle (issue #202).

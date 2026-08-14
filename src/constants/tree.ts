@@ -140,7 +140,12 @@ const DRAWER_DETENT_HEIGHT_CLASS: Record<DrawerDetent, string> = {
  * fixed right-side panel, regardless of `detent`.
  */
 export function getDrawerContainerClass(detent: DrawerDetent): string {
-  return `absolute inset-x-0 bottom-0 z-20 w-full ${DRAWER_DETENT_HEIGHT_CLASS[detent]} rounded-t-[var(--ft-r-panel)] border-t border-line bg-surface shadow-[var(--ft-shadow-3)] flex flex-col sm:inset-x-auto sm:top-0 sm:right-0 sm:bottom-auto sm:h-full sm:max-h-none sm:w-[360px] sm:rounded-none sm:border-t-0 sm:border-l sm:shadow-none`
+  // `sm:shadow-none` doesn't compute to a literal `none` — Tailwind's shadow
+  // utilities always compose `--tw-ring-offset-shadow`/`--tw-ring-shadow`/`--tw-shadow`,
+  // so `shadow-none` just zeroes those out (`getComputedStyle` still reports a
+  // list of transparent `0px 0px 0px 0px` layers, not `none`). The desktop panel
+  // must have no box-shadow at all, so set the property directly instead.
+  return `absolute inset-x-0 bottom-0 z-20 w-full ${DRAWER_DETENT_HEIGHT_CLASS[detent]} rounded-t-[var(--ft-r-panel)] border-t border-line bg-surface shadow-[var(--ft-shadow-3)] flex flex-col sm:inset-x-auto sm:top-0 sm:right-0 sm:bottom-auto sm:h-full sm:max-h-none sm:w-[360px] sm:rounded-none sm:border-t-0 sm:border-l sm:[box-shadow:none]`
 }
 
 /**

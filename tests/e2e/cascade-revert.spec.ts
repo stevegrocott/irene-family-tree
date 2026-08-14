@@ -128,7 +128,11 @@ const adminChangesWithRelationship = {
     appliedAt: '2026-04-01T10:00:00.000Z',
   },
   relationshipChanges: [
-    { id: 'change-rel-1', newValue: { unionId: '@UBOB@' }, appliedAt: '2026-04-01T10:01:00.000Z' },
+    {
+      id: 'change-rel-1',
+      newValue: { type: 'parent', targetId: '@IBOB@', unionId: '@UBOB@' },
+      appliedAt: '2026-04-01T10:01:00.000Z',
+    },
   ],
   updateChanges: [],
 }

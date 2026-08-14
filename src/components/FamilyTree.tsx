@@ -569,7 +569,7 @@ function DrawerSubView({
 }) {
   return (
     <div
-      data-testid="drawer-sub-view"
+      data-testid="person-drawer"
       className={getDrawerContainerClass(detent)}
     >
       <DrawerDragHandle detent={detent} onToggle={onToggleDetent} />
@@ -664,6 +664,10 @@ export function PersonDrawer({
   const [detail, setDetail] = useState<PersonDetailResponse | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailVersion, setDetailVersion] = useState(0)
+  // `person` may be a placeholder stub (see `personStub`) when navigating to someone not
+  // in the currently-loaded tree nodes (e.g. via a timeline life-event link). The fetched
+  // `detail` always has the real name once it loads, so prefer it for display.
+  const displayName = detail?.name || person.name
 
   const [mode, setMode] = useState<'view' | 'add-relative' | 'edit'>('view')
 
@@ -1699,12 +1703,12 @@ export function PersonDrawer({
               aria-hidden="true"
               className="w-12 h-12 rounded-full flex items-center justify-center bg-surface-2 text-ink text-lg font-semibold flex-shrink-0"
             >
-              {(person.name || '?').trim().charAt(0).toUpperCase()}
+              {(displayName || '?').trim().charAt(0).toUpperCase()}
             </div>
           )}
           <div className="min-w-0">
             <h2 className="text-ink [font:var(--ft-name-lg)] truncate">
-              {person.name || <span className="text-ink-3 italic">Unknown</span>}
+              {displayName || <span className="text-ink-3 italic">Unknown</span>}
             </h2>
             {dates && (
               <p className="text-ink-3 [font:var(--ft-mono)] truncate">{dates}</p>
@@ -1839,7 +1843,16 @@ export function PersonDrawer({
         )}
 
         {suggestionSubmitted && (
-          <p data-testid="suggestion-submitted" className="text-emerald-400 text-xs">Suggestion submitted for admin review.</p>
+          <div className="flex items-center justify-between gap-2">
+            <p data-testid="suggestion-submitted" className="text-emerald-400 text-xs">Suggestion submitted for admin review.</p>
+            <button
+              type="button"
+              onClick={() => setSuggestionSubmitted(false)}
+              className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex-shrink-0"
+            >
+              Done
+            </button>
+          </div>
         )}
 
         {detailLoading && (
@@ -2017,7 +2030,7 @@ export function PersonDrawer({
           onClick={() => { onReroot(person.gedcomId); onClose() }}
           className="w-full py-2 rounded-lg bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors uppercase tracking-wide"
         >
-          FOCUS TREE ON {(person.name || 'PERSON').toUpperCase()}
+          FOCUS TREE ON {(displayName || 'PERSON').toUpperCase()}
         </button>
         {myChanges?.createChange && (
           <>

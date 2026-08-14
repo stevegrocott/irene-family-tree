@@ -169,11 +169,23 @@ test.describe('Revert: delete-person button', () => {
       ],
     }
 
+    // This user authored both the CREATE_PERSON change and the parent connection,
+    // so relationshipChanges must account for it — otherwise hasForeignConnections
+    // (FamilyTree.tsx) treats the connection as added by someone else and disables
+    // the button, per the "another user added a connection" scenario covered by
+    // cascade-revert.spec.ts.
+    const myChangesWithOwnRelationship = {
+      ...myChangesWithCreate,
+      relationshipChanges: [
+        { id: 'change-rel-1', newValue: { type: 'parent', targetId: '@IBOB@' }, appliedAt: '2026-04-23T10:01:00.000Z' },
+      ],
+    }
+
     await page.route(/\/api\/person\/[^/]+\/my-changes/, (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(myChangesWithCreate),
+        body: JSON.stringify(myChangesWithOwnRelationship),
       })
     )
 
@@ -299,8 +311,8 @@ test.describe('Revert: delete-person button', () => {
     await expect(drawer).toBeVisible()
     await expect(page.getByTestId('person-drawer-marriages')).toBeVisible({ timeout: 5_000 })
 
-    page.once('dialog', d => d.accept())
     await page.getByTestId('person-drawer-delete').click()
+    await page.getByTestId('confirm-dialog-confirm').click()
 
     await expect(drawer).toBeVisible()
     await expect(page.getByTestId('person-drawer-action-error'))

@@ -2709,6 +2709,8 @@ export default function FamilyTree() {
   const [viewportWidth, setViewportWidth] = useState<number | null>(null)
   /** True once the initial focus-resolution pass (below) has run — gates the entry/viewer branch so it never flashes the entry state while that resolution is still in flight. */
   const [focusResolved, setFocusResolved] = useState(false)
+  /** Guards the `/api/persons` effect's URL/localStorage focus resolution so it only runs on the first load — later `personsVersion` bumps (re-rooting, add/delete) must refresh the persons list without resetting `rootId` back to the initial URL/localStorage root (issue #292). */
+  const initialFocusResolvedRef = useRef(false)
   /** Explicit view chosen via the switcher/URL; `null` defers to 'walk' once a focus is set (see `view` below). */
   const [shellView, setShellView] = useState<ShellView | null>(() =>
     isShellView(initialUrlState.view) ? initialUrlState.view : null
@@ -2821,6 +2823,19 @@ export default function FamilyTree() {
       })
       .then((data: Person[]) => {
         setPersons(data)
+        // `personsVersion` bumps on every `handleSelectRoot` call (including
+        // re-rooting via a relationship row or the drawer's reroot button) so
+        // the persons list stays fresh after adds/deletes. But the focus
+        // resolution below must only run on the very first load: it derives
+        // `rootId` from the URL/localStorage snapshot captured at mount
+        // (`initialUrlState` never changes), so re-running it on a later
+        // `personsVersion` bump would immediately snap `rootId` — and thus
+        // `rootName` — back to the original page-load root, silently undoing
+        // whatever root the user just navigated to (issue #292).
+        if (initialFocusResolvedRef.current) {
+          return
+        }
+        initialFocusResolvedRef.current = true
         // Precedence for the entry-vs-viewer branch: URL root/person > localStorage.
         // Unlike before, there is no further fallback to DEFAULT_ROOT_GEDCOM_ID or
         // the first named person — an unresolved focus now renders the entry state

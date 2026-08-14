@@ -298,6 +298,26 @@ describe('PersonNode pending edit indicator (DESIGN_SYSTEM.md §3.2 Has pending 
   it.each([
     ['compact', 'person-node-compact'],
     ['full', 'person-node-full'],
+  ] as const)(
+    // Regression for issue #293: `tests/e2e/design-node-states.spec.ts:164` measures the
+    // dot's on-screen `getBoundingClientRect` inside a canvas fixture pinned at 2x zoom
+    // (single/two-node trees clamp at the fit-to-bounds max), so a node-local CSS size of
+    // 6px renders as 12px there. The node-local size must be half the spec value — 3px —
+    // so it renders at the §3.2-specified 6px once the canvas's 2x zoom transform applies.
+    'sizes the pending-edit dot to 3px node-local (renders 6px on-screen at 2x canvas zoom, per §3.2) on the %s variant',
+    (lodVariant, testId) => {
+      const el = render({ pendingEdits: 1, lodVariant })
+      const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement
+      const dot = node.querySelector('[data-testid="person-node-pending-dot"]') as HTMLElement
+      expect(dot).toBeTruthy()
+      expect(dot.className).toContain('w-[3px]')
+      expect(dot.className).toContain('h-[3px]')
+    }
+  )
+
+  it.each([
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
   ] as const)('renders no pending-edit indicator on the %s variant when pendingEdits is absent', (lodVariant, testId) => {
     const el = render({ lodVariant })
     const node = el.querySelector(`[data-testid="${testId}"]`) as HTMLElement

@@ -665,6 +665,11 @@ export function PersonDrawer({
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailVersion, setDetailVersion] = useState(0)
 
+  // Prefer the fetched detail record's name over the summary `person` prop, which is
+  // empty (`personStub`) when a Timeline link targets someone outside the current tree
+  // view — `detail` fills in once its fetch resolves, but `person` itself never does.
+  const displayName = detail?.name || person.name
+
   const [mode, setMode] = useState<'view' | 'add-relative' | 'edit'>('view')
 
   const [editBirthPlace, setEditBirthPlace] = useState('')
@@ -1699,12 +1704,12 @@ export function PersonDrawer({
               aria-hidden="true"
               className="w-12 h-12 rounded-full flex items-center justify-center bg-surface-2 text-ink text-lg font-semibold flex-shrink-0"
             >
-              {(person.name || '?').trim().charAt(0).toUpperCase()}
+              {(displayName || '?').trim().charAt(0).toUpperCase()}
             </div>
           )}
           <div className="min-w-0">
             <h2 className="text-ink [font:var(--ft-name-lg)] truncate">
-              {person.name || <span className="text-ink-3 italic">Unknown</span>}
+              {displayName || <span className="text-ink-3 italic">Unknown</span>}
             </h2>
             {dates && (
               <p className="text-ink-3 [font:var(--ft-mono)] truncate">{dates}</p>
@@ -1831,7 +1836,7 @@ export function PersonDrawer({
             )}
             {relationship.status === 'success' && (
               <p data-testid="person-drawer-relationship-result" className="text-slate-300 text-xs">
-                {person.name || 'This person'} is {rootLabel}&rsquo;s{' '}
+                {displayName || 'This person'} is {rootLabel}&rsquo;s{' '}
                 <span className="font-semibold text-white">{relationship.label}</span>.
               </p>
             )}
@@ -2017,7 +2022,7 @@ export function PersonDrawer({
           onClick={() => { onReroot(person.gedcomId); onClose() }}
           className="w-full py-2 rounded-lg bg-indigo-500/80 hover:bg-indigo-500 text-white text-sm font-medium transition-colors uppercase tracking-wide"
         >
-          FOCUS TREE ON {(person.name || 'PERSON').toUpperCase()}
+          FOCUS TREE ON {(displayName || 'PERSON').toUpperCase()}
         </button>
         {myChanges?.createChange && (
           <>

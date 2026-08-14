@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { waitForCanvasSettled } from './helpers/viewer';
 
 /**
  * E2E tests for the relationship calculator affordance in PersonDrawer (issue #162).
@@ -27,7 +28,17 @@ test.describe('relationship calculator', () => {
     await expect(toolbarViewing).toBeVisible({ timeout: 15_000 });
     await expect(toolbarViewing).toContainText('Irene', { timeout: 10_000 });
 
-    // Root node is marked with border-brass on its inner card; non-root nodes are not.
+    // Wait for the deferred fitView transition to finish before reading node
+    // geometry or clicking — otherwise the viewport transform (and therefore
+    // node positions) can still be moving underneath us (see helpers/viewer.ts).
+    await waitForCanvasSettled(page);
+
+    // Identify the root by who it is (its accessible name, seeded as "Irene
+    // Tunnicliffe" in beforeEach), not by the presence/absence of a
+    // design-system CSS class like border-brass — that class is a styling
+    // detail PersonNode can change independently of root identity (see the
+    // identical fix applied to the "does not render the control for the root
+    // person" test below).
     //
     // A plain `.filter({ hasNot: ... }).first()` isn't enough on its own: this
     // tree renders 370 nodes and `FamilyTree`'s initial `fitView` only brings a
@@ -40,7 +51,8 @@ test.describe('relationship calculator', () => {
       const vh = window.innerHeight
       const nodes = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node-person'))
       for (const node of nodes) {
-        const isRoot = !!node.querySelector('[class*="border-brass"]')
+        const accessibleName = node.querySelector('[role="button"]')?.getAttribute('aria-label') ?? ''
+        const isRoot = accessibleName.startsWith('Irene Tunnicliffe')
         if (isRoot) continue
         const rect = node.getBoundingClientRect()
         const onScreen = rect.width > 0 && rect.top >= 0 && rect.left >= 0 && rect.bottom <= vh && rect.right <= vw

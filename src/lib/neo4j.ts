@@ -8,7 +8,19 @@ export function getDriver(): Driver {
     g.neo4jDriver = neo4j.driver(
       process.env.NEO4J_URI!,
       neo4j.auth.basic(process.env.NEO4J_USER!, process.env.NEO4J_PASSWORD!),
-      { disableLosslessIntegers: true }
+      {
+        disableLosslessIntegers: true,
+        // `session.executeRead`/`executeWrite` (used by `read`/`write`/
+        // `writeTransaction` below) retry retriable errors — including
+        // `ServiceUnavailable` from a connection refusal — for the driver's
+        // default `maxTransactionRetryTime` of 30 seconds before finally
+        // rejecting. Any caller with a try/catch around these calls (e.g.
+        // `/admin`'s server component) still blocks on render for the full
+        // 30s during a database outage, since the promise doesn't reject
+        // until the retry budget is exhausted. Capped here so an outage
+        // fails fast with a clear error instead of hanging the page.
+        maxTransactionRetryTime: 5000,
+      }
     )
   }
   return g.neo4jDriver

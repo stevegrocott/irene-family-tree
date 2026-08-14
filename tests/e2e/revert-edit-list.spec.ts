@@ -217,8 +217,8 @@ test.describe('Revert: "Your edits" list in edit mode', () => {
     const row1 = page.getByTestId('your-edit-change-upd-1')
     await expect(row1).toBeVisible({ timeout: 5_000 })
 
-    page.once('dialog', d => d.accept())
     await page.getByTestId('your-edit-revert-change-upd-1').click()
+    await page.getByTestId('confirm-dialog-confirm').click()
 
     await expect(page.getByTestId('your-edit-change-upd-1')).toHaveCount(0, { timeout: 5_000 })
     await expect(page.getByTestId('your-edit-change-upd-2')).toBeVisible()
@@ -262,8 +262,8 @@ test.describe('Revert: "Your edits" list in edit mode', () => {
 
     await openEditMode(page)
 
-    page.once('dialog', d => d.accept())
     await page.getByTestId('your-edit-revert-change-upd-1').click()
+    await page.getByTestId('confirm-dialog-confirm').click()
 
     // The edit form stays visible; actionError renders below the inputs.
     await expect(page.getByTestId('person-drawer-edit-action-error'))

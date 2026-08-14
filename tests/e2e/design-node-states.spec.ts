@@ -175,9 +175,13 @@ test.describe('person node states — design system §3.2', () => {
         (child) => getComputedStyle(child).backgroundColor === expected
       )
       if (!match) return null
-      const box = match.getBoundingClientRect()
+      // Read computed style rather than `getBoundingClientRect`: the canvas applies a CSS
+      // zoom transform (this fixture clamps at 2x — see the file-level comment above), which
+      // scales the dot's on-screen rect without changing its actual box size. Computed style
+      // reflects the CSS-specified size regardless of the ancestor transform.
+      const style = getComputedStyle(match)
       return {
-        size: Math.round(Math.max(box.width, box.height)),
+        size: Math.round(Math.max(parseFloat(style.width), parseFloat(style.height))),
         title: match.getAttribute('title') ?? match.closest('[title]')?.getAttribute('title') ?? null,
       }
     }, pending)

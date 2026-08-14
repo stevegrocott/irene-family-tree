@@ -7,10 +7,10 @@
 
 'use client'
 
-import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo, useDeferredValue } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo, useDeferredValue } from 'react'
 import type React from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession, signIn } from 'next-auth/react'
 import ReactFlow, {
   Background,
@@ -75,6 +75,9 @@ function isArrowKey(key: string): key is ArrowKey {
  * clearance so the focus ring never hugs the viewport border (docs/DESIGN_SYSTEM.md §7).
  */
 const FOCUS_VIEWPORT_MARGIN = 32
+
+/** Shown when a suggestion POST fails, whether from a network error or a non-OK response. */
+const SUGGESTION_SUBMIT_ERROR_MESSAGE = 'Failed to submit suggestion. Please try again.'
 
 /** Default edge styling applied to all edges. */
 const defaultEdgeStyle: React.CSSProperties = { stroke: '#6366f1', strokeWidth: 1.5, opacity: 0.5 }
@@ -928,13 +931,13 @@ export function PersonDrawer({
         })
       } catch (err) {
         console.error('Failed to submit suggestion', err)
-        setSuggestionError('Failed to submit suggestion. Please try again.')
+        setSuggestionError(SUGGESTION_SUBMIT_ERROR_MESSAGE)
         setMode('view')
         return
       }
       if (!suggestRes.ok) {
         console.error('Failed to submit suggestion', new Error(`HTTP ${suggestRes.status}`))
-        setSuggestionError('Failed to submit suggestion. Please try again.')
+        setSuggestionError(SUGGESTION_SUBMIT_ERROR_MESSAGE)
         setMode('view')
         return
       }
@@ -1022,23 +1025,10 @@ export function PersonDrawer({
       .map(c => c.newValue?.targetId as string | undefined)
       .filter((id): id is string => !!id)
   )
-  // Some ADD_RELATIONSHIP records carry only `unionId` in `newValue`, with no
-  // `type`/`targetId` (the server's own cascade-revert authorship check — see
-  // src/lib/cascade-revert.ts — keys solely on unionId for exactly this reason).
-  // `detail.parents` has no unionId to match against client-side, so these can't
-  // be tied to one specific connection. Rather than assume every one of them is
-  // foreign, give each an unmatched connection to account for — bounded by how
-  // many the per-connection check above couldn't already explain. A record whose
-  // `type` doesn't match ('child', etc.) is real signal, not missing data, and
-  // must NOT fall into this bucket.
-  const untypedRelationshipChangeCount = (myChanges?.relationshipChanges ?? [])
-    .filter(c => c.newValue?.type == null).length
-  const unmatchedConnectionCount = detailHasRelationships && myChanges
-    ? detail!.parents.filter(p => !authoredConnectionTargetIds.has(p.gedcomId)).length +
-      detail!.marriages.filter(m => !m.spouse?.gedcomId || !authoredConnectionTargetIds.has(m.spouse.gedcomId)).length
-    : 0
-  const hasForeignConnections = detailHasRelationships && !!myChanges &&
-    unmatchedConnectionCount > untypedRelationshipChangeCount
+  const hasForeignConnections = detailHasRelationships && !!myChanges && (
+    detail!.parents.some(p => !authoredConnectionTargetIds.has(p.gedcomId)) ||
+    detail!.marriages.some(m => !m.spouse?.gedcomId || !authoredConnectionTargetIds.has(m.spouse.gedcomId))
+  )
 
   /**
    * Calls the cascade-revert endpoint to atomically remove the person and all
@@ -2264,6 +2254,7 @@ function FlowCanvas({
   const [error, setError] = useState<string | null>(null)
   const [truncated, setTruncated] = useState(false)
   const [totalNodes, setTotalNodes] = useState<number | undefined>(undefined)
+  const router = useRouter()
   const [hops, setHops] = useState(() => initialUrlState.hops ?? DEFAULT_HOPS)
   const [actualMaxDepth, setActualMaxDepth] = useState<number>(MAX_HOPS)
   const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(() =>
@@ -2322,16 +2313,6 @@ function FlowCanvas({
   const abortRef = useRef<AbortController | null>(null)
   /** Tracks whether the user has actively changed depth or person, so an untouched initial load never rewrites the URL. */
   const userInteractedRef = useRef(false)
-  /**
-   * Tracks whether the initial fit-to-bounds viewport has already been applied, so
-   * that first fit snaps instantly instead of animating. Animating it left a brief
-   * window where nodes rendered at their pre-fit dagre coordinates while the 300ms
-   * pan/zoom transition was still in flight — on large trees that's a real spot a
-   * node can appear on-screen mid-transition and then end up off-screen once the
-   * transition settles. Re-roots and depth changes still animate (the tree the user
-   * is already looking at should transition smoothly), only the very first fit skips it.
-   */
-  const hasFitOnceRef = useRef(false)
 
   /** Display name of the current root person, derived from `nodes` and `rootId`. */
   const rootName = useMemo(() => {
@@ -2445,26 +2426,16 @@ function FlowCanvas({
   }, [buildPath])
 
   /**
-   * Keeps the URL in sync with viewer state (root, person, hops) via the native
-   * History API so re-rooting, depth changes, and person selection are shareable
-   * without adding history entries or scrolling. Skipped until the user has
-   * actually interacted (or the root has changed via {@link onSelectRoot}) so an
-   * untouched initial load — including one that arrived via a deep link — never
-   * rewrites the URL.
-   *
-   * Uses `window.history.replaceState` directly rather than the App Router's
-   * `router.replace()`. The latter triggers a soft navigation (an RSC payload
-   * round-trip) that resolves asynchronously and isn't guaranteed to have
-   * committed by the time this function returns — a real race for anything that
-   * reads the URL immediately after, e.g. a page reload right after re-rooting
-   * (see `tests/e2e/reroot-persistence.spec.ts`). `history.replaceState` updates
-   * the address bar synchronously and still integrates with `usePathname`/
-   * `useSearchParams` per Next's docs on the native History API.
+   * Keeps the URL in sync with viewer state (root, person, hops) via `router.replace`
+   * so re-rooting, depth changes, and person selection are shareable without adding
+   * history entries or scrolling. Skipped until the user has actually interacted (or
+   * the root has changed via {@link onSelectRoot}) so an untouched initial load —
+   * including one that arrived via a deep link — never rewrites the URL.
    */
   useEffect(() => {
     if (!userInteractedRef.current && treeVersion === 0) return
-    window.history.replaceState(null, '', buildPath())
-  }, [buildPath, treeVersion])
+    router.replace(buildPath(), { scroll: false })
+  }, [buildPath, treeVersion, router])
 
   /**
    * Opens the person drawer when a person node is clicked.
@@ -2650,45 +2621,38 @@ function FlowCanvas({
   /**
    * Fits the viewport to the tree bounds after layout completes.
    * Falls back to centering on the root node when the tree is too large to fit at MIN_ZOOM.
-   *
-   * Runs in `useLayoutEffect`, synchronously before the browser paints, rather than
-   * `useEffect` behind a `setTimeout`. The previous async delay meant nodes could
-   * paint at their raw, un-fit dagre coordinates for a frame (or more) before this
-   * ran — on a large tree, that's a real window where a node genuinely sits inside
-   * the viewport pre-fit and then leaves it once the fit lands, which is
-   * indistinguishable from a race to anything reading node positions right after
-   * load (e.g. a real user's click landing between the two states).
    */
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!treeBounds || nodes.length === 0) return
     // Wait until ReactFlow has measured its container before fitting.
     if (canvasWidth === 0 || canvasHeight === 0) return
-    const vw = canvasWidth
-    const vh = canvasHeight
-    const PADDING = 0.15
-    const MIN_ZOOM = 0.18
-    const duration = hasFitOnceRef.current ? 300 : 0
-    hasFitOnceRef.current = true
+    const id = setTimeout(() => {
+      const vw = canvasWidth
+      const vh = canvasHeight
+      const PADDING = 0.15
+      const MIN_ZOOM = 0.18
 
-    const idealZoom = Math.min(
-      (vw * (1 - 2 * PADDING)) / treeBounds.width,
-      (vh * (1 - 2 * PADDING)) / treeBounds.height,
-    )
-
-    if (idealZoom >= MIN_ZOOM) {
-      setViewport(getViewportForBounds(treeBounds, vw, vh, MIN_ZOOM, 2, PADDING), { duration })
-    } else {
-      const rootNode = nodes.find(
-        n => n.type === 'person' && (n.data as PersonData).gedcomId === rootId
+      const idealZoom = Math.min(
+        (vw * (1 - 2 * PADDING)) / treeBounds.width,
+        (vh * (1 - 2 * PADDING)) / treeBounds.height,
       )
-      if (rootNode) {
-        setViewport({
-          zoom: MIN_ZOOM,
-          x: vw / 2 - (rootNode.position.x + 80) * MIN_ZOOM,
-          y: vh / 2 - (rootNode.position.y + 34) * MIN_ZOOM,
-        }, { duration })
+
+      if (idealZoom >= MIN_ZOOM) {
+        setViewport(getViewportForBounds(treeBounds, vw, vh, MIN_ZOOM, 2, PADDING), { duration: 300 })
+      } else {
+        const rootNode = nodes.find(
+          n => n.type === 'person' && (n.data as PersonData).gedcomId === rootId
+        )
+        if (rootNode) {
+          setViewport({
+            zoom: MIN_ZOOM,
+            x: vw / 2 - (rootNode.position.x + 80) * MIN_ZOOM,
+            y: vh / 2 - (rootNode.position.y + 34) * MIN_ZOOM,
+          }, { duration: 300 })
+        }
       }
-    }
+    }, 50)
+    return () => clearTimeout(id)
   }, [treeBounds, nodes, rootId, setViewport, canvasWidth, canvasHeight])
 
   return (
@@ -2791,7 +2755,7 @@ export default function FamilyTree() {
   const [treeVersion, setTreeVersion] = useState(0)
   const [personsVersion, setPersonsVersion] = useState(0)
   const searchParams = useSearchParams()
-  // Captured once on mount so later URL updates (from our own history.replaceState calls) don't
+  // Captured once on mount so later URL updates (from our own router.replace calls) don't
   // re-trigger root resolution — only the URL present on initial load takes precedence.
   const [initialUrlState] = useState(() => parseTreeUrlState(searchParams))
   // null until mount so SSR/first paint uses DEFAULT_DENSITY, avoiding a hydration mismatch

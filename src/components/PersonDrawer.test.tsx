@@ -419,6 +419,41 @@ describe('PersonDrawer', () => {
 
       expect(container.querySelector('[data-testid="suggestion-submitted"]')).toBeNull()
     })
+
+    it('non-admin: shows an error and does not show the confirmation when the suggestion POST fails', async () => {
+      mockSession('user')
+      const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+      const fetchMock = jest.fn().mockImplementation(async (url: string) => {
+        if (url === `${personPath}/my-changes`) {
+          return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
+        }
+        if (url === '/api/suggestions') {
+          return { ok: false, status: 500, json: async () => ({ error: 'Internal Server Error' }) }
+        }
+        if (url.startsWith('/api/persons?q=')) {
+          return { ok: true, json: async () => searchResult }
+        }
+        if (url.startsWith(personPath)) {
+          return { ok: true, json: async () => mockDetailResponse }
+        }
+        return { ok: true, json: async () => ({}) }
+      })
+      global.fetch = fetchMock as unknown as typeof fetch
+      await renderDrawer()
+      await openAddParentAndSelect()
+
+      expect(container.querySelector('[data-testid="suggestion-submitted"]')).toBeNull()
+      const error = Array.from(container.querySelectorAll('p'))
+        .find(p => /fail|error|try again/i.test(p.textContent ?? ''))
+      expect(error).toBeDefined()
+
+      const suggestionCall = fetchMock.mock.calls.find(([url]) => url === '/api/suggestions')
+      expect(suggestionCall).toBeDefined()
+      const relationshipsCall = fetchMock.mock.calls.find(
+        ([url, init]) => url === `${personPath}/relationships` && (init as RequestInit | undefined)?.method === 'POST'
+      )
+      expect(relationshipsCall).toBeUndefined()
+    })
   })
 
   describe('Add parent via create-and-link — role-based routing', () => {
@@ -498,6 +533,49 @@ describe('PersonDrawer', () => {
 
       const linkCall = calls.find(c => c.url.includes('/relationships') && c.init?.method === 'POST')
       expect(linkCall).toBeUndefined()
+    })
+
+    it('non-admin: if the suggestion POST fails after the person was created, shows an error, does not show the confirmation, and does not fall back to a direct link', async () => {
+      mockSession('user')
+      const calls: Array<{ url: string; init?: RequestInit }> = []
+      const personPath = `/api/person/${encodeURIComponent('@I1@')}`
+      const fetchMock = jest.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url === `${personPath}/my-changes`) {
+          return { ok: true, json: async () => ({ createChange: null, relationshipChanges: [], updateChanges: [] }) }
+        }
+        if (url === '/api/persons' && (init as RequestInit)?.method === 'POST') {
+          return { ok: true, json: async () => ({ gedcomId: '@I99@', name: 'New Parent', sex: 'M', birthYear: null, birthPlace: null }) }
+        }
+        if (url === '/api/suggestions') {
+          return { ok: false, status: 500, json: async () => ({ error: 'Internal Server Error' }) }
+        }
+        if (url === `${personPath}/relationships`) {
+          return { ok: true, status: 201, json: async () => ({ unionId: '@F_new@' }) }
+        }
+        if (url.startsWith(personPath)) {
+          return { ok: true, json: async () => mockDetailResponse }
+        }
+        return { ok: true, json: async () => ({}) }
+      })
+      global.fetch = fetchMock as unknown as typeof fetch
+      await renderDrawer()
+      await openAddParentAndFillCreateForm()
+
+      const createPersonCall = calls.find(c => c.url === '/api/persons' && c.init?.method === 'POST')
+      expect(createPersonCall).toBeDefined()
+
+      const suggestionCall = calls.find(c => c.url === '/api/suggestions')
+      expect(suggestionCall).toBeDefined()
+
+      // A failed suggestion must not silently write a direct relationship.
+      const linkCall = calls.find(c => c.url.includes('/relationships') && c.init?.method === 'POST')
+      expect(linkCall).toBeUndefined()
+
+      expect(container.querySelector('[data-testid="suggestion-submitted"]')).toBeNull()
+      const error = Array.from(container.querySelectorAll('p'))
+        .find(p => /fail|error|try again/i.test(p.textContent ?? ''))
+      expect(error).toBeDefined()
     })
   })
 

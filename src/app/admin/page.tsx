@@ -5,7 +5,6 @@ import { safeParseJson } from '@/lib/utils'
 import { SuggestionsReview } from './SuggestionsReview'
 import { ChangeHistory } from './ChangeHistory'
 import { AdminTabs } from './AdminTabs'
-import { GedcomExportLink } from './GedcomExportLink'
 import type { Change } from './types'
 
 const PAGE_SIZE = 20
@@ -78,7 +77,13 @@ export default async function AdminPage() {
     <main className="min-h-screen bg-[#050a18] text-white px-4 py-8 sm:px-8">
       <div className="max-w-2xl mx-auto">
         <div className="flex justify-end mb-4">
-          <GedcomExportLink />
+          <a
+            href="/api/admin/export"
+            download
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--ft-r-md)] text-sm font-medium bg-accent hover:bg-[var(--ft-accent-hover)] text-[var(--ft-text-on-accent)] shadow-[var(--ft-shadow-1)] transition-colors"
+          >
+            Download GEDCOM
+          </a>
         </div>
         <AdminTabs
           suggestionsSlot={<SuggestionsReview initialSuggestions={suggestions} />}

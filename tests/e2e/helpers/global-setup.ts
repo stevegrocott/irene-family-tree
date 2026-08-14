@@ -23,8 +23,12 @@ import { chromium, type FullConfig } from '@playwright/test'
 const DEV_OVERLAY_SELECTOR = '[data-nextjs-dev-tools-button]'
 
 /**
- * Bounds how long globalSetup waits for the overlay to (not) appear, so a
- * passing run — the common case — adds negligible time to suite startup.
+ * Bounds how long globalSetup waits for the overlay to (not) appear.
+ * `waitFor({ state: 'attached' })` blocks for the full timeout before
+ * resolving false when the overlay never mounts, so *every* passing run —
+ * the common case — pays this fixed cost. Kept short so it stays well
+ * within AC4's <5s startup budget while still giving a slow dev server a
+ * fair chance to mount the overlay if it's going to.
  */
 const OVERLAY_CHECK_TIMEOUT_MS = 2_000
 

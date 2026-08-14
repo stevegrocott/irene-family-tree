@@ -1011,8 +1011,11 @@ export function PersonDrawer({
           ? `Connections added by ${names} cannot be removed. Contact an admin.`
           : 'Some connections cannot be removed. Contact an admin.')
       } else {
-        const body = await res.json().catch(() => ({})) as { error?: string }
-        setActionError(body.error ?? 'Failed to delete person. Please try again.')
+        const body = await res.json().catch(() => ({})) as {
+          error?: string
+          conflictingChange?: { detail?: string }
+        }
+        setActionError(body.conflictingChange?.detail ?? body.error ?? 'Failed to delete person. Please try again.')
       }
     } finally {
       setIsSubmitting(false)

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { waitForCanvasSettled } from './helpers/viewer';
 
 /**
  * E2E tests for the relationship calculator affordance in PersonDrawer (issue #162).
@@ -26,6 +27,11 @@ test.describe('relationship calculator', () => {
     const toolbarViewing = page.getByTestId('toolbar-viewing');
     await expect(toolbarViewing).toBeVisible({ timeout: 15_000 });
     await expect(toolbarViewing).toContainText('Irene', { timeout: 10_000 });
+
+    // Wait for the deferred fitView transition to finish before reading node
+    // geometry or clicking — otherwise the viewport transform (and therefore
+    // node positions) can still be moving underneath us (see helpers/viewer.ts).
+    await waitForCanvasSettled(page);
 
     // Root node is marked with border-brass on its inner card; non-root nodes are not.
     //

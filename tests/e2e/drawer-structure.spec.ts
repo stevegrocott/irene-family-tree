@@ -18,6 +18,52 @@ import { gotoViewer } from './helpers/viewer'
 
 const LAYOUT_TOLERANCE_PX = 4
 
+/**
+ * Splits a computed `box-shadow` value into its comma-separated shadow
+ * layers, splitting only on commas outside of parentheses so a layer's
+ * `rgba(r, g, b, a)` color isn't mistaken for a layer boundary.
+ */
+function splitShadowLayers(boxShadow: string): string[] {
+  const layers: string[] = []
+  let depth = 0
+  let current = ''
+  for (const char of boxShadow) {
+    if (char === '(') depth++
+    if (char === ')') depth--
+    if (char === ',' && depth === 0) {
+      layers.push(current.trim())
+      current = ''
+    } else {
+      current += char
+    }
+  }
+  if (current.trim()) layers.push(current.trim())
+  return layers
+}
+
+/**
+ * Extracts a shadow layer's alpha channel. Layers whose color has no alpha
+ * component (e.g. `rgb(...)`, a named color, or no parseable color at all)
+ * are treated as fully opaque/non-transparent.
+ */
+function shadowLayerAlpha(layer: string): number {
+  const match = layer.match(/rgba?\(([^)]+)\)/)
+  if (!match) return 1
+  const parts = match[1].split(',').map((part) => parseFloat(part.trim()))
+  return parts.length === 4 ? parts[3] : 1
+}
+
+/**
+ * True when a computed `box-shadow` value renders nothing visible — either
+ * the literal `none`, or every layer's color is fully transparent (alpha 0).
+ * Some browsers/CSS resets compute an explicit `rgba(0, 0, 0, 0) 0px 0px
+ * 0px 0px` instead of `none`, so asserting the literal string is fragile.
+ */
+function isBoxShadowFullyTransparent(boxShadow: string): boolean {
+  if (boxShadow.trim() === '' || boxShadow.trim() === 'none') return true
+  return splitShadowLayers(boxShadow).every((layer) => shadowLayerAlpha(layer) === 0)
+}
+
 /** Root person with a parent so the Parents section renders a relative-row. */
 const mockPerson = {
   gedcomId: '@IROOT@',
@@ -148,7 +194,7 @@ test.describe('desktop drawer structure', () => {
     })
     expect(style.borderLeftWidth).toBe('1px')
     expect(style.borderTopWidth).toBe('0px')
-    expect(style.boxShadow).toBe('none')
+    expect(isBoxShadowFullyTransparent(style.boxShadow)).toBe(true)
     expect(style.backdropFilter === 'none' || style.backdropFilter === '').toBe(true)
   })
 

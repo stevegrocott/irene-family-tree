@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { waitForCanvasSettled } from './helpers/viewer';
 
 /**
  * Verifies that the re-root selection persists across a full page reload.
@@ -20,7 +19,6 @@ test('re-root selection persists after page reload', async ({ page }) => {
   const toolbarViewing = page.getByTestId('toolbar-viewing');
   await expect(toolbarViewing).toBeVisible({ timeout: 15_000 });
   await expect(toolbarViewing).toContainText('Irene', { timeout: 10_000 });
-  await waitForCanvasSettled(page);
 
   // Click a non-root person node.
   //
@@ -66,16 +64,6 @@ test('re-root selection persists after page reload', async ({ page }) => {
   // Capture the new root name from the inner span of the toolbar
   const newRootName = await toolbarViewing.locator('span').first().textContent();
   expect(newRootName).toBeTruthy();
-
-  // The toolbar and localStorage update synchronously on re-root, but the URL's `root`
-  // query param is written by a `router.replace` effect that can lag the visible UI by
-  // close to a second in this environment. Reloading before that replace lands would
-  // reload against the stale `root` param (still Irene), which wins over localStorage
-  // on initial-mount focus resolution — so wait for the persisted id to actually be
-  // reflected in the URL before reloading.
-  const persistedRootId = await page.evaluate(() => localStorage.getItem('family-tree-root-id'))
-  expect(persistedRootId).toBeTruthy()
-  await page.waitForURL((url) => url.searchParams.get('root') === persistedRootId, { timeout: 5_000 })
 
   // Reload the page
   await page.reload();

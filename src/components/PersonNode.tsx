@@ -132,12 +132,7 @@ function PersonNode({ data, selected }: NodeProps<PersonNodeData>) {
 
   const accessibleName = buildAccessibleName(data, sexLabel, dates)
 
-  /**
-   * Per `docs/DESIGN_SYSTEM.md` §3.2 "Has pending edit": 6px violet dot, top-right, with an
-   * explanatory title. Sized 3px node-local — half the spec value — because the dot's
-   * on-screen size is measured through React Flow's canvas zoom transform (issue #293); at
-   * the design system's reference zoom the 3px node-local box renders at the spec's 6px.
-   */
+  /** Per `docs/DESIGN_SYSTEM.md` §3.2 "Has pending edit": 6px violet dot, top-right, with an explanatory title. */
   const pendingEdits = data.pendingEdits ?? 0
   const pendingEditTitle = pendingEdits > 0 ? buildPendingEditTitle(pendingEdits) : null
 
@@ -182,7 +177,7 @@ function PersonNode({ data, selected }: NodeProps<PersonNodeData>) {
           <span
             data-testid="person-node-pending-dot"
             title={pendingEditTitle}
-            className="absolute -top-[1.5px] -right-[1.5px] w-[3px] h-[3px] rounded-full bg-pending"
+            className="absolute -top-[3px] -right-[3px] w-1.5 h-1.5 rounded-full bg-pending"
           />
         )}
         <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
@@ -218,7 +213,7 @@ function PersonNode({ data, selected }: NodeProps<PersonNodeData>) {
         <span
           data-testid="person-node-pending-dot"
           title={pendingEditTitle}
-          className="absolute -top-[1.5px] -right-[1.5px] w-[3px] h-[3px] rounded-full bg-pending"
+          className="absolute -top-[3px] -right-[3px] w-1.5 h-1.5 rounded-full bg-pending"
         />
       )}
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />

@@ -190,6 +190,38 @@ describe('PersonDrawer', () => {
     expect(onSelectPerson).not.toHaveBeenCalled()
   })
 
+  it('tapping a sibling row re-roots the tree on that sibling', async () => {
+    const onReroot = jest.fn()
+    const onSelectPerson = jest.fn()
+
+    await renderDrawer({ onReroot, onSelectPerson })
+
+    const siblingsSection = container.querySelector('[data-testid="person-drawer-siblings"]')
+    const firstSiblingRow = siblingsSection?.querySelector('[data-testid="relative-row"]')
+    expect(firstSiblingRow).not.toBeNull()
+
+    await act(async () => { (firstSiblingRow as HTMLElement).click() })
+
+    expect(onReroot).toHaveBeenCalledWith('@I4@')
+    expect(onSelectPerson).not.toHaveBeenCalled()
+  })
+
+  it('tapping a spouse row re-roots the tree on that spouse', async () => {
+    const onReroot = jest.fn()
+    const onSelectPerson = jest.fn()
+
+    await renderDrawer({ onReroot, onSelectPerson })
+
+    const marriagesSection = container.querySelector('[data-testid="person-drawer-marriages"]')
+    const spouseRow = marriagesSection?.querySelector('[data-testid="relative-row"]')
+    expect(spouseRow).not.toBeNull()
+
+    await act(async () => { (spouseRow as HTMLElement).click() })
+
+    expect(onReroot).toHaveBeenCalledWith('@I5@')
+    expect(onSelectPerson).not.toHaveBeenCalled()
+  })
+
   it('renders relative rows at a 44px touch-target height', async () => {
     await renderDrawer()
 

@@ -705,6 +705,7 @@ export function PersonDrawer({
   const [pendingRemoveParentId, setPendingRemoveParentId] = useState<string | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [suggestionSubmitted, setSuggestionSubmitted] = useState(false)
+  const [suggestionError, setSuggestionError] = useState<string | null>(null)
 
   const [relationship, setRelationship] = useState<
     | { status: 'idle' }
@@ -894,6 +895,7 @@ export function PersonDrawer({
     resetAddRelativeForm()
     setActionError(null)
     setSuggestionSubmitted(false)
+    setSuggestionError(null)
     setMode('add-relative')
   }
 
@@ -903,20 +905,42 @@ export function PersonDrawer({
    * Non-admin users adding a *parent* route through `/api/suggestions` for
    * moderation; every other case (and every admin case) links directly via the
    * relationships endpoint and goes live immediately.
+   *
+   * A failed suggestion POST is handled here rather than left to the caller's
+   * generic catch: it must never fall through to the direct-link path below
+   * (that would silently write a live relationship after moderation was
+   * declined), and the drawer must return to view mode so the error is
+   * rendered where the success confirmation would have appeared — the
+   * add-relative sub-view carries no `person-drawer` test id, so an error left
+   * there is invisible to anything scoped to the drawer.
    */
   const submitRelationshipChange = async (targetId: string) => {
     if (!isAdmin && addRelativeType === 'parent') {
-      const suggestRes = await fetch('/api/suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          changeType: 'ADD_RELATIONSHIP',
-          payload: { type: addRelativeType, targetId, childId: person.gedcomId },
-        }),
-      })
-      if (!suggestRes.ok) throw new Error(`HTTP ${suggestRes.status}`)
+      let suggestRes: Response
+      try {
+        suggestRes = await fetch('/api/suggestions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            changeType: 'ADD_RELATIONSHIP',
+            payload: { type: addRelativeType, targetId, childId: person.gedcomId },
+          }),
+        })
+      } catch (err) {
+        console.error('Failed to submit suggestion', err)
+        setSuggestionError('Failed to submit suggestion. Please try again.')
+        setMode('view')
+        return
+      }
+      if (!suggestRes.ok) {
+        console.error('Failed to submit suggestion', new Error(`HTTP ${suggestRes.status}`))
+        setSuggestionError('Failed to submit suggestion. Please try again.')
+        setMode('view')
+        return
+      }
       resetAddRelativeForm()
       setMode('view')
+      setSuggestionError(null)
       setSuggestionSubmitted(true)
       return
     }
@@ -1852,6 +1876,19 @@ export function PersonDrawer({
               className="text-xs text-ink-2 hover:text-ink font-medium transition-colors shrink-0"
             >
               Done
+            </button>
+          </div>
+        )}
+
+        {suggestionError && (
+          <div className="flex items-center justify-between gap-2 bg-[var(--ft-declined-soft)] rounded-lg px-3 py-2">
+            <p data-testid="suggestion-error" className="text-[var(--ft-declined)] text-xs">{suggestionError}</p>
+            <button
+              type="button"
+              onClick={() => setSuggestionError(null)}
+              className="text-xs text-ink-2 hover:text-ink font-medium transition-colors shrink-0"
+            >
+              Dismiss
             </button>
           </div>
         )}

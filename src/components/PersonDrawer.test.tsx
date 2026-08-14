@@ -531,7 +531,7 @@ describe('PersonDrawer', () => {
       const revertCall = calls.find(c => c.url === '/api/changes/chg-create/revert')
       expect(revertCall).toBeDefined()
       expect(revertCall!.init?.method).toBe('POST')
-      expect(onClose).toHaveBeenCalled()
+      expect(onClose).toHaveBeenCalledTimes(1)
     })
 
     it('cancelling the modal closes it without reverting or closing the drawer', async () => {
@@ -584,7 +584,7 @@ describe('PersonDrawer', () => {
       const cascadeCall = calls.find(c => c.url === '/api/person/%40I1%40/cascade-revert')
       expect(cascadeCall).toBeDefined()
       expect(cascadeCall!.init?.method).toBe('POST')
-      expect(onClose).toHaveBeenCalled()
+      expect(onClose).toHaveBeenCalledTimes(1)
     })
   })
 

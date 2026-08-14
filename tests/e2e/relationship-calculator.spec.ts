@@ -28,10 +28,29 @@ test.describe('relationship calculator', () => {
     await expect(toolbarViewing).toContainText('Irene', { timeout: 10_000 });
 
     // Root node is marked with border-brass on its inner card; non-root nodes are not.
-    const nonRootPersonNode = page
-      .locator('.react-flow__node-person')
-      .filter({ hasNot: page.locator('[class*="border-brass"]') })
-      .first();
+    //
+    // A plain `.filter({ hasNot: ... }).first()` isn't enough on its own: this
+    // tree renders 370 nodes and `FamilyTree`'s initial `fitView` only brings a
+    // fraction of them on-screen (the rest sit outside the browser viewport,
+    // unreachable by a real click, even though they're valid DOM matches). Pick
+    // the first candidate that is both genuinely non-root AND actually
+    // on-screen (see the identical workaround in reroot-persistence.spec.ts).
+    const nonRootDataId = await page.evaluate(() => {
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const nodes = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node-person'))
+      for (const node of nodes) {
+        const isRoot = !!node.querySelector('[class*="border-brass"]')
+        if (isRoot) continue
+        const rect = node.getBoundingClientRect()
+        const onScreen = rect.width > 0 && rect.top >= 0 && rect.left >= 0 && rect.bottom <= vh && rect.right <= vw
+        if (onScreen) return node.getAttribute('data-id')
+      }
+      return null
+    })
+    expect(nonRootDataId, 'expected at least one on-screen non-root person node').toBeTruthy()
+
+    const nonRootPersonNode = page.locator(`.react-flow__node[data-id="${nonRootDataId}"]`)
     await expect(nonRootPersonNode).toBeVisible({ timeout: 10_000 });
     await nonRootPersonNode.click();
 

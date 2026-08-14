@@ -201,8 +201,8 @@ test.describe('Revert: per-marriage remove (×) button', () => {
 
     await expect(page.getByTestId('person-drawer-marriages')).toContainText('Jane SpouseA', { timeout: 5_000 })
 
-    page.once('dialog', d => d.accept())
     await page.getByTestId('marriage-remove-@FUNION_A@').click()
+    await page.getByTestId('confirm-dialog-confirm').click()
 
     // After the revert, the drawer refetches — Jane's marriage disappears,
     // Mary remains, and the × is no longer present.
@@ -258,8 +258,8 @@ test.describe('Revert: per-marriage remove (×) button', () => {
 
     await expect(page.getByTestId('person-drawer-marriages')).toContainText('Jane SpouseA', { timeout: 5_000 })
 
-    page.once('dialog', d => d.accept())
     await page.getByTestId('marriage-remove-@FUNION_A@').click()
+    await page.getByTestId('confirm-dialog-confirm').click()
 
     await expect(page.getByTestId('person-drawer-action-error'))
       .toContainText('Union has a CHILD edge — cannot remove', { timeout: 5_000 })

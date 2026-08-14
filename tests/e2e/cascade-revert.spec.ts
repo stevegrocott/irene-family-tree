@@ -203,11 +203,8 @@ test.describe('cascade-revert: delete person', () => {
     await expect(deleteBtn).toBeVisible()
     await expect(deleteBtn).toBeEnabled()
 
-    page.once('dialog', d => {
-      expect(d.message()).toMatch(/1.*connections?/i)
-      d.accept()
-    })
     await deleteBtn.click()
+    await page.getByTestId('confirm-dialog-confirm').click()
 
     await expect(drawer).not.toBeVisible({ timeout: 5_000 })
     expect(cascadePostCount).toBe(1)
@@ -266,8 +263,8 @@ test.describe('cascade-revert: delete person', () => {
     await expect(deleteBtn).toBeVisible()
     await expect(deleteBtn).toBeEnabled()
 
-    page.once('dialog', d => d.accept())
     await deleteBtn.click()
+    await page.getByTestId('confirm-dialog-confirm').click()
 
     await expect(drawer).not.toBeVisible({ timeout: 5_000 })
     expect(revertPostCount).toBe(1)

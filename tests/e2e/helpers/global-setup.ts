@@ -1,4 +1,5 @@
-import { chromium, type FullConfig } from '@playwright/test'
+import { chromium, type FullConfig, type Page } from '@playwright/test'
+import { adminSessionToken, AUTH_SECRET_FALLBACK } from './admin-auth'
 
 /**
  * Selector for the Next.js dev overlay's bottom-left toggle button — the
@@ -31,6 +32,79 @@ const DEV_OVERLAY_SELECTOR = '[data-nextjs-dev-tools-button]'
  * fair chance to mount the overlay if it's going to.
  */
 const OVERLAY_CHECK_TIMEOUT_MS = 2_000
+
+/** NextAuth's default JWT session cookie name (`session: { strategy: 'jwt' }` in `src/auth.ts`). */
+const ADMIN_SESSION_COOKIE_NAME = 'authjs.session-token'
+
+/**
+ * Bounds how long globalSetup waits for the `/admin` navigation to settle
+ * before deciding whether the admin cookie was accepted. Unlike
+ * `OVERLAY_CHECK_TIMEOUT_MS`, this is a ceiling rather than a typical
+ * duration: `page.goto` resolves as soon as the redirect (rejected) or the
+ * admin page (accepted) reaches `domcontentloaded`, so a warm dev server
+ * settles in ~1s. It's set well above that because `/admin` — unlike `/`,
+ * which the `webServer.url` readiness probe already compiled — may still be
+ * an uncompiled Turbopack route on a cold-cache run, and a slow compile must
+ * not be misreported as a rejected cookie.
+ */
+const ADMIN_COOKIE_CHECK_TIMEOUT_MS = 30_000
+
+/**
+ * Fails the suite fast, naming `AUTH_SECRET`, if the server under test does
+ * not accept the admin session cookie the admin specs present.
+ *
+ * `/admin` (`src/app/admin/page.tsx`) calls `auth()` and redirects to
+ * `/api/auth/signin` before it ever touches Neo4j, so this is a pure auth
+ * probe: a Neo4j outage cannot masquerade as a secret mismatch, and a
+ * mismatch cannot masquerade as a Neo4j/UI problem.
+ *
+ * On the common **spawn** path this always passes: `playwright.config.ts`
+ * gives the server the same `AUTH_SECRET` fallback `adminSessionToken()`
+ * uses. It only fails on the **reuse** path (issue #284's `webServer.env`
+ * caveat) when the reused server loaded a *different* `AUTH_SECRET` from
+ * `.env.local` — the exact scenario that cost a wrong root-cause diagnosis
+ * and a reverted, out-of-scope production change during #284's own
+ * verification (issue #287).
+ */
+async function assertAdminCookieAccepted(page: Page, baseURL: string): Promise<void> {
+  const token = await adminSessionToken()
+  await page.context().addCookies([
+    {
+      name: ADMIN_SESSION_COOKIE_NAME,
+      value: token,
+      domain: new URL(baseURL).hostname,
+      path: '/',
+      httpOnly: true,
+      secure: false,
+      sameSite: 'Lax',
+    },
+  ])
+
+  await page.goto(`${baseURL}/admin`, {
+    waitUntil: 'domcontentloaded',
+    timeout: ADMIN_COOKIE_CHECK_TIMEOUT_MS,
+  })
+
+  const landedUrl = page.url()
+  const cookieRejected = /\/api\/auth\/signin/.test(landedUrl)
+
+  if (cookieRejected) {
+    throw new Error(
+      `Admin session cookie rejected at ${baseURL}/admin — landed on ${landedUrl} instead of the admin ` +
+        `page. The E2E suite is reusing a dev server whose AUTH_SECRET does not match the secret this ` +
+        `suite signs its test admin cookie with (\`process.env.AUTH_SECRET ?? '${AUTH_SECRET_FALLBACK}'\`). ` +
+        `playwright.config.ts's "reuseExistingServer" reuses whatever is already listening on ${baseURL} ` +
+        `and silently discards webServer.env.AUTH_SECRET when it does, so a pre-existing server keeps ` +
+        `whatever AUTH_SECRET it originally booted with (often the real value from .env.local) while this ` +
+        `test process still signs with the fallback. The resulting JWT fails to verify, every admin spec's ` +
+        `session cookie is rejected, and \`/admin\` redirects to sign-in — which then surfaces as 9+ unrelated ` +
+        `"Sign in with Google" timeouts instead of this message (issue #287).\n\n` +
+        `Fix: stop whatever is listening on ${baseURL} (e.g. \`lsof -ti:3000 | xargs kill\`) and let ` +
+        `Playwright spawn its own dev server, or restart your dev server with ` +
+        `AUTH_SECRET=${AUTH_SECRET_FALLBACK} exported first (matching playwright.config.ts's fallback).`,
+    )
+  }
+}
 
 /**
  * Fails the suite fast, with an actionable message, if the Next.js dev
@@ -81,6 +155,8 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
           `NEXT_PUBLIC_E2E=1 exported first.`,
       )
     }
+
+    await assertAdminCookieAccepted(page, baseURL)
   } finally {
     await browser.close()
   }

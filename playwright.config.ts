@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { AUTH_SECRET_FALLBACK } from './tests/e2e/helpers/admin-auth';
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -49,7 +50,11 @@ export default defineConfig({
       // Provide NextAuth config to the dev server so auth flows can boot
       // during E2E tests without real Google credentials. Tests stub
       // accounts.google.com, so these IDs never leave the test process.
-      AUTH_SECRET: process.env.AUTH_SECRET ?? 'e2e-test-auth-secret',
+      // Imported rather than repeated: globalSetup and the admin specs derive
+      // the same value from `admin-auth.ts`, so a literal here could drift out
+      // of step with the token the specs sign and silently reintroduce the
+      // sign-in-redirect failures this issue exists to catch (AC6).
+      AUTH_SECRET: process.env.AUTH_SECRET ?? AUTH_SECRET_FALLBACK,
       AUTH_GOOGLE_ID: process.env.AUTH_GOOGLE_ID ?? 'e2e-test-google-client-id',
       AUTH_GOOGLE_SECRET: process.env.AUTH_GOOGLE_SECRET ?? 'e2e-test-google-client-secret',
     },

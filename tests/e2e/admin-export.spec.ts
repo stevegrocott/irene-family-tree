@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { encode } from '@auth/core/jwt'
+import { setAdminCookie } from './helpers/admin-auth'
 
 /**
  * E2E test for the admin GEDCOM export download (issue #147).
@@ -7,33 +7,6 @@ import { encode } from '@auth/core/jwt'
  * Covers: clicking "Download GEDCOM" on /admin triggers a browser download
  * whose filename and body reflect the /api/admin/export response.
  */
-
-async function adminSessionToken(): Promise<string> {
-  return encode({
-    token: {
-      name: 'E2E Admin',
-      email: 'admin@test.com',
-      picture: null,
-      sub: 'e2e-admin-001',
-      role: 'admin',
-    },
-    secret: process.env.AUTH_SECRET ?? 'e2e-test-auth-secret',
-    salt: 'authjs.session-token',
-  })
-}
-
-async function setAdminCookie(context: import('@playwright/test').BrowserContext) {
-  const token = await adminSessionToken()
-  await context.addCookies([{
-    name: 'authjs.session-token',
-    value: token,
-    domain: 'localhost',
-    path: '/',
-    httpOnly: true,
-    secure: false,
-    sameSite: 'Lax',
-  }])
-}
 
 const mockGedcom = '0 HEAD\n1 SOUR irene-family-tree\n0 TRLR'
 

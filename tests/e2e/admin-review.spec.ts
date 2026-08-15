@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { encode } from '@auth/core/jwt'
+import { setAdminCookie } from './helpers/admin-auth'
 
 /**
  * E2E tests for the Admin Changes Review page (issue #55).
@@ -23,35 +23,6 @@ import { encode } from '@auth/core/jwt'
  * `/api/admin/changes` client-side endpoint AND use an injected initial-prop
  * override; see the individual test comments for details.
  */
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-async function adminSessionToken(): Promise<string> {
-  return encode({
-    token: {
-      name: 'E2E Admin',
-      email: 'admin@test.com',
-      picture: null,
-      sub: 'e2e-admin-001',
-      role: 'admin',
-    },
-    secret: process.env.AUTH_SECRET ?? 'e2e-test-auth-secret',
-    salt: 'authjs.session-token',
-  })
-}
-
-async function setAdminCookie(context: import('@playwright/test').BrowserContext) {
-  const token = await adminSessionToken()
-  await context.addCookies([{
-    name: 'authjs.session-token',
-    value: token,
-    domain: 'localhost',
-    path: '/',
-    httpOnly: true,
-    secure: false,
-    sameSite: 'Lax',
-  }])
-}
 
 // ── Mock data ────────────────────────────────────────────────────────────────
 

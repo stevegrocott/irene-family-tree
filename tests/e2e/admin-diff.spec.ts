@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { encode } from '@auth/core/jwt'
+import { setAdminCookie } from './helpers/admin-auth'
 
 /**
  * E2E coverage for the admin review-card diff treatment (issue #214, task 1
@@ -45,33 +45,6 @@ import { encode } from '@auth/core/jwt'
  * a synthetic fixture, then drives the resulting navigation through the
  * real "View in tree" link.
  */
-
-async function adminSessionToken(): Promise<string> {
-  return encode({
-    token: {
-      name: 'E2E Admin',
-      email: 'admin@test.com',
-      picture: null,
-      sub: 'e2e-admin-001',
-      role: 'admin',
-    },
-    secret: process.env.AUTH_SECRET ?? 'e2e-test-auth-secret',
-    salt: 'authjs.session-token',
-  })
-}
-
-async function setAdminCookie(context: import('@playwright/test').BrowserContext) {
-  const token = await adminSessionToken()
-  await context.addCookies([{
-    name: 'authjs.session-token',
-    value: token,
-    domain: 'localhost',
-    path: '/',
-    httpOnly: true,
-    secure: false,
-    sameSite: 'Lax',
-  }])
-}
 
 // birthPlace exercises AC1/AC4: a field with both a before and an after
 // value. occupation exercises AC2: an empty "before" side paired with a

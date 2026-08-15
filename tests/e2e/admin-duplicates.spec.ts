@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { encode } from '@auth/core/jwt'
+import { adminSessionToken } from './helpers/admin-auth'
 
 /**
  * E2E tests for the Admin Duplicates workflow (issue #149).
@@ -23,20 +23,6 @@ import { encode } from '@auth/core/jwt'
  */
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-
-async function adminSessionToken(): Promise<string> {
-  return encode({
-    token: {
-      name: 'E2E Admin',
-      email: 'admin@test.com',
-      picture: null,
-      sub: 'e2e-admin-001',
-      role: 'admin',
-    },
-    secret: process.env.AUTH_SECRET ?? 'e2e-test-auth-secret',
-    salt: 'authjs.session-token',
-  })
-}
 
 let cachedAdminToken: string
 

@@ -177,7 +177,11 @@ test.describe('Revert: delete-person button', () => {
     const myChangesWithOwnRelationship = {
       ...myChangesWithCreate,
       relationshipChanges: [
-        { id: 'change-rel-1', newValue: { type: 'parent', targetId: '@IBOB@' }, appliedAt: '2026-04-23T10:01:00.000Z' },
+        {
+          id: 'change-rel-1',
+          newValue: { type: 'parent', targetId: '@IBOB@', unionId: '@UBOB@' },
+          appliedAt: '2026-04-23T10:01:00.000Z',
+        },
       ],
     }
 

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { waitForCanvasSettled } from './helpers/viewer';
 
 /**
  * E2E tests for generation bands (issue #194, design system §3.1).
@@ -36,6 +37,7 @@ test.describe('generation bands', () => {
   test('each generation band aligns with the y-level of its person nodes', async ({ page }) => {
     const toolbarViewing = page.getByTestId('toolbar-viewing');
     await expect(toolbarViewing).toContainText('Irene', { timeout: 15_000 });
+    await waitForCanvasSettled(page);
 
     const personNodes = page.locator('.react-flow__node-person');
     const nodeCount = await personNodes.count();
@@ -73,6 +75,7 @@ test.describe('generation bands', () => {
     const bandBoxes: BBox[] = [];
     for (let i = 0; i < bandCount; i++) {
       const box = await bands.nth(i).boundingBox();
+      expect(box, `generation-band[${i}] has no bounding box`).not.toBeNull();
       if (box) bandBoxes.push(box);
     }
     expect(bandBoxes.length).toBe(bandCount);

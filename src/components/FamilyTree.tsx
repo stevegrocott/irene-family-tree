@@ -10,7 +10,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo, useDeferredValue } from 'react'
 import type React from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession, signIn } from 'next-auth/react'
 import ReactFlow, {
   Background,
@@ -2256,6 +2256,7 @@ function FlowCanvas({
   const [error, setError] = useState<string | null>(null)
   const [truncated, setTruncated] = useState(false)
   const [totalNodes, setTotalNodes] = useState<number | undefined>(undefined)
+  const router = useRouter()
   const [hops, setHops] = useState(() => initialUrlState.hops ?? DEFAULT_HOPS)
   const [actualMaxDepth, setActualMaxDepth] = useState<number>(MAX_HOPS)
   const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(() =>
@@ -2427,32 +2428,16 @@ function FlowCanvas({
   }, [buildPath])
 
   /**
-   * Keeps the URL in sync with viewer state (root, person, hops) so re-rooting,
-   * depth changes, and person selection are shareable without adding history
-   * entries or scrolling. Skipped until the user has actually interacted (or the
-   * root has changed via {@link onSelectRoot}) so an untouched initial load —
+   * Keeps the URL in sync with viewer state (root, person, hops) via `router.replace`
+   * so re-rooting, depth changes, and person selection are shareable without adding
+   * history entries or scrolling. Skipped until the user has actually interacted (or
+   * the root has changed via {@link onSelectRoot}) so an untouched initial load —
    * including one that arrived via a deep link — never rewrites the URL.
-   *
-   * Uses `window.history.replaceState` directly instead of `next/navigation`'s
-   * `router.replace`. That router call is asynchronous here and — critically —
-   * does not commit to `window.location` in call order: selecting a node (which
-   * syncs `?person=`) followed shortly after by re-rooting on it (which syncs
-   * `?root=` and clears `?person=`) fires two `replace()` calls a few hundred ms
-   * apart, but the *earlier* call's async commit can land *after* the later one,
-   * permanently overwriting the URL with stale state. Since the URL's `root`
-   * takes precedence over localStorage on reload (deep links must win), that
-   * stale `root` param survives a reload and reverts the viewer to the previous
-   * person (issue #308, tests/e2e/reroot-persistence.spec.ts). `history.replaceState`
-   * is a plain synchronous browser API — calls apply immediately and in order —
-   * so there is no async window for a later call to be clobbered by an earlier
-   * one. Safe here because this is the app's only `next/navigation` router usage
-   * and `searchParams` is read just once, at mount (`initialUrlState`), so
-   * nothing downstream depends on Next's router state tracking the URL live.
    */
   useEffect(() => {
     if (!userInteractedRef.current && treeVersion === 0) return
-    window.history.replaceState(null, '', buildPath())
-  }, [buildPath, treeVersion])
+    router.replace(buildPath(), { scroll: false })
+  }, [buildPath, treeVersion, router])
 
   /**
    * Opens the person drawer when a person node is clicked.
@@ -2772,10 +2757,8 @@ export default function FamilyTree() {
   const [treeVersion, setTreeVersion] = useState(0)
   const [personsVersion, setPersonsVersion] = useState(0)
   const searchParams = useSearchParams()
-  // Captured once on mount so later URL updates (from our own history.replaceState calls
-  // in FlowCanvas) don't re-trigger root resolution — only the URL present on initial
-  // load takes precedence. Note `searchParams` itself isn't re-read live elsewhere, since
-  // those URL updates bypass next/navigation's router (see FlowCanvas's URL-sync effect).
+  // Captured once on mount so later URL updates (from our own router.replace calls) don't
+  // re-trigger root resolution — only the URL present on initial load takes precedence.
   const [initialUrlState] = useState(() => parseTreeUrlState(searchParams))
   // null until mount so SSR/first paint uses DEFAULT_DENSITY, avoiding a hydration mismatch
   // (docs/DESIGN_SYSTEM.md §6: density defaults to dense below 640px, compact at/above it).

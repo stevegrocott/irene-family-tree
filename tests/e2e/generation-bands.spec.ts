@@ -41,6 +41,22 @@ test.describe('generation bands', () => {
     const nodeCount = await personNodes.count();
     expect(nodeCount).toBeGreaterThan(0);
 
+    // The canvas fits the tree to the viewport with a pan/zoom transition shortly after
+    // load (FamilyTree.tsx's fit-to-bounds effect), independent of the `toolbarViewing`
+    // text this spec already waits for above. Reading node bounding boxes one at a time
+    // while that transition is still animating races the viewport transform: each
+    // sequential read can land on a different animation frame, so two boxes belonging to
+    // the same generation row can transiently appear more than Y_TOLERANCE apart and get
+    // miscounted as separate levels. Wait for the first node's box to stop moving between
+    // polls before measuring, so all reads below land after the transition settles.
+    await expect(async () => {
+      const before = await personNodes.first().boundingBox();
+      await page.waitForTimeout(50);
+      const after = await personNodes.first().boundingBox();
+      expect(before).not.toBeNull();
+      expect(after).toEqual(before);
+    }).toPass({ timeout: 5_000 });
+
     type BBox = { x: number; y: number; width: number; height: number };
     const nodeBoxes: BBox[] = [];
     for (let i = 0; i < nodeCount; i++) {

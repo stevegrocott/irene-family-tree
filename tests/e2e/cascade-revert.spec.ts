@@ -53,7 +53,7 @@ const mockAliceWithParent = {
   deathPlace: null,
   occupation: null,
   notes: null,
-  parents: [{ gedcomId: '@IBOB@', name: 'Bob Parent', sex: 'M', birthYear: '1960', deathYear: null }],
+  parents: [{ gedcomId: '@IBOB@', name: 'Bob Parent', sex: 'M', birthYear: '1960', deathYear: null, unionId: '@UBOB@' }],
   siblings: [],
   marriages: [],
 }

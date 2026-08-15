@@ -114,6 +114,17 @@ export interface PersonSummary {
 }
 
 /**
+ * A parent entry in {@link PersonDetailResponse}, extending {@link PersonSummary}
+ * with the GEDCOM identifier of the Union node connecting this parent to the person,
+ * so callers can match authored relationship changes to a specific parent connection
+ * instead of tallying counts.
+ */
+export interface ParentSummary extends PersonSummary {
+  /** GEDCOM identifier for the Union (FAM) node linking this parent to the person. */
+  unionId: string
+}
+
+/**
  * Details of a single marriage/union, including the spouse and children of that union.
  */
 export interface MarriageDetail {
@@ -157,7 +168,7 @@ export interface PersonDetailResponse {
   /** URL of the person's profile photo, or `null`/absent if none is set. */
   photoUrl?: string | null
   /** Biological or adoptive parents. */
-  parents: PersonSummary[]
+  parents: ParentSummary[]
   /** Siblings sharing at least one common parent union. */
   siblings: PersonSummary[]
   /** All recorded marriages with spouse and children. */

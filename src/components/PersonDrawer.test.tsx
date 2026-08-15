@@ -49,9 +49,11 @@ const mockDetailResponse = {
   deathPlace: null,
   occupation: null,
   notes: null,
+  // Both parents hang off a single FAM/Union node ('@F0@'), the shape a GEDCOM-derived
+  // union graph emits and what /api/person/[id] returns as ParentSummary.unionId.
   parents: [
-    { gedcomId: '@I2@', name: 'Father Smith', sex: 'M', birthYear: null, deathYear: null },
-    { gedcomId: '@I3@', name: 'Mother Jones', sex: 'F', birthYear: null, deathYear: null },
+    { gedcomId: '@I2@', name: 'Father Smith', sex: 'M', birthYear: null, deathYear: null, unionId: '@F0@' },
+    { gedcomId: '@I3@', name: 'Mother Jones', sex: 'F', birthYear: null, deathYear: null, unionId: '@F0@' },
   ],
   siblings: [
     { gedcomId: '@I4@', name: 'Sibling Smith', sex: 'M', birthYear: null, deathYear: null },
@@ -688,17 +690,17 @@ describe('PersonDrawer', () => {
     })
 
     it('for a person with relationships, the modal shows the connection count and confirming calls cascade-revert', async () => {
-      // mockDetailResponse has 2 parents + 1 marriage (unionId '@F1@') = 3 connections.
-      // The API keys relationship changes on newValue.unionId (see my-changes/route.ts);
-      // there is no guaranteed type/targetId. The marriage is matched by its unionId
-      // directly; the two parent-authored changes carry union ids the client can't
-      // correlate to a specific parent, so they're counted against the parent total.
+      // mockDetailResponse has 2 parents (both on union '@F0@') + 1 marriage
+      // (unionId '@F1@') = 3 connections. The API keys relationship changes on
+      // newValue.unionId (see my-changes/route.ts); there is no guaranteed
+      // type/targetId. Every connection is matched per-connection by unionId, so the
+      // single authored parent change ('@F0@') legitimately covers both parents —
+      // two authored changes are not required to match the parent count.
       const { calls } = installDeleteFetchMock({
         detail: mockDetailResponse,
         relationshipChanges: [
-          { id: 'rc1', newValue: { unionId: '@F2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
-          { id: 'rc2', newValue: { unionId: '@F3@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
-          { id: 'rc3', newValue: { unionId: '@F1@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc1', newValue: { unionId: '@F0@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc2', newValue: { unionId: '@F1@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
         ],
       })
       const onClose = jest.fn()
@@ -711,9 +713,12 @@ describe('PersonDrawer', () => {
 
       await act(async () => { deleteBtn.click() })
 
+      // computeCascadeDeleteConnectionCount reports the number of authored
+      // relationship changes (2 unions: the parents' '@F0@' and the marriage '@F1@'),
+      // falling back to the parent+marriage total only when changes are unavailable.
       const message = container.querySelector('[data-testid="confirm-dialog-message"]')
       expect(message!.textContent).toBe(
-        'Delete John Smith and remove all 3 of their connections? This cannot be undone.'
+        'Delete John Smith and remove all 2 of their connections? This cannot be undone.'
       )
 
       const confirmBtn = container.querySelector('[data-testid="confirm-dialog-confirm"]') as HTMLButtonElement
@@ -737,7 +742,7 @@ describe('PersonDrawer', () => {
       installDeleteFetchMock({
         detail: oneParentDetail,
         relationshipChanges: [
-          { id: 'rc1', newValue: { unionId: '@F2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc1', newValue: { unionId: '@F0@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
         ],
       })
       await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
@@ -748,14 +753,13 @@ describe('PersonDrawer', () => {
     })
 
     it('disables delete and shows a contact-admin message when one of several connections was authored by another user', async () => {
-      // mockDetailResponse has 2 parents + 1 marriage (unionId '@F1@') = 3 connections.
-      // This user authored two relationship changes covering the parents, but none
-      // covering the marriage's unionId — '@F1@' is foreign.
+      // mockDetailResponse has 2 parents (union '@F0@') + 1 marriage (unionId '@F1@').
+      // This user authored the parent union, but nothing covering the marriage's
+      // unionId — '@F1@' is foreign.
       installDeleteFetchMock({
         detail: mockDetailResponse,
         relationshipChanges: [
-          { id: 'rc1', newValue: { unionId: '@F2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
-          { id: 'rc2', newValue: { unionId: '@F3@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc1', newValue: { unionId: '@F0@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
         ],
       })
       await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)

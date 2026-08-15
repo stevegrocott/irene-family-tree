@@ -165,6 +165,7 @@ test.describe('Revert: delete-person button', () => {
           sex: 'M',
           birthYear: '1960',
           deathYear: null,
+          unionId: '@UBOB@',
         },
       ],
     }
@@ -173,13 +174,14 @@ test.describe('Revert: delete-person button', () => {
     // so relationshipChanges must account for it — otherwise hasForeignConnections
     // (FamilyTree.tsx) treats the connection as added by someone else and disables
     // the button, per the "another user added a connection" scenario covered by
-    // cascade-revert.spec.ts.
+    // cascade-revert.spec.ts. The change shape mirrors what my-changes/route.ts
+    // emits: the union id lives on newValue.unionId, with no type/targetId fields.
     const myChangesWithOwnRelationship = {
       ...myChangesWithCreate,
       relationshipChanges: [
         {
           id: 'change-rel-1',
-          newValue: { type: 'parent', targetId: '@IBOB@', unionId: '@UBOB@' },
+          newValue: { unionId: '@UBOB@' },
           appliedAt: '2026-04-23T10:01:00.000Z',
         },
       ],

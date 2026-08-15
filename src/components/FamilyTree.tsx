@@ -1017,23 +1017,19 @@ export function PersonDrawer({
   // client-side by checking each live parent/spouse connection against the user's
   // own relationship changes, avoiding a server round-trip. The API keys relationship
   // changes on `newValue.unionId` (see my-changes/route.ts) — there is no guaranteed
-  // `type` or `targetId` on that shape. Marriages carry their own `unionId` in the
-  // person detail response, so those are matched precisely, per connection. Parent
-  // connections don't expose a union id to the client, so authored change ids left
-  // over after matching marriages are counted against the number of live parent
-  // connections instead of being matched individually.
+  // `type` or `targetId` on that shape. Both marriages and parents carry their own
+  // `unionId` in the person detail response (see /api/person/[id]), so every
+  // connection is matched precisely, per connection, against the authored union ids.
+  // A person's two parents commonly hang off a single FAM/Union node, so authoring
+  // that one connection can legitimately cover both parent entries.
   const authoredUnionIds = new Set(
     (myChanges?.relationshipChanges ?? [])
       .map(c => c.newValue?.unionId as string | undefined)
       .filter((id): id is string => !!id)
   )
-  const authoredMarriageCount = detail
-    ? detail.marriages.filter(m => authoredUnionIds.has(m.unionId)).length
-    : 0
-  const unmatchedAuthoredCount = authoredUnionIds.size - authoredMarriageCount
   const hasForeignConnections = detailHasRelationships && !!myChanges && (
     detail!.marriages.some(m => !authoredUnionIds.has(m.unionId)) ||
-    unmatchedAuthoredCount < detail!.parents.length
+    detail!.parents.some(p => !authoredUnionIds.has(p.unionId))
   )
 
   /**

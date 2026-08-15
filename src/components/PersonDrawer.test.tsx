@@ -776,6 +776,26 @@ describe('PersonDrawer', () => {
       expect(warning?.textContent).toBe('Some connections cannot be removed. Contact an admin.')
     })
 
+    it('admin: leaves delete enabled and shows no contact-admin warning even when a connection was authored by another user', async () => {
+      // Same setup as the non-admin foreign-connection test above (this user authored
+      // both parent links but not the marriage — @I5@ is foreign) but signed in as admin.
+      // The client-side gate is bypassed for admins entirely, matching the backend's
+      // cascadeRevertPerson behavior which only blocks non-admin requesters.
+      mockSession('admin')
+      installDeleteFetchMock({
+        detail: mockDetailResponse,
+        relationshipChanges: [
+          { id: 'rc1', newValue: { type: 'parent', targetId: '@I2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc2', newValue: { type: 'parent', targetId: '@I3@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+        ],
+      })
+      await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
+
+      const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
+      expect(deleteBtn.disabled).toBe(false)
+      expect(container.querySelector('[data-testid="person-drawer-action-error"]')).toBeNull()
+    })
+
     it('shows conflictingChange.detail from a 409 revert response as the action error', async () => {
       const personPath = `/api/person/${encodeURIComponent('@I1@')}`
       const fetchMock = jest.fn().mockImplementation(async (url: string) => {

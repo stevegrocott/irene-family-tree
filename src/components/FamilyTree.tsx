@@ -1026,9 +1026,19 @@ export function PersonDrawer({
       .filter((id): id is string => !!id)
   )
   // Admins bypass this client-side gate entirely — `cascadeRevertPerson`
-  // (src/lib/cascade-revert.ts) only enforces the foreign-connection block
+  // (src/lib/cascade-revert.ts:124) only enforces the foreign-connection block
   // for non-admin requesters, so disabling the button for admins here would
   // just be a UI lie about what the backend actually allows.
+  //
+  // Reconciled with #308's fail-closed requirement (recorded on #308, see
+  // issue comments): #308's fail-closed concern is about the matching logic
+  // below correctly identifying foreign connections for *non-admin* users —
+  // e.g. switching from `newValue.type`/`targetId` to the `newValue.unionId`
+  // shape the API actually emits must not under-match and let a real foreign
+  // connection through. It is not a claim that admins must also be gated.
+  // This `!isAdmin` short-circuit is a separate, orthogonal check that mirrors
+  // the server's own admin exemption above, and must stay the leading
+  // condition, unmodified, when #308 reworks the matching logic that follows.
   const hasForeignConnections = !isAdmin && detailHasRelationships && !!myChanges && (
     detail!.parents.some(p => !authoredConnectionTargetIds.has(p.gedcomId)) ||
     detail!.marriages.some(m => !m.spouse?.gedcomId || !authoredConnectionTargetIds.has(m.spouse.gedcomId))

@@ -46,23 +46,33 @@ test.describe('relationship calculator', () => {
     // unreachable by a real click, even though they're valid DOM matches). Pick
     // the first candidate that is both genuinely non-root AND actually
     // on-screen (see the identical workaround in reroot-persistence.spec.ts).
-    const nonRootDataId = await page.evaluate(() => {
+    const nonRootAccessibleName = await page.evaluate(() => {
       const vw = window.innerWidth
       const vh = window.innerHeight
       const nodes = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node-person'))
       for (const node of nodes) {
         const accessibleName = node.querySelector('[role="button"]')?.getAttribute('aria-label') ?? ''
         const isRoot = accessibleName.startsWith('Irene Tunnicliffe')
-        if (isRoot) continue
+        if (isRoot || !accessibleName) continue
         const rect = node.getBoundingClientRect()
         const onScreen = rect.width > 0 && rect.top >= 0 && rect.left >= 0 && rect.bottom <= vh && rect.right <= vw
-        if (onScreen) return node.getAttribute('data-id')
+        if (onScreen) return accessibleName
       }
       return null
     })
-    expect(nonRootDataId, 'expected at least one on-screen non-root person node').toBeTruthy()
+    expect(nonRootAccessibleName, 'expected at least one on-screen non-root person node').toBeTruthy()
+    // Assert the picked candidate's identity before we ever click it: it must
+    // be a real, named person and it must not be the root (mirrors the
+    // accessible-name based root check in the sibling test below).
+    expect(nonRootAccessibleName).not.toMatch(/^Irene Tunnicliffe\b/);
 
-    const nonRootPersonNode = page.locator(`.react-flow__node[data-id="${nonRootDataId}"]`)
+    // Re-locate the same person through Playwright's own accessible-name
+    // query (not a raw CSS/data-id selector) so the click goes through the
+    // real accessible control the DOM lookup above identified.
+    const nonRootPersonNode = page
+      .locator('.react-flow__node-person')
+      .filter({ has: page.getByRole('button', { name: nonRootAccessibleName!, exact: true }) })
+      .first();
     await expect(nonRootPersonNode).toBeVisible({ timeout: 10_000 });
     await nonRootPersonNode.click();
 

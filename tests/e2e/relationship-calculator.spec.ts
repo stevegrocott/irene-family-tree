@@ -43,24 +43,43 @@ test.describe('relationship calculator', () => {
     // A plain `.filter({ hasNot: ... }).first()` isn't enough on its own: this
     // tree renders 370 nodes and `FamilyTree`'s initial `fitView` only brings a
     // fraction of them on-screen (the rest sit outside the browser viewport,
-    // unreachable by a real click, even though they're valid DOM matches). Pick
-    // the first candidate that is both genuinely non-root AND actually
-    // on-screen (see the identical workaround in reroot-persistence.spec.ts).
-    const nonRootAccessibleName = await page.evaluate(() => {
+    // unreachable by a real click, even though they're valid DOM matches).
+    //
+    // Collect every genuinely non-root candidate along with its on-screen
+    // status, rather than folding the on-screen check into the selector
+    // itself. Filtering `if (onScreen) return ...` inside the loop would
+    // silently discard off-screen candidates with no trace of who they were
+    // or how many there were: a failure would only ever say "nothing
+    // on-screen" with no names attached. Surfacing the full candidate list
+    // lets the assertion below name exactly who was found and why the check
+    // failed (mirrors the identical workaround in reroot-persistence.spec.ts).
+    const nonRootCandidates = await page.evaluate(() => {
       const vw = window.innerWidth
       const vh = window.innerHeight
       const nodes = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node-person'))
-      for (const node of nodes) {
-        const accessibleName = node.querySelector('[role="button"]')?.getAttribute('aria-label') ?? ''
-        const isRoot = accessibleName.startsWith('Irene Tunnicliffe')
-        if (isRoot || !accessibleName) continue
-        const rect = node.getBoundingClientRect()
-        const onScreen = rect.width > 0 && rect.top >= 0 && rect.left >= 0 && rect.bottom <= vh && rect.right <= vw
-        if (onScreen) return accessibleName
-      }
-      return null
+      return nodes
+        .map((node) => {
+          const accessibleName = node.querySelector('[role="button"]')?.getAttribute('aria-label') ?? ''
+          const isRoot = accessibleName.startsWith('Irene Tunnicliffe')
+          if (isRoot || !accessibleName) return null
+          const rect = node.getBoundingClientRect()
+          const onScreen = rect.width > 0 && rect.top >= 0 && rect.left >= 0 && rect.bottom <= vh && rect.right <= vw
+          return { accessibleName, onScreen }
+        })
+        .filter((candidate): candidate is { accessibleName: string; onScreen: boolean } => candidate !== null)
     })
-    expect(nonRootAccessibleName, 'expected at least one on-screen non-root person node').toBeTruthy()
+    expect(nonRootCandidates.length, 'expected at least one non-root person node in the DOM').toBeGreaterThan(0)
+
+    // Loud assertion, not a silent selector: if none of the non-root
+    // candidates are on-screen, name every one of them in the failure so the
+    // cause (nothing reachable after fitView) is obvious without re-running
+    // under a debugger, instead of just timing out on a later click.
+    const onScreenCandidate = nonRootCandidates.find((candidate) => candidate.onScreen)
+    expect(
+      onScreenCandidate,
+      `expected at least one on-screen non-root person node; found ${nonRootCandidates.length} non-root candidate(s), all off-screen: ${nonRootCandidates.map((candidate) => candidate.accessibleName).join(', ')}`
+    ).toBeTruthy()
+    const nonRootAccessibleName = onScreenCandidate!.accessibleName
     // Assert the picked candidate's identity before we ever click it: it must
     // be a real, named person and it must not be the root (mirrors the
     // accessible-name based root check in the sibling test below).

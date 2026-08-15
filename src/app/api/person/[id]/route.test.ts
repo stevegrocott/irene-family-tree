@@ -393,7 +393,9 @@ describe('GET /api/person/[id]', () => {
       mockAuth.mockResolvedValueOnce(null)
       const livingRelatives = {
         ...livingDetail,
-        parents: [{ gedcomId: 'I006', name: 'Living Parent', sex: 'F', birthYear: RECENT, deathYear: null }],
+        parents: [
+          { gedcomId: 'I006', name: 'Living Parent', sex: 'F', birthYear: RECENT, deathYear: null, unionId: 'F002' },
+        ],
         siblings: [{ gedcomId: 'I007', name: 'Living Sibling', sex: 'M', birthYear: RECENT, deathYear: null }],
       }
       mockRead.mockResolvedValue([livingRelatives])
@@ -404,6 +406,9 @@ describe('GET /api/person/[id]', () => {
       expect(parent.living).toBe(true)
       expect(parent.name).toBe('Living Parent')
       expect(parent.birthYear).toBeNull()
+      // unionId identifies the connecting Union node, not the parent, so it must
+      // survive redaction even though the parent's other fields are nulled out.
+      expect(parent.unionId).toBe('F002')
 
       const sibling = body.siblings[0]
       expect(sibling.living).toBe(true)

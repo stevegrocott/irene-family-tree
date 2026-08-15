@@ -10,6 +10,14 @@ import { encode } from '@auth/core/jwt'
  * middleware treats the request as an authenticated admin.
  */
 
+/**
+ * Fallback `AUTH_SECRET` used to sign the E2E admin session cookie when
+ * `process.env.AUTH_SECRET` is not set — the single source of truth for this
+ * literal (issue #287 AC6). `playwright.config.ts`'s `webServer.env.AUTH_SECRET`
+ * must match this value for the admin specs' cookie to verify server-side.
+ */
+export const AUTH_SECRET_FALLBACK = 'e2e-test-auth-secret'
+
 /** Signs an admin `authjs.session-token` JWT. */
 export async function adminSessionToken(): Promise<string> {
   return encode({
@@ -20,7 +28,7 @@ export async function adminSessionToken(): Promise<string> {
       sub: 'e2e-admin-001',
       role: 'admin',
     },
-    secret: process.env.AUTH_SECRET ?? 'e2e-test-auth-secret',
+    secret: process.env.AUTH_SECRET ?? AUTH_SECRET_FALLBACK,
     salt: 'authjs.session-token',
   })
 }

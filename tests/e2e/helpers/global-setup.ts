@@ -1,5 +1,5 @@
 import { chromium, type FullConfig, type Page } from '@playwright/test'
-import { encode } from '@auth/core/jwt'
+import { adminSessionToken, AUTH_SECRET_FALLBACK } from './admin-auth'
 
 /**
  * Selector for the Next.js dev overlay's bottom-left toggle button — the
@@ -33,17 +33,6 @@ const DEV_OVERLAY_SELECTOR = '[data-nextjs-dev-tools-button]'
  */
 const OVERLAY_CHECK_TIMEOUT_MS = 2_000
 
-/**
- * Fallback `AUTH_SECRET` used to sign both sides of the E2E admin session
- * cookie: `playwright.config.ts`'s `webServer.env.AUTH_SECRET` (server side)
- * and the admin specs' `adminSessionToken()` (test-process side). They only
- * agree because both fall back to this exact literal — see AC6 of issue
- * #287. Mirrored here (rather than imported) matches the duplication already
- * present across the admin specs; whichever call site extracts the shared
- * module is expected to point this constant at it too.
- */
-const AUTH_SECRET_FALLBACK = 'e2e-test-auth-secret'
-
 /** NextAuth's default JWT session cookie name (`session: { strategy: 'jwt' }` in `src/auth.ts`). */
 const ADMIN_SESSION_COOKIE_NAME = 'authjs.session-token'
 
@@ -59,26 +48,6 @@ const ADMIN_SESSION_COOKIE_NAME = 'authjs.session-token'
  * not be misreported as a rejected cookie.
  */
 const ADMIN_COOKIE_CHECK_TIMEOUT_MS = 30_000
-
-/**
- * Mints the same admin session JWT the four admin specs
- * (`admin-change-history.spec.ts`, `admin-diff.spec.ts`,
- * `admin-duplicates.spec.ts`, `admin-export.spec.ts`) sign to bypass
- * Google sign-in in tests, using the exact fallback secret they use.
- */
-async function adminSessionToken(): Promise<string> {
-  return encode({
-    token: {
-      name: 'E2E Admin',
-      email: 'admin@test.com',
-      picture: null,
-      sub: 'e2e-admin-001',
-      role: 'admin',
-    },
-    secret: process.env.AUTH_SECRET ?? AUTH_SECRET_FALLBACK,
-    salt: ADMIN_SESSION_COOKIE_NAME,
-  })
-}
 
 /**
  * Fails the suite fast, naming `AUTH_SECRET`, if the server under test does

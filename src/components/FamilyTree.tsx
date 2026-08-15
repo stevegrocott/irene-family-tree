@@ -10,7 +10,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo, useDeferredValue } from 'react'
 import type React from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession, signIn } from 'next-auth/react'
 import ReactFlow, {
   Background,
@@ -2254,6 +2254,7 @@ function FlowCanvas({
   const [error, setError] = useState<string | null>(null)
   const [truncated, setTruncated] = useState(false)
   const [totalNodes, setTotalNodes] = useState<number | undefined>(undefined)
+  const router = useRouter()
   const [hops, setHops] = useState(() => initialUrlState.hops ?? DEFAULT_HOPS)
   const [actualMaxDepth, setActualMaxDepth] = useState<number>(MAX_HOPS)
   const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(() =>
@@ -2425,30 +2426,16 @@ function FlowCanvas({
   }, [buildPath])
 
   /**
-   * Keeps the URL in sync with viewer state (root, person, hops) so re-rooting,
-   * depth changes, and person selection are shareable. Skipped until the user
-   * has actually interacted (or the root has changed via {@link onSelectRoot})
-   * so an untouched initial load — including one that arrived via a deep link
-   * — never rewrites the URL.
-   *
-   * Uses the native History API directly rather than `router.replace`. This
-   * page never re-renders server-side off `root`/`person`/`hops`/`view` — they
-   * only ever feed this client component's own `useSearchParams()` snapshot,
-   * captured once on mount — so a client-side RSC navigation buys nothing here
-   * and costs correctness: `router.replace` resolves asynchronously, and two
-   * calls issued close together (e.g. selecting a person node to open the
-   * drawer, immediately followed by clicking that person's "focus tree on"
-   * re-root button) are not guaranteed to *apply* in call order — the earlier,
-   * now-stale navigation (still carrying the old root) can finish after the
-   * later, correct one and silently overwrite the URL/history entry. That
-   * surfaced as the re-rooted person reverting to the previous root on the
-   * next page load/reload. `history.replaceState` applies synchronously in
-   * call order, with no network round trip to race.
+   * Keeps the URL in sync with viewer state (root, person, hops) via `router.replace`
+   * so re-rooting, depth changes, and person selection are shareable without adding
+   * history entries or scrolling. Skipped until the user has actually interacted (or
+   * the root has changed via {@link onSelectRoot}) so an untouched initial load —
+   * including one that arrived via a deep link — never rewrites the URL.
    */
   useEffect(() => {
     if (!userInteractedRef.current && treeVersion === 0) return
-    window.history.replaceState(window.history.state, '', buildPath())
-  }, [buildPath, treeVersion])
+    router.replace(buildPath(), { scroll: false })
+  }, [buildPath, treeVersion, router])
 
   /**
    * Opens the person drawer when a person node is clicked.
@@ -2768,7 +2755,7 @@ export default function FamilyTree() {
   const [treeVersion, setTreeVersion] = useState(0)
   const [personsVersion, setPersonsVersion] = useState(0)
   const searchParams = useSearchParams()
-  // Captured once on mount so later URL updates (from our own history.replaceState calls) don't
+  // Captured once on mount so later URL updates (from our own router.replace calls) don't
   // re-trigger root resolution — only the URL present on initial load takes precedence.
   const [initialUrlState] = useState(() => parseTreeUrlState(searchParams))
   // null until mount so SSR/first paint uses DEFAULT_DENSITY, avoiding a hydration mismatch

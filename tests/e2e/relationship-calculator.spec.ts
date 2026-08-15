@@ -40,6 +40,16 @@ test.describe('relationship calculator', () => {
     // identical fix applied to the "does not render the control for the root
     // person" test below).
     //
+    // Pin the subject to a specific, named direct relative of the root
+    // instead of picking whichever non-root node happens to render first:
+    // in the seeded dataset, root @I85@ (Irene Tunnicliffe) is WIFE in
+    // family @F82@ whose HUSB is @I506@, "Donald Grocott" — her spouse. The
+    // kinship being exercised below is therefore always "root's spouse",
+    // not an incidental relationship that drifts with layout (issue #306:
+    // "an incidental subject means the assertion's meaning drifts with
+    // layout").
+    const TARGET_NAME = 'Donald Grocott'
+
     // A plain `.filter({ hasNot: ... }).first()` isn't enough on its own: this
     // tree renders 370 nodes and `FamilyTree`'s initial `fitView` only brings a
     // fraction of them on-screen (the rest sit outside the browser viewport,
@@ -51,8 +61,10 @@ test.describe('relationship calculator', () => {
     // silently discard off-screen candidates with no trace of who they were
     // or how many there were: a failure would only ever say "nothing
     // on-screen" with no names attached. Surfacing the full candidate list
-    // lets the assertion below name exactly who was found and why the check
-    // failed (mirrors the identical workaround in reroot-persistence.spec.ts).
+    // lets the assertions below name exactly who was found — including
+    // whether the intended person, Donald Grocott, is present at all — and
+    // why the check failed (mirrors the identical workaround in
+    // reroot-persistence.spec.ts).
     const nonRootCandidates = await page.evaluate(() => {
       const vw = window.innerWidth
       const vh = window.innerHeight
@@ -70,19 +82,28 @@ test.describe('relationship calculator', () => {
     })
     expect(nonRootCandidates.length, 'expected at least one non-root person node in the DOM').toBeGreaterThan(0)
 
-    // Loud assertion, not a silent selector: if none of the non-root
-    // candidates are on-screen, name every one of them in the failure so the
-    // cause (nothing reachable after fitView) is obvious without re-running
-    // under a debugger, instead of just timing out on a later click.
-    const onScreenCandidate = nonRootCandidates.find((candidate) => candidate.onScreen)
+    // Loud assertion, not a silent selector: if the intended person isn't
+    // among the non-root candidates at all, name every candidate that *was*
+    // found so the cause (wrong seed data, renamed fixture, etc.) is obvious
+    // without re-running under a debugger.
+    const targetCandidate = nonRootCandidates.find((candidate) => candidate.accessibleName.startsWith(TARGET_NAME))
     expect(
-      onScreenCandidate,
-      `expected at least one on-screen non-root person node; found ${nonRootCandidates.length} non-root candidate(s), all off-screen: ${nonRootCandidates.map((candidate) => candidate.accessibleName).join(', ')}`
+      targetCandidate,
+      `expected the direct relative "${TARGET_NAME}" (root's spouse, @I506@) among the non-root person nodes; found ${nonRootCandidates.length} other candidate(s) instead: ${nonRootCandidates.map((candidate) => candidate.accessibleName).join(', ') || '(none)'}`
     ).toBeTruthy()
-    const nonRootAccessibleName = onScreenCandidate!.accessibleName
+
+    // Separately assert reachability: the intended person can exist in the
+    // DOM but still be off-screen after fitView, which is a distinct failure
+    // from "the intended person is absent".
+    expect(
+      targetCandidate!.onScreen,
+      `expected "${TARGET_NAME}" to be on-screen after fitView, but it was off-screen; on-screen non-root candidates were: ${nonRootCandidates.filter((candidate) => candidate.onScreen).map((candidate) => candidate.accessibleName).join(', ') || '(none)'}`
+    ).toBe(true)
+    const nonRootAccessibleName = targetCandidate!.accessibleName
     // Assert the picked candidate's identity before we ever click it: it must
-    // be a real, named person and it must not be the root (mirrors the
+    // be the intended person and it must not be the root (mirrors the
     // accessible-name based root check in the sibling test below).
+    expect(nonRootAccessibleName).toMatch(new RegExp(`^${TARGET_NAME}\\b`));
     expect(nonRootAccessibleName).not.toMatch(/^Irene Tunnicliffe\b/);
 
     // Re-locate the same person through Playwright's own accessible-name

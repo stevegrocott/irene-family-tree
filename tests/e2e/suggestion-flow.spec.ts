@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { encode } from '@auth/core/jwt'
+import { setAdminCookie } from './helpers/admin-auth'
 import { gotoViewer } from './helpers/viewer'
 
 /**
@@ -82,33 +82,6 @@ async function mockSignedInSession(page: import('@playwright/test').Page) {
       }),
     })
   )
-}
-
-async function adminSessionToken(): Promise<string> {
-  return encode({
-    token: {
-      name: 'E2E Admin',
-      email: 'admin@test.com',
-      picture: null,
-      sub: 'e2e-admin-001',
-      role: 'admin',
-    },
-    secret: process.env.AUTH_SECRET ?? 'e2e-test-auth-secret',
-    salt: 'authjs.session-token',
-  })
-}
-
-async function setAdminCookie(context: import('@playwright/test').BrowserContext) {
-  const token = await adminSessionToken()
-  await context.addCookies([{
-    name: 'authjs.session-token',
-    value: token,
-    domain: 'localhost',
-    path: '/',
-    httpOnly: true,
-    secure: false,
-    sameSite: 'Lax',
-  }])
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

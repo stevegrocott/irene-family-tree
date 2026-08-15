@@ -1,5 +1,5 @@
-import { test, expect, type BrowserContext } from '@playwright/test'
-import { encode } from '@auth/core/jwt'
+import { test, expect } from '@playwright/test'
+import { setAdminCookie } from './helpers/admin-auth'
 import { mockPersonsAndTree, mockSignedInSession } from './helpers/revert-mocks'
 import { gotoViewer } from './helpers/viewer'
 
@@ -14,31 +14,6 @@ import { gotoViewer } from './helpers/viewer'
  *   3. Non-admin attempt where another user added a connection →
  *      delete button is pre-disabled and error message is shown inline.
  */
-
-// ── Admin auth helper ────────────────────────────────────────────────────────
-
-async function setAdminCookie(context: BrowserContext): Promise<void> {
-  const token = await encode({
-    token: {
-      name: 'E2E Admin',
-      email: 'admin@test.com',
-      picture: null,
-      sub: 'e2e-admin-001',
-      role: 'admin',
-    },
-    secret: process.env.AUTH_SECRET ?? 'e2e-test-auth-secret',
-    salt: 'authjs.session-token',
-  })
-  await context.addCookies([{
-    name: 'authjs.session-token',
-    value: token,
-    domain: 'localhost',
-    path: '/',
-    httpOnly: true,
-    secure: false,
-    sameSite: 'Lax',
-  }])
-}
 
 // ── Shared mock data ─────────────────────────────────────────────────────────
 

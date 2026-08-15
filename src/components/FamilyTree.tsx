@@ -10,7 +10,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo, useDeferredValue } from 'react'
 import type React from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { useSession, signIn } from 'next-auth/react'
 import ReactFlow, {
   Background,
@@ -1025,7 +1025,11 @@ export function PersonDrawer({
       .map(c => c.newValue?.targetId as string | undefined)
       .filter((id): id is string => !!id)
   )
-  const hasForeignConnections = detailHasRelationships && !!myChanges && (
+  // Admins bypass this client-side gate entirely — `cascadeRevertPerson`
+  // (src/lib/cascade-revert.ts) only enforces the foreign-connection block
+  // for non-admin requesters, so disabling the button for admins here would
+  // just be a UI lie about what the backend actually allows.
+  const hasForeignConnections = !isAdmin && detailHasRelationships && !!myChanges && (
     detail!.parents.some(p => !authoredConnectionTargetIds.has(p.gedcomId)) ||
     detail!.marriages.some(m => !m.spouse?.gedcomId || !authoredConnectionTargetIds.has(m.spouse.gedcomId))
   )
@@ -2254,7 +2258,6 @@ function FlowCanvas({
   const [error, setError] = useState<string | null>(null)
   const [truncated, setTruncated] = useState(false)
   const [totalNodes, setTotalNodes] = useState<number | undefined>(undefined)
-  const router = useRouter()
   const [hops, setHops] = useState(() => initialUrlState.hops ?? DEFAULT_HOPS)
   const [actualMaxDepth, setActualMaxDepth] = useState<number>(MAX_HOPS)
   const [selectedPerson, setSelectedPerson] = useState<PersonData | null>(() =>
@@ -2426,16 +2429,26 @@ function FlowCanvas({
   }, [buildPath])
 
   /**
-   * Keeps the URL in sync with viewer state (root, person, hops) via `router.replace`
-   * so re-rooting, depth changes, and person selection are shareable without adding
-   * history entries or scrolling. Skipped until the user has actually interacted (or
-   * the root has changed via {@link onSelectRoot}) so an untouched initial load —
-   * including one that arrived via a deep link — never rewrites the URL.
+   * Keeps the URL in sync with viewer state (root, person, hops) so re-rooting, depth
+   * changes, and person selection are shareable without adding history entries or
+   * scrolling. Skipped until the user has actually interacted (or the root has changed
+   * via {@link onSelectRoot}) so an untouched initial load — including one that arrived
+   * via a deep link — never rewrites the URL.
+   *
+   * Uses `window.history.replaceState` (the shallow-routing API Next documents for this,
+   * which still syncs `usePathname`/`useSearchParams`) rather than `router.replace`.
+   * `router.replace` commits asynchronously — measured at ~1.5s behind a re-root — which
+   * left the address bar advertising the *previous* root while the UI and localStorage
+   * had already moved on. Reloading inside that window silently reverted the user to the
+   * old root, because initial focus resolution ranks the URL root above the stored one
+   * (issue #307). Nothing here re-reads the URL after mount (`initialUrlState` is
+   * captured once), so a synchronous shallow update is both sufficient and cheaper — it
+   * skips the RSC round trip `router.replace` triggers per keystroke of viewer state.
    */
   useEffect(() => {
     if (!userInteractedRef.current && treeVersion === 0) return
-    router.replace(buildPath(), { scroll: false })
-  }, [buildPath, treeVersion, router])
+    window.history.replaceState(null, '', buildPath())
+  }, [buildPath, treeVersion])
 
   /**
    * Opens the person drawer when a person node is clicked.
@@ -2555,6 +2568,69 @@ function FlowCanvas({
   }
 
   /**
+   * Latest container-measured canvas size, mirrored into a ref so {@link frameTree}
+   * can read it without closing over `canvasWidth`/`canvasHeight` — taking those as
+   * dependencies would make a mere resize re-trigger `fetchTree`.
+   */
+  const canvasSizeRef = useRef({ width: 0, height: 0 })
+  useEffect(() => {
+    canvasSizeRef.current = { width: canvasWidth, height: canvasHeight }
+  }, [canvasWidth, canvasHeight])
+
+  /**
+   * Tree bounds the viewport has already been framed for. Framing happens exactly
+   * once per tree load: `treeBounds` is a fresh object per `fetchTree`, so identity
+   * comparison distinguishes "a new tree to frame" from "the same tree, re-rendered".
+   */
+  const fitBoundsRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null)
+
+  /**
+   * Frames `bounds` in the viewport, falling back to centring on the root node when
+   * the tree is too large to fit at MIN_ZOOM.
+   *
+   * Applied instantly rather than as a 300ms transition. The framing viewport is the
+   * *first* one a freshly loaded tree should ever have, so there is no meaningful
+   * "from" state to animate out of — the old transition merely slid every node
+   * several hundred pixels while they were already mounted, painted, and clickable
+   * (issue #307).
+   *
+   * @param bounds - Layout bounds of the tree to frame.
+   * @param laidNodes - Laid-out nodes, used only by the too-large-to-fit fallback.
+   * @returns `true` if a viewport was applied, `false` if there was nothing to frame against.
+   */
+  const frameTree = useCallback((
+    bounds: { x: number; y: number; width: number; height: number },
+    laidNodes: Node[],
+  ): boolean => {
+    const vw = canvasSizeRef.current.width
+    const vh = canvasSizeRef.current.height
+    // ReactFlow hasn't measured its container yet — nothing sane to frame against.
+    if (vw === 0 || vh === 0) return false
+    const PADDING = 0.15
+    const MIN_ZOOM = 0.18
+
+    const idealZoom = Math.min(
+      (vw * (1 - 2 * PADDING)) / bounds.width,
+      (vh * (1 - 2 * PADDING)) / bounds.height,
+    )
+
+    if (idealZoom >= MIN_ZOOM) {
+      setViewport(getViewportForBounds(bounds, vw, vh, MIN_ZOOM, 2, PADDING))
+      return true
+    }
+    const rootNode = laidNodes.find(
+      n => n.type === 'person' && (n.data as PersonData).gedcomId === rootId
+    )
+    if (!rootNode) return false
+    setViewport({
+      zoom: MIN_ZOOM,
+      x: vw / 2 - (rootNode.position.x + 80) * MIN_ZOOM,
+      y: vh / 2 - (rootNode.position.y + 34) * MIN_ZOOM,
+    })
+    return true
+  }, [rootId, setViewport])
+
+  /**
    * Fetches tree data for the current `rootId` and `hops` depth, applies dagre
    * layout, and updates the node/edge state. Aborts any in-flight request first.
    */
@@ -2586,6 +2662,15 @@ function FlowCanvas({
       }))
 
       const laid = applyDagreLayout(rawNodes, rawEdges, { rootId })
+      // Frame the new tree *before* handing its nodes to ReactFlow. The viewport is a
+      // ReactFlow store write, not React state, so it lands ahead of the commit that
+      // first paints these nodes — they appear already framed, instead of appearing at
+      // the previous viewport and only then being moved into place. Nodes that are
+      // visible and clickable while still travelling are a real interaction hazard
+      // (a click lands on whatever slid under the cursor) and the direct cause of the
+      // issue #307 e2e flakiness, where a node located on-screen had moved off-screen
+      // by the time it was clicked.
+      if (frameTree(laid.bounds, laid.nodes)) fitBoundsRef.current = laid.bounds
       setNodes(laid.nodes)
       const laidPersonGens = laid.nodes
         .filter(n => n.type === 'person')
@@ -2611,7 +2696,7 @@ function FlowCanvas({
     } finally {
       setLoading(false)
     }
-  }, [rootId, hops, treeVersion])
+  }, [rootId, hops, treeVersion, frameTree])
 
   /** Re-fetches the tree whenever `rootId`, `hops`, or `treeVersion` changes. */
   useEffect(() => {
@@ -2619,41 +2704,25 @@ function FlowCanvas({
   }, [fetchTree])
 
   /**
-   * Fits the viewport to the tree bounds after layout completes.
-   * Falls back to centering on the root node when the tree is too large to fit at MIN_ZOOM.
+   * Fallback framing for the one case `fetchTree` can't handle inline: tree data
+   * arrived before ReactFlow's ResizeObserver had measured the container, so there
+   * were no canvas dimensions to frame against. Re-runs once dimensions appear.
+   *
+   * The common path frames inside `fetchTree` (see there for why), which sets
+   * `fitBoundsRef` and makes this effect a no-op. Keeping the 50ms defer matters:
+   * `tests/e2e/tree-initial-render.spec.ts` documents it as the window in which a
+   * pre-fit first paint is observable, which is what makes its LOD assertion
+   * mutation-sensitive.
    */
   useEffect(() => {
     if (!treeBounds || nodes.length === 0) return
-    // Wait until ReactFlow has measured its container before fitting.
     if (canvasWidth === 0 || canvasHeight === 0) return
+    if (fitBoundsRef.current === treeBounds) return
     const id = setTimeout(() => {
-      const vw = canvasWidth
-      const vh = canvasHeight
-      const PADDING = 0.15
-      const MIN_ZOOM = 0.18
-
-      const idealZoom = Math.min(
-        (vw * (1 - 2 * PADDING)) / treeBounds.width,
-        (vh * (1 - 2 * PADDING)) / treeBounds.height,
-      )
-
-      if (idealZoom >= MIN_ZOOM) {
-        setViewport(getViewportForBounds(treeBounds, vw, vh, MIN_ZOOM, 2, PADDING), { duration: 300 })
-      } else {
-        const rootNode = nodes.find(
-          n => n.type === 'person' && (n.data as PersonData).gedcomId === rootId
-        )
-        if (rootNode) {
-          setViewport({
-            zoom: MIN_ZOOM,
-            x: vw / 2 - (rootNode.position.x + 80) * MIN_ZOOM,
-            y: vh / 2 - (rootNode.position.y + 34) * MIN_ZOOM,
-          }, { duration: 300 })
-        }
-      }
+      if (frameTree(treeBounds, nodes)) fitBoundsRef.current = treeBounds
     }, 50)
     return () => clearTimeout(id)
-  }, [treeBounds, nodes, rootId, setViewport, canvasWidth, canvasHeight])
+  }, [treeBounds, nodes, canvasWidth, canvasHeight, frameTree])
 
   return (
     <>

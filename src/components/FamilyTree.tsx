@@ -1015,19 +1015,25 @@ export function PersonDrawer({
 
   // True when connections exist that the current user did not author — determined
   // client-side by checking each live parent/spouse connection against the user's
-  // own relationship changes, avoiding a server round-trip. Must compare per
-  // connection (by type + targetId) rather than by count: an equal tally can still
-  // hide foreign connections when the user's changes reference different people
-  // (e.g. a child added elsewhere) than the person's current parents/spouse.
-  const authoredConnectionTargetIds = new Set(
+  // own relationship changes, avoiding a server round-trip. The API keys relationship
+  // changes on `newValue.unionId` (see my-changes/route.ts) — there is no guaranteed
+  // `type` or `targetId` on that shape. Marriages carry their own `unionId` in the
+  // person detail response, so those are matched precisely, per connection. Parent
+  // connections don't expose a union id to the client, so authored change ids left
+  // over after matching marriages are counted against the number of live parent
+  // connections instead of being matched individually.
+  const authoredUnionIds = new Set(
     (myChanges?.relationshipChanges ?? [])
-      .filter(c => c.newValue?.type === 'parent' || c.newValue?.type === 'spouse')
-      .map(c => c.newValue?.targetId as string | undefined)
+      .map(c => c.newValue?.unionId as string | undefined)
       .filter((id): id is string => !!id)
   )
+  const authoredMarriageCount = detail
+    ? detail.marriages.filter(m => authoredUnionIds.has(m.unionId)).length
+    : 0
+  const unmatchedAuthoredCount = authoredUnionIds.size - authoredMarriageCount
   const hasForeignConnections = detailHasRelationships && !!myChanges && (
-    detail!.parents.some(p => !authoredConnectionTargetIds.has(p.gedcomId)) ||
-    detail!.marriages.some(m => !m.spouse?.gedcomId || !authoredConnectionTargetIds.has(m.spouse.gedcomId))
+    detail!.marriages.some(m => !authoredUnionIds.has(m.unionId)) ||
+    unmatchedAuthoredCount < detail!.parents.length
   )
 
   /**

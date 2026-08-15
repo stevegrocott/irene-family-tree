@@ -679,13 +679,17 @@ describe('PersonDrawer', () => {
     })
 
     it('for a person with relationships, the modal shows the connection count and confirming calls cascade-revert', async () => {
-      // mockDetailResponse has 2 parents + 1 marriage = 3 connections
+      // mockDetailResponse has 2 parents + 1 marriage (unionId '@F1@') = 3 connections.
+      // The API keys relationship changes on newValue.unionId (see my-changes/route.ts);
+      // there is no guaranteed type/targetId. The marriage is matched by its unionId
+      // directly; the two parent-authored changes carry union ids the client can't
+      // correlate to a specific parent, so they're counted against the parent total.
       const { calls } = installDeleteFetchMock({
         detail: mockDetailResponse,
         relationshipChanges: [
-          { id: 'rc1', newValue: { type: 'parent', targetId: '@I2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
-          { id: 'rc2', newValue: { type: 'parent', targetId: '@I3@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
-          { id: 'rc3', newValue: { type: 'spouse', targetId: '@I5@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc1', newValue: { unionId: '@F2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc2', newValue: { unionId: '@F3@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc3', newValue: { unionId: '@F1@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
         ],
       })
       const onClose = jest.fn()
@@ -724,7 +728,7 @@ describe('PersonDrawer', () => {
       installDeleteFetchMock({
         detail: oneParentDetail,
         relationshipChanges: [
-          { id: 'rc1', newValue: { type: 'parent', targetId: '@I2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc1', newValue: { unionId: '@F2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
         ],
       })
       await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
@@ -735,13 +739,14 @@ describe('PersonDrawer', () => {
     })
 
     it('disables delete and shows a contact-admin message when one of several connections was authored by another user', async () => {
-      // mockDetailResponse has 2 parents (@I2@, @I3@) + 1 marriage (@I5@) = 3 connections.
-      // This user authored both parent links but not the marriage — @I5@ is foreign.
+      // mockDetailResponse has 2 parents + 1 marriage (unionId '@F1@') = 3 connections.
+      // This user authored two relationship changes covering the parents, but none
+      // covering the marriage's unionId — '@F1@' is foreign.
       installDeleteFetchMock({
         detail: mockDetailResponse,
         relationshipChanges: [
-          { id: 'rc1', newValue: { type: 'parent', targetId: '@I2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
-          { id: 'rc2', newValue: { type: 'parent', targetId: '@I3@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc1', newValue: { unionId: '@F2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc2', newValue: { unionId: '@F3@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
         ],
       })
       await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
@@ -756,15 +761,16 @@ describe('PersonDrawer', () => {
     it('disables delete when every live connection is unaccounted for even though the change count matches', async () => {
       // 3 relationshipChanges vs 3 total connections (2 parents + 1 marriage) — a naive
       // count comparison reads this as "fully self-authored". But none of these three
-      // changes actually reference this person's current parents/spouse (@I2@, @I3@,
-      // @I5@); they're unrelated entries (e.g. a child added elsewhere). Authorship
-      // must be checked per-connection, not by tallying totals.
+      // changes' unionIds reference this person's current marriage ('@F1@'); they're
+      // unrelated union ids (e.g. from a child added elsewhere). The marriage is matched
+      // precisely by unionId, so it's correctly flagged foreign regardless of the total
+      // tally.
       installDeleteFetchMock({
         detail: mockDetailResponse,
         relationshipChanges: [
-          { id: 'rc1', newValue: { type: 'child', targetId: '@I90@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
-          { id: 'rc2', newValue: { type: 'child', targetId: '@I91@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
-          { id: 'rc3', newValue: { type: 'child', targetId: '@I92@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc1', newValue: { unionId: '@F90@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc2', newValue: { unionId: '@F91@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc3', newValue: { unionId: '@F92@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
         ],
       })
       await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)

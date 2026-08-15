@@ -587,6 +587,15 @@ describe('PersonDrawer', () => {
       marriages: [],
     }
 
+    // mockDetailResponse's one marriage carries unionId '@F1@' — the only field
+    // src/app/api/person/[id]/my-changes/route.test.ts documents as guaranteed
+    // on a relationshipChanges[].newValue. type/targetId are not part of that contract.
+    const marriageOnlyDetail = {
+      ...mockDetailResponse,
+      parents: [],
+      siblings: [],
+    }
+
     function installDeleteFetchMock(opts: {
       detail: typeof mockDetailResponse
       relationshipChanges: Array<{ id: string; newValue: Record<string, unknown>; appliedAt: string }>
@@ -771,6 +780,36 @@ describe('PersonDrawer', () => {
           { id: 'rc1', newValue: { unionId: '@F90@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
           { id: 'rc2', newValue: { unionId: '@F91@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
           { id: 'rc3', newValue: { unionId: '@F92@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+        ],
+      })
+      await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
+
+      const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
+      expect(deleteBtn.disabled).toBe(true)
+
+      const warning = container.querySelector('[data-testid="person-drawer-action-error"]')
+      expect(warning?.textContent).toBe('Some connections cannot be removed. Contact an admin.')
+    })
+
+    it('matches an authored connection via newValue.unionId, the shape the my-changes API documents and emits', async () => {
+      installDeleteFetchMock({
+        detail: marriageOnlyDetail,
+        relationshipChanges: [
+          { id: 'rc1', newValue: { unionId: '@F1@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+        ],
+      })
+      await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
+
+      const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
+      expect(deleteBtn.disabled).toBe(false)
+      expect(container.querySelector('[data-testid="person-drawer-action-error"]')).toBeNull()
+    })
+
+    it('treats a relationship change with a non-matching unionId as foreign, per the same documented shape', async () => {
+      installDeleteFetchMock({
+        detail: marriageOnlyDetail,
+        relationshipChanges: [
+          { id: 'rc1', newValue: { unionId: '@SOMEONE-ELSES-UNION@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
         ],
       })
       await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)

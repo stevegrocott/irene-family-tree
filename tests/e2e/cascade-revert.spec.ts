@@ -103,7 +103,12 @@ const adminChangesWithRelationship = {
     appliedAt: '2026-04-01T10:00:00.000Z',
   },
   relationshipChanges: [
-    { id: 'change-rel-1', newValue: { unionId: '@UBOB@' }, appliedAt: '2026-04-01T10:01:00.000Z' },
+    // newValue mirrors the real ADD_RELATIONSHIP change shape recorded by
+    // POST /api/person/[id]/relationships (`{ type, targetId, unionId }`) —
+    // FamilyTree's hasForeignConnections check matches on `type`/`targetId`,
+    // so a mock missing them makes every parent/spouse connection look
+    // foreign and the delete button stays disabled.
+    { id: 'change-rel-1', newValue: { type: 'parent', targetId: '@IBOB@', unionId: '@UBOB@' }, appliedAt: '2026-04-01T10:01:00.000Z' },
   ],
   updateChanges: [],
 }

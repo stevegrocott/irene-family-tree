@@ -338,6 +338,29 @@ describe('PersonNode compact variant unknown name (DESIGN_SYSTEM.md §3.2)', () 
   })
 })
 
+describe('PersonNode aria-label root-identity markup (issue #307)', () => {
+  /**
+   * tests/e2e/relationship-calculator.spec.ts identifies the root node by
+   * reading `[role="button"]`'s `aria-label` off each `.react-flow__node-person`
+   * and checking it starts with the seeded root's name. If this markup is ever
+   * absent or the name stops leading the label, every node looks non-root and
+   * that e2e test silently breaks rather than failing loudly.
+   */
+  it.each([
+    ['dot', 'person-node-dot'],
+    ['compact', 'person-node-compact'],
+    ['full', 'person-node-full'],
+  ] as const)(
+    'exposes a [role="button"] element whose aria-label starts with the person\'s name on the %s variant',
+    (lodVariant, testId) => {
+      const el = render({ name: 'Irene Tunnicliffe', lodVariant })
+      const node = el.querySelector(`[data-testid="${testId}"]`)
+      expect(node?.getAttribute('role')).toBe('button')
+      expect(node?.getAttribute('aria-label')).toMatch(/^Irene Tunnicliffe/)
+    }
+  )
+})
+
 describe('PersonNode keyboard accessibility (DESIGN_SYSTEM.md §7)', () => {
   it.each([
     ['dot', 'person-node-dot'],

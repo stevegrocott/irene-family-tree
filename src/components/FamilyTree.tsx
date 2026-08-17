@@ -1035,10 +1035,7 @@ export function PersonDrawer({
   // authored and enable cascade-delete over links the user never created.
   const authoredUnionIds = new Set(
     (myChanges?.relationshipChanges ?? [])
-      .filter(c => {
-        const t = c.newValue?.type
-        return t === undefined || t === 'parent' || t === 'spouse'
-      })
+      .filter(c => ['parent', 'spouse', undefined].includes(c.newValue?.type as string | undefined))
       .map(c => c.newValue?.unionId as string | undefined)
       .filter((id): id is string => !!id)
   )
@@ -1049,7 +1046,7 @@ export function PersonDrawer({
    * irreversible cascade rather than permit one on unverified authorship.
    */
   const isAuthoredUnion = (unionId: string | null | undefined) =>
-    typeof unionId === 'string' && unionId.length > 0 && authoredUnionIds.has(unionId)
+    !!unionId && authoredUnionIds.has(unionId)
   // Admins bypass this client-side gate entirely — `cascadeRevertPerson`
   // (src/lib/cascade-revert.ts:124) only enforces the foreign-connection block
   // for non-admin requesters, so disabling the button for admins here would

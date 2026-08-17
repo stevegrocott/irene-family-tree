@@ -10,7 +10,7 @@ import type React from 'react'
 import { createRoot } from 'react-dom/client'
 import * as NextAuthReact from 'next-auth/react'
 import { PersonDrawer, computeCascadeDeleteConnectionCount } from '@/components/FamilyTree'
-import type { PersonData } from '@/types/tree'
+import type { PersonData, ParentSummary } from '@/types/tree'
 
 jest.mock('reactflow', () => ({
   default: () => null,
@@ -49,10 +49,13 @@ const mockDetailResponse = {
   deathPlace: null,
   occupation: null,
   notes: null,
+  // Both parents share a single union (@FPARENT@), as they do in the graph — the
+  // person hangs off that union by a CHILD edge. Authorship is matched by union id,
+  // so one authored parent-union change covers both parent rows (issue #308).
   parents: [
-    { gedcomId: '@I2@', name: 'Father Smith', sex: 'M', birthYear: null, deathYear: null },
-    { gedcomId: '@I3@', name: 'Mother Jones', sex: 'F', birthYear: null, deathYear: null },
-  ],
+    { gedcomId: '@I2@', name: 'Father Smith', sex: 'M', birthYear: null, deathYear: null, unionId: '@FPARENT@' },
+    { gedcomId: '@I3@', name: 'Mother Jones', sex: 'F', birthYear: null, deathYear: null, unionId: '@FPARENT@' },
+  ] as ParentSummary[],
   siblings: [
     { gedcomId: '@I4@', name: 'Sibling Smith', sex: 'M', birthYear: null, deathYear: null },
   ],
@@ -683,9 +686,9 @@ describe('PersonDrawer', () => {
       const { calls } = installDeleteFetchMock({
         detail: mockDetailResponse,
         relationshipChanges: [
-          { id: 'rc1', newValue: { type: 'parent', targetId: '@I2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
-          { id: 'rc2', newValue: { type: 'parent', targetId: '@I3@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
-          { id: 'rc3', newValue: { type: 'spouse', targetId: '@I5@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc1', newValue: { unionId: '@FPARENT@', type: 'parent' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc2', newValue: { unionId: '@FPARENT@', type: 'parent' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc3', newValue: { unionId: '@F1@', type: 'spouse' }, appliedAt: '2024-01-01T00:00:00.000Z' },
         ],
       })
       const onClose = jest.fn()
@@ -724,7 +727,7 @@ describe('PersonDrawer', () => {
       installDeleteFetchMock({
         detail: oneParentDetail,
         relationshipChanges: [
-          { id: 'rc1', newValue: { type: 'parent', targetId: '@I2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc1', newValue: { unionId: '@FPARENT@', type: 'parent' }, appliedAt: '2024-01-01T00:00:00.000Z' },
         ],
       })
       await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
@@ -740,8 +743,8 @@ describe('PersonDrawer', () => {
       installDeleteFetchMock({
         detail: mockDetailResponse,
         relationshipChanges: [
-          { id: 'rc1', newValue: { type: 'parent', targetId: '@I2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
-          { id: 'rc2', newValue: { type: 'parent', targetId: '@I3@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc1', newValue: { unionId: '@FPARENT@', type: 'parent' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc2', newValue: { unionId: '@FPARENT@', type: 'parent' }, appliedAt: '2024-01-01T00:00:00.000Z' },
         ],
       })
       await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
@@ -762,9 +765,9 @@ describe('PersonDrawer', () => {
       installDeleteFetchMock({
         detail: mockDetailResponse,
         relationshipChanges: [
-          { id: 'rc1', newValue: { type: 'child', targetId: '@I90@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
-          { id: 'rc2', newValue: { type: 'child', targetId: '@I91@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
-          { id: 'rc3', newValue: { type: 'child', targetId: '@I92@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc1', newValue: { unionId: '@F1@', type: 'child' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc2', newValue: { unionId: '@F1@', type: 'child' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc3', newValue: { unionId: '@F1@', type: 'child' }, appliedAt: '2024-01-01T00:00:00.000Z' },
         ],
       })
       await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
@@ -785,8 +788,8 @@ describe('PersonDrawer', () => {
       installDeleteFetchMock({
         detail: mockDetailResponse,
         relationshipChanges: [
-          { id: 'rc1', newValue: { type: 'parent', targetId: '@I2@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
-          { id: 'rc2', newValue: { type: 'parent', targetId: '@I3@' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc1', newValue: { unionId: '@FPARENT@', type: 'parent' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+          { id: 'rc2', newValue: { unionId: '@FPARENT@', type: 'parent' }, appliedAt: '2024-01-01T00:00:00.000Z' },
         ],
       })
       await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
@@ -794,6 +797,58 @@ describe('PersonDrawer', () => {
       const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
       expect(deleteBtn.disabled).toBe(false)
       expect(container.querySelector('[data-testid="person-drawer-action-error"]')).toBeNull()
+    })
+
+    it('one authored parent-union change covers both parent rows sharing that union', async () => {
+      // Two parents, one union (@FPARENT@) — the normal shape in the graph. A count-based
+      // check reads "1 authored change vs 2 parent rows" as foreign, which is the bug
+      // #308 was filed for. Union matching covers both rows from the single change.
+      installDeleteFetchMock({
+        detail: { ...mockDetailResponse, marriages: [] },
+        relationshipChanges: [
+          { id: 'rc1', newValue: { unionId: '@FPARENT@', type: 'parent' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+        ],
+      })
+      await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
+
+      const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
+      expect(deleteBtn.disabled).toBe(false)
+    })
+
+    it('a child-typed change does not mark its union authored — fails closed (AC6)', async () => {
+      // The user added a *child* to their own marriage union. That is not authorship of
+      // the marriage link itself, so dropping the type filter and treating any change on
+      // @F1@ as authorship would enable cascade-delete over a spouse connection they
+      // never created. Must fail closed.
+      installDeleteFetchMock({
+        detail: { ...mockDetailResponse, parents: [] },
+        relationshipChanges: [
+          { id: 'rc1', newValue: { unionId: '@F1@', type: 'child' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+        ],
+      })
+      await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
+
+      const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
+      expect(deleteBtn.disabled).toBe(true)
+    })
+
+    it('a connection with no union id fails closed rather than counting as authored', async () => {
+      // A parent row the API could not attach a union to must never read as authored —
+      // the safe default before an irreversible cascade is to refuse.
+      installDeleteFetchMock({
+        detail: {
+          ...mockDetailResponse,
+          marriages: [],
+          parents: [{ gedcomId: '@I2@', name: 'Father Smith', sex: 'M', birthYear: null, deathYear: null, unionId: null }],
+        },
+        relationshipChanges: [
+          { id: 'rc1', newValue: { unionId: '@FPARENT@', type: 'parent' }, appliedAt: '2024-01-01T00:00:00.000Z' },
+        ],
+      })
+      await renderDrawer({ onSelectRoot: jest.fn(), rootId: '@I1@' }, 4)
+
+      const deleteBtn = container.querySelector('[data-testid="person-drawer-delete"]') as HTMLButtonElement
+      expect(deleteBtn.disabled).toBe(true)
     })
 
     it('shows conflictingChange.detail from a 409 revert response as the action error', async () => {

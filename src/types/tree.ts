@@ -114,6 +114,26 @@ export interface PersonSummary {
 }
 
 /**
+ * A parent entry in {@link PersonDetailResponse}, extending {@link PersonSummary}
+ * with the GEDCOM identifier of the Union node connecting this parent to the person,
+ * so callers can match authored relationship changes to a specific parent connection
+ * instead of tallying counts.
+ */
+export interface ParentSummary extends PersonSummary {
+  /**
+   * GEDCOM identifier for the Union (FAM) node linking this parent to the person.
+   *
+   * Nullable because the detail query reaches the parent union through an
+   * `OPTIONAL MATCH` — a parent recorded without a resolvable union yields null
+   * rather than being dropped. Consumers matching authorship by union id must
+   * treat null as "not authored" and fail closed (issue #308); declaring this
+   * non-nullable would let a missing id be read as a match by an `undefined`
+   * lookup that silently succeeds.
+   */
+  unionId: string | null
+}
+
+/**
  * Details of a single marriage/union, including the spouse and children of that union.
  */
 export interface MarriageDetail {
@@ -157,7 +177,7 @@ export interface PersonDetailResponse {
   /** URL of the person's profile photo, or `null`/absent if none is set. */
   photoUrl?: string | null
   /** Biological or adoptive parents. */
-  parents: PersonSummary[]
+  parents: ParentSummary[]
   /** Siblings sharing at least one common parent union. */
   siblings: PersonSummary[]
   /** All recorded marriages with spouse and children. */

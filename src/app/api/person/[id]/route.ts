@@ -11,7 +11,7 @@ import { recordChange } from '@/lib/changes'
 import { auth } from '@/auth'
 import { ALLOWED_PATCH_FIELDS, isValidPhotoUrl } from '@/lib/patches'
 import { isLikelyLiving, redactPerson } from '@/lib/privacy'
-import type { PersonSummary, MarriageDetail } from '@/types/tree'
+import type { PersonSummary, ParentSummary, MarriageDetail } from '@/types/tree'
 
 /** Forces the route to run in the Node.js runtime (required for Neo4j driver). */
 export const runtime = 'nodejs'
@@ -41,7 +41,7 @@ interface PersonDetailRow {
   /** URL of the person's profile photo, or null if none is set. */
   photoUrl: string | null
   /** Biological or adoptive parents identified in the graph. */
-  parents: PersonSummary[]
+  parents: ParentSummary[]
   /** Siblings sharing at least one common parent union. */
   siblings: PersonSummary[]
   /** All recorded marriages/unions with spouse and children for each. */
@@ -73,6 +73,16 @@ function redactSummaryIfLiving(p: PersonSummary): PersonSummary {
     deathYear: null,
     living: true,
   }
+}
+
+/**
+ * Redacts a {@link ParentSummary} the same way as {@link redactSummaryIfLiving},
+ * while always preserving `unionId` — it identifies the connecting Union node, not
+ * the parent themselves, so it carries no privacy-sensitive information and callers
+ * need it (even for redacted/living parents) to match authored relationship changes.
+ */
+function redactParentIfLiving(p: ParentSummary): ParentSummary {
+  return { ...redactSummaryIfLiving(p), unionId: p.unionId }
 }
 
 /**
@@ -108,7 +118,8 @@ export async function GET(
      WITH p,
        collect(DISTINCT CASE WHEN parent IS NOT NULL THEN {
          gedcomId: parent.gedcomId, name: parent.name, sex: parent.sex,
-         birthYear: parent.birthYear, deathYear: parent.deathYear
+         birthYear: parent.birthYear, deathYear: parent.deathYear,
+         unionId: pu.gedcomId
        } END) AS parents,
        collect(DISTINCT CASE WHEN sib IS NOT NULL THEN {
          gedcomId: sib.gedcomId, name: sib.name, sex: sib.sex,
@@ -189,7 +200,7 @@ export async function GET(
     return NextResponse.json({
       ...row,
       ...rootFields,
-      parents: row.parents.map(redactSummaryIfLiving),
+      parents: row.parents.map(redactParentIfLiving),
       siblings: row.siblings.map(redactSummaryIfLiving),
       marriages: row.marriages.map((m) => ({
         ...m,

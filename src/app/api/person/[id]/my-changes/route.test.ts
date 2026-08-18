@@ -176,6 +176,48 @@ describe('GET /api/person/[id]/my-changes', () => {
     expect(body.relationshipChanges[0].id).toBe('c-rel-in')
   })
 
+  // Issue #308. Every other test here stubs the union rows, so none of them can tell
+  // whether the query would actually have returned a parent union — which is exactly
+  // how the bug survived: the client matched connections by union id against a set
+  // that never contained a parent union, so every parent read as foreign and delete
+  // stayed permanently disabled. Asserting on the query text is the only way to pin
+  // this at the unit level.
+  it('collects parent unions as well as spouse unions', async () => {
+    mockAuth.mockResolvedValue(USER_SESSION)
+    mockRead.mockResolvedValueOnce([])
+    mockRead.mockResolvedValueOnce([])
+
+    await GET(makeRequest(), makeParams('I001'))
+
+    const unionQuery = mockRead.mock.calls[0][0] as string
+    // Spouse unions: the person points at the union.
+    expect(unionQuery).toMatch(/\(p:Person \{gedcomId: \$id\}\)-\[:UNION\]->\(/)
+    // Parent unions: the parents' union points at the person as a child.
+    expect(unionQuery).toMatch(/\(p:Person \{gedcomId: \$id\}\)<-\[:CHILD\]-\(/)
+  })
+
+  it('keeps an ADD_RELATIONSHIP change against a parent union', async () => {
+    mockAuth.mockResolvedValue(USER_SESSION)
+    // 'UPARENT' is the union the person hangs off as a child; 'U100' is their marriage.
+    mockRead.mockResolvedValueOnce([{ unionId: 'U100' }, { unionId: 'UPARENT' }])
+    mockRead.mockResolvedValueOnce([
+      {
+        id: 'c-rel-parent',
+        changeType: 'ADD_RELATIONSHIP',
+        targetId: 'I001',
+        newValue: JSON.stringify({ unionId: 'UPARENT', type: 'parent' }),
+        previousValue: null,
+        appliedAt: '2026-04-21T10:00:00Z',
+      },
+    ])
+
+    const response = await GET(makeRequest(), makeParams('I001'))
+    const body = await response.json()
+
+    expect(body.relationshipChanges).toHaveLength(1)
+    expect(body.relationshipChanges[0].id).toBe('c-rel-parent')
+  })
+
   it('returns updateChanges in newest-first order', async () => {
     mockAuth.mockResolvedValue(USER_SESSION)
     mockRead.mockResolvedValueOnce([])

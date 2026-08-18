@@ -1015,16 +1015,38 @@ export function PersonDrawer({
 
   // True when connections exist that the current user did not author — determined
   // client-side by checking each live parent/spouse connection against the user's
-  // own relationship changes, avoiding a server round-trip. Must compare per
-  // connection (by type + targetId) rather than by count: an equal tally can still
-  // hide foreign connections when the user's changes reference different people
-  // (e.g. a child added elsewhere) than the person's current parents/spouse.
-  const authoredConnectionTargetIds = new Set(
+  // own relationship changes, avoiding a server round-trip.
+  //
+  // Matched per connection by **union id**, which is the key the API actually emits:
+  // `my-changes/route.ts` keeps an `ADD_RELATIONSHIP` change when its
+  // `newValue.unionId` belongs to this person, and there is no guaranteed `type` or
+  // `targetId` on that shape. Reading `type`/`targetId` matched nothing against a
+  // real response, so every connection looked foreign and delete stayed disabled
+  // (issue #308) — the earlier specs only passed because their fixtures invented
+  // those fields.
+  //
+  // Counting is deliberately avoided: two parents normally share one union, so any
+  // tally of authored changes against `parents.length` mis-reads a single authored
+  // parent union as covering only one of the two rows, and the inverse can let a
+  // foreign link through. Every connection is matched individually instead.
+  //
+  // The `type` filter is retained so a `child`-typed change (this person's own
+  // children, whose union they also belong to) cannot mark the *whole* union as
+  // authored and enable cascade-delete over links the user never created.
+  const authoredUnionIds = new Set(
     (myChanges?.relationshipChanges ?? [])
-      .filter(c => c.newValue?.type === 'parent' || c.newValue?.type === 'spouse')
-      .map(c => c.newValue?.targetId as string | undefined)
+      .filter(c => ['parent', 'spouse', undefined].includes(c.newValue?.type as string | undefined))
+      .map(c => c.newValue?.unionId as string | undefined)
       .filter((id): id is string => !!id)
   )
+  /**
+   * A connection counts as authored only when its union id is known *and* present
+   * in {@link authoredUnionIds}. A missing union id fails **closed** — it reads as
+   * foreign, disabling delete — because the safe default is to refuse an
+   * irreversible cascade rather than permit one on unverified authorship.
+   */
+  const isAuthoredUnion = (unionId: string | null | undefined) =>
+    !!unionId && authoredUnionIds.has(unionId)
   // Admins bypass this client-side gate entirely — `cascadeRevertPerson`
   // (src/lib/cascade-revert.ts:124) only enforces the foreign-connection block
   // for non-admin requesters, so disabling the button for admins here would
@@ -1040,8 +1062,8 @@ export function PersonDrawer({
   // the server's own admin exemption above, and must stay the leading
   // condition, unmodified, when #308 reworks the matching logic that follows.
   const hasForeignConnections = !isAdmin && detailHasRelationships && !!myChanges && (
-    detail!.parents.some(p => !authoredConnectionTargetIds.has(p.gedcomId)) ||
-    detail!.marriages.some(m => !m.spouse?.gedcomId || !authoredConnectionTargetIds.has(m.spouse.gedcomId))
+    detail!.parents.some(p => !isAuthoredUnion(p.unionId)) ||
+    detail!.marriages.some(m => !isAuthoredUnion(m.unionId))
   )
 
   /**

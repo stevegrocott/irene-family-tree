@@ -57,10 +57,22 @@ export async function GET(
   const { id } = await params
   const email = session.user.email
 
-  // Step 1: collect this person's union ids.
+  // Step 1: collect this person's union ids — BOTH directions.
+  //
+  // A person reaches their *spouse* union by an outgoing `UNION` edge, but their
+  // *parents'* union by an incoming `CHILD` edge (see the parents match in
+  // `person/[id]/route.ts`, which walks `(p)<-[:CHILD]-(pu:Union)<-[:UNION]-(parent)`).
+  // Collecting only the outgoing direction silently drops every parent union, so
+  // `ADD_RELATIONSHIP` changes against a parent were filtered out here and never
+  // reached the client. `hasForeignConnections` then read every parent as foreign
+  // and permanently disabled delete for a user who had created the person *and*
+  // their parent links (issue #308).
   const unionRows = await read<{ unionId: string }>(
     `MATCH (p:Person {gedcomId: $id})-[:UNION]->(u:Union)
-     RETURN DISTINCT u.gedcomId AS unionId`,
+     RETURN DISTINCT u.gedcomId AS unionId
+     UNION
+     MATCH (p:Person {gedcomId: $id})<-[:CHILD]-(pu:Union)
+     RETURN DISTINCT pu.gedcomId AS unionId`,
     { id }
   )
   const unionIds = new Set(unionRows.map(r => r.unionId).filter(Boolean))

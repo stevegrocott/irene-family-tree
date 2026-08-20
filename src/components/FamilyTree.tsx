@@ -2583,11 +2583,18 @@ function FlowCanvas({
     scrollFocusedNodeIntoView(nextEl ?? null)
   }, [flowNodes, flowEdges, scrollFocusedNodeIntoView])
 
+  // Bumped by the "database-unavailable" card's Retry button (issue #321) to force a
+  // re-fetch of the *same* rootId/hops/treeVersion combination. Folded into
+  // `treeFetchKey` below so a manual retry re-enters the loading state and clears the
+  // previous error via the same render-time-adjustment path as every other refetch
+  // trigger, rather than needing its own synchronous setState call.
+  const [retryCount, setRetryCount] = useState(0)
+
   // Enter the loading state and clear the previous error/hover as soon as we know
-  // we're fetching a new rootId/hops/treeVersion combination — adjusted during
-  // render rather than as a synchronous setState at the top of `fetchTree` below
-  // (which would otherwise trigger cascading renders when the effect calls it).
-  const treeFetchKey = `${rootId}:${hops}:${treeVersion}`
+  // we're fetching a new rootId/hops/treeVersion/retryCount combination — adjusted
+  // during render rather than as a synchronous setState at the top of `fetchTree`
+  // below (which would otherwise trigger cascading renders when the effect calls it).
+  const treeFetchKey = `${rootId}:${hops}:${treeVersion}:${retryCount}`
   const [loadedTreeKey, setLoadedTreeKey] = useState<string | null>(null)
   if (rootId && loadedTreeKey !== treeFetchKey) {
     setLoadedTreeKey(treeFetchKey)
@@ -2728,7 +2735,7 @@ function FlowCanvas({
     } finally {
       setLoading(false)
     }
-  }, [rootId, hops, treeVersion, frameTree])
+  }, [rootId, hops, treeVersion, retryCount, frameTree])
 
   /** Re-fetches the tree whenever `rootId`, `hops`, or `treeVersion` changes. */
   useEffect(() => {
@@ -2774,9 +2781,34 @@ function FlowCanvas({
           Loading family tree…
         </div>
       )}
+      {/*
+        Issue #321: a failed tree fetch (most commonly an unreachable database)
+        previously rendered as a few words of red text floating over the still-visible
+        dot background/minimap/controls — indistinguishable at a glance from "this
+        person legitimately has no relatives". This replaces the canvas with an opaque,
+        explicit "Database unavailable" card instead, with a retry action that re-runs
+        `fetchTree` without a full page reload.
+      */}
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center text-red-400 z-10 pointer-events-none">
-          {error}
+        <div
+          data-testid="database-unavailable"
+          role="alert"
+          className="absolute inset-0 flex items-center justify-center z-10 bg-[var(--ft-canvas)]"
+        >
+          <div className="bg-slate-800 border border-red-400/30 rounded-lg p-6 max-w-sm text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+            <p className="text-red-300 text-sm font-semibold mb-1">Database unavailable</p>
+            <p className="text-red-300/80 text-xs">
+              Couldn&apos;t load the family tree. Please check your database connection and try again.
+            </p>
+            <button
+              type="button"
+              data-testid="database-unavailable-retry"
+              onClick={() => setRetryCount(c => c + 1)}
+              className="mt-4 text-xs text-white/70 hover:text-white border border-white/20 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       )}
       <ReactFlow
@@ -3045,8 +3077,13 @@ export default function FamilyTree() {
   if (personsError) {
     return (
       <div className="relative w-full h-dvh bg-[var(--ft-canvas)] flex items-center justify-center">
-        <div className="bg-slate-800 border border-red-400/30 rounded-lg p-6 max-w-sm text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-          <p className="text-red-300 text-sm">{personsError}</p>
+        <div
+          data-testid="database-unavailable"
+          role="alert"
+          className="bg-slate-800 border border-red-400/30 rounded-lg p-6 max-w-sm text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+        >
+          <p className="text-red-300 text-sm font-semibold mb-1">Database unavailable</p>
+          <p className="text-red-300/80 text-xs">{personsError}</p>
         </div>
       </div>
     )

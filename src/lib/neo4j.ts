@@ -3,12 +3,28 @@ import { NextResponse } from 'next/server'
 
 const g = globalThis as unknown as { neo4jDriver?: Driver }
 
+// Driver defaults let an unreachable database hang every request for 30s
+// (maxTransactionRetryTime) with no cap on how long a connection acquisition
+// can block (connectionAcquisitionTimeout), before `read`/`write` reject
+// (see issue #321). 5s is a conservative default chosen to keep total
+// request time comfortably under typical serverless function budgets while
+// still tolerating normal (non-cold-start) query latency. It is NOT derived
+// from measured Aura cold-start latency — the production instance is
+// currently paused and that measurement is outstanding (issue #321, AC5b).
+// Re-tune once real cold-start numbers are available.
+const MAX_TRANSACTION_RETRY_TIME_MS = 5_000
+const CONNECTION_ACQUISITION_TIMEOUT_MS = 5_000
+
 export function getDriver(): Driver {
   if (!g.neo4jDriver) {
     g.neo4jDriver = neo4j.driver(
       process.env.NEO4J_URI!,
       neo4j.auth.basic(process.env.NEO4J_USER!, process.env.NEO4J_PASSWORD!),
-      { disableLosslessIntegers: true }
+      {
+        disableLosslessIntegers: true,
+        maxTransactionRetryTime: MAX_TRANSACTION_RETRY_TIME_MS,
+        connectionAcquisitionTimeout: CONNECTION_ACQUISITION_TIMEOUT_MS,
+      }
     )
   }
   return g.neo4jDriver

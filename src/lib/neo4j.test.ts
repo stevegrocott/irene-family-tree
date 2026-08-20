@@ -20,6 +20,7 @@ jest.mock('neo4j-driver', () => ({
   },
 }))
 
+import neo4j from 'neo4j-driver'
 import { read, closeDriver } from './neo4j'
 
 describe('neo4j connection', () => {
@@ -30,5 +31,14 @@ describe('neo4j connection', () => {
   it('runs RETURN 1 AS n and returns 1', async () => {
     const rows = await read<{ n: number }>('RETURN 1 AS n')
     expect(rows[0].n).toBe(1)
+  })
+
+  it('caps maxTransactionRetryTime and connectionAcquisitionTimeout well under the 30s driver default', async () => {
+    await read('RETURN 1 AS n')
+    const [, , config] = (neo4j.driver as jest.Mock).mock.calls[0]
+    expect(config.maxTransactionRetryTime).toBeGreaterThan(0)
+    expect(config.maxTransactionRetryTime).toBeLessThanOrEqual(10_000)
+    expect(config.connectionAcquisitionTimeout).toBeGreaterThan(0)
+    expect(config.connectionAcquisitionTimeout).toBeLessThanOrEqual(10_000)
   })
 })

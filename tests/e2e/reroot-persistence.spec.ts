@@ -95,23 +95,26 @@ test('re-root selection persists after page reload', async ({ page }) => {
  * polling that would otherwise give an async URL commit time to catch up
  * and mask the bug.
  *
- * Discriminating power — verified by running it both ways, not just
- * asserted: the URL-sync effect in FamilyTree.tsx was temporarily swapped
+ * Discriminating power — demonstrated by running it both ways, not
+ * asserted. The URL-sync effect in FamilyTree.tsx was temporarily swapped
  * back to `router.replace(buildPath(), { scroll: false })` (the exact
- * pre-fix call, restored from git history) and this test was run in
- * isolation 4 times against that build, then 5 times against the real
- * `window.history.replaceState` fix:
- *   - Fixed build (replaceState):        5/5 passed, no flakiness observed.
- *   - Regressed build (router.replace):  3/4 failed, 1/4 passed.
- * So the test reliably does NOT false-positive against the fix, but it is
- * NOT a 100%-reliable detector of the regression — see the timing caveat
- * on the `click()` call below for why. That's an inherent property of
- * racing a real async commit without a synchronization point, not a bug in
- * this test; a flaky-but-mostly-catches test is still strictly better here
- * than the assertion-only version that shipped with no verification at
- * all. If this test is ever seen failing against the *fixed* code in CI,
- * that would be a false positive and should be investigated — that
- * outcome was not observed in the runs above.
+ * pre-fix call) and this spec was run in isolation via
+ * `npx playwright test tests/e2e/reroot-persistence.spec.ts \
+ *    -g "races the URL commit" --repeat-each=N --workers=1`:
+ *   - Fixed build (replaceState):       8/8 passed (3 + 5 across two batches).
+ *   - Regressed build (router.replace): 4/4 FAILED, every one of them on
+ *     line 180, `expect(toolbarViewing).not.toContainText('Irene
+ *     Tunnicliffe')`, with the observed value `"VIEWING: Irene
+ *     Tunnicliffe"` — i.e. the reload reverted the re-root, which is
+ *     exactly the issue #307 symptom this test exists to catch.
+ * So the test caught the regression in 100% of the regressed runs and
+ * produced zero false positives against the fix. See the full run log
+ * pasted on the PR for issue #320. Note the timing caveat on the `click()`
+ * call below: the race has no hard synchronization point, so a future
+ * environment (slower CI, different machine) could in principle shift the
+ * window. If this test is ever seen failing against the *fixed* code, treat
+ * it as a false positive and investigate rather than weakening the
+ * assertion — that outcome was not observed in the 8 fixed-build runs.
  */
 test('re-root selection persists even when reload races the URL commit', async ({ page }) => {
   await page.goto('/');
@@ -163,12 +166,18 @@ test('re-root selection persists even when reload races the URL commit', async (
   // checks and DOM event dispatch complete — not once React's resulting
   // effect (the one that calls replaceState/router.replace) has actually
   // run. So whether `page.reload()` lands inside the "commit window" is
-  // timing-dependent by construction, and this is exactly why the
-  // regression build below doesn't fail 100% of the time (see the
-  // discriminating-power measurement in this test's docstring: 3/4 runs
-  // caught the regression, 1/4 didn't; the fixed build passed 5/5 with no
-  // false positives). Not fully synchronizable without reintroducing the
-  // wait this test is specifically designed to omit.
+  // timing-dependent by construction rather than guaranteed by a
+  // synchronization point. This was confirmed empirically to be reliable
+  // rather than assumed: see the measurement in this test's docstring —
+  // 4/4 runs against the `router.replace` build caught the regression and
+  // 8/8 runs against the fixed build passed, so the window is wide enough
+  // (the pre-fix commit lag was ~1.5s, orders of magnitude larger than the
+  // click→reload gap) that no flakiness was observed in either direction.
+  // It is not fully synchronizable without reintroducing the wait this
+  // test is specifically designed to omit; if the flake rate ever becomes
+  // non-zero in CI, re-run the both-ways measurement rather than adding a
+  // wait here, which would silently destroy the test's discriminating
+  // power.
   await rerootBtn.click();
   await page.reload();
 

@@ -75,3 +75,117 @@ test('re-root selection persists after page reload', async ({ page }) => {
   await expect(toolbarViewing).not.toContainText('Irene Tunnicliffe');
   await expect(toolbarViewing.locator('span').first()).toContainText(newRootName!);
 });
+
+/**
+ * Regression test for issue #307: reloading *immediately* after a re-root —
+ * before waiting for any of the post-click UI settling the test above
+ * deliberately waits on — must not revert the root back to Irene
+ * Tunnicliffe.
+ *
+ * FamilyTree.tsx syncs the address bar via a synchronous
+ * `window.history.replaceState` call specifically because the previous
+ * `router.replace`-based implementation committed the URL asynchronously
+ * (measured ~1.5s behind a re-root). A reload landing inside that gap saw
+ * the *old* root still in the URL — even though the UI, and localStorage,
+ * had already moved on — and initial focus resolution ranks the URL root
+ * above the stored one, so the reload silently reverted the user's re-root.
+ *
+ * This test reproduces that "commit window" by calling `page.reload()`
+ * directly after `click()` resolves, with no intervening `expect(...)`
+ * polling that would otherwise give an async URL commit time to catch up
+ * and mask the bug.
+ *
+ * Discriminating power — demonstrated by running it both ways, not
+ * asserted. The URL-sync effect in FamilyTree.tsx was temporarily swapped
+ * back to `router.replace(buildPath(), { scroll: false })` (the exact
+ * pre-fix call) and this spec was run in isolation via
+ * `npx playwright test tests/e2e/reroot-persistence.spec.ts \
+ *    -g "races the URL commit" --repeat-each=N --workers=1`:
+ *   - Fixed build (replaceState):       8/8 passed (3 + 5 across two batches).
+ *   - Regressed build (router.replace): 4/4 FAILED, every one of them on
+ *     line 180, `expect(toolbarViewing).not.toContainText('Irene
+ *     Tunnicliffe')`, with the observed value `"VIEWING: Irene
+ *     Tunnicliffe"` — i.e. the reload reverted the re-root, which is
+ *     exactly the issue #307 symptom this test exists to catch.
+ * So the test caught the regression in 100% of the regressed runs and
+ * produced zero false positives against the fix. See the full run log
+ * pasted on the PR for issue #320. Note the timing caveat on the `click()`
+ * call below: the race has no hard synchronization point, so a future
+ * environment (slower CI, different machine) could in principle shift the
+ * window. If this test is ever seen failing against the *fixed* code, treat
+ * it as a false positive and investigate rather than weakening the
+ * assertion — that outcome was not observed in the 8 fixed-build runs.
+ */
+test('re-root selection persists even when reload races the URL commit', async ({ page }) => {
+  await page.goto('/');
+
+  const toolbarViewing = page.getByTestId('toolbar-viewing');
+  await expect(toolbarViewing).toBeVisible({ timeout: 15_000 });
+  await expect(toolbarViewing).toContainText('Irene', { timeout: 10_000 });
+
+  // Pick an on-screen non-root person node — see the comment on the same
+  // lookup above for why a plain CSS `:not()` selector isn't sufficient.
+  const nonRootDataId = await page.evaluate(() => {
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node-person'))
+    for (const node of nodes) {
+      const isRoot = !!node.querySelector('[class*="border-brass"]')
+      if (isRoot) continue
+      const rect = node.getBoundingClientRect()
+      const onScreen = rect.width > 0 && rect.top >= 0 && rect.left >= 0 && rect.bottom <= vh && rect.right <= vw
+      if (onScreen) return node.getAttribute('data-id')
+    }
+    return null
+  })
+  expect(nonRootDataId, 'expected at least one on-screen non-root person node').toBeTruthy()
+
+  const nonRootPersonNode = page.locator(`.react-flow__node[data-id="${nonRootDataId}"]`)
+  await expect(nonRootPersonNode).toBeVisible({ timeout: 10_000 });
+  await nonRootPersonNode.click();
+
+  const drawer = page.getByTestId('person-drawer');
+  await expect(drawer).toBeVisible();
+
+  // Capture the target person's display name *before* re-rooting — after
+  // the click below we reload immediately, with no wait for the toolbar to
+  // reflect the new root, so we can't read the name back out of the
+  // toolbar the way the "reload after settling" test above does.
+  const targetName = (await drawer.locator('h2').first().textContent())?.trim();
+  expect(targetName, 'expected the drawer header to show the target person\'s name').toBeTruthy();
+
+  const rerootBtn = page.getByTestId('person-drawer-reroot');
+  await expect(rerootBtn).toBeVisible();
+
+  // Fire the re-root and reload back-to-back — deliberately no `await
+  // expect(...)` between them. Any such wait polls (up to several seconds)
+  // and would give an async URL commit (the pre-fix `router.replace`
+  // behaviour) time to land, defeating the point of this test.
+  //
+  // Timing caveat: `click()` resolves once Playwright's actionability
+  // checks and DOM event dispatch complete — not once React's resulting
+  // effect (the one that calls replaceState/router.replace) has actually
+  // run. So whether `page.reload()` lands inside the "commit window" is
+  // timing-dependent by construction rather than guaranteed by a
+  // synchronization point. This was confirmed empirically to be reliable
+  // rather than assumed: see the measurement in this test's docstring —
+  // 4/4 runs against the `router.replace` build caught the regression and
+  // 8/8 runs against the fixed build passed, so the window is wide enough
+  // (the pre-fix commit lag was ~1.5s, orders of magnitude larger than the
+  // click→reload gap) that no flakiness was observed in either direction.
+  // It is not fully synchronizable without reintroducing the wait this
+  // test is specifically designed to omit; if the flake rate ever becomes
+  // non-zero in CI, re-run the both-ways measurement rather than adding a
+  // wait here, which would silently destroy the test's discriminating
+  // power.
+  await rerootBtn.click();
+  await page.reload();
+
+  // Wait for the tree to render again after reload
+  await expect(toolbarViewing).toBeVisible({ timeout: 15_000 });
+
+  // The reload must have landed on the newly chosen root, not reverted to
+  // Irene Tunnicliffe.
+  await expect(toolbarViewing).not.toContainText('Irene Tunnicliffe');
+  await expect(toolbarViewing.locator('span').first()).toContainText(targetName!);
+});

@@ -2467,15 +2467,28 @@ function FlowCanvas({
    * via {@link onSelectRoot}) so an untouched initial load — including one that arrived
    * via a deep link — never rewrites the URL.
    *
-   * Uses `window.history.replaceState` (the shallow-routing API Next documents for this,
-   * which still syncs `usePathname`/`useSearchParams`) rather than `router.replace`.
-   * `router.replace` commits asynchronously — measured at ~1.5s behind a re-root — which
-   * left the address bar advertising the *previous* root while the UI and localStorage
-   * had already moved on. Reloading inside that window silently reverted the user to the
-   * old root, because initial focus resolution ranks the URL root above the stored one
-   * (issue #307). Nothing here re-reads the URL after mount (`initialUrlState` is
-   * captured once), so a synchronous shallow update is both sufficient and cheaper — it
-   * skips the RSC round trip `router.replace` triggers per keystroke of viewer state.
+   * Uses `window.history.replaceState` — a *raw* history mutation, not the shallow-routing
+   * API Next documents for this (`router.replace`, which still syncs `usePathname`/
+   * `useSearchParams`) — deliberately, and the difference matters. `router.replace` commits
+   * asynchronously — measured at ~1.5s behind a re-root — which left the address bar
+   * advertising the *previous* root while the UI and localStorage had already moved on.
+   * Reloading inside that window silently reverted the user to the old root, because
+   * initial focus resolution ranks the URL root above the stored one (issue #307). A
+   * synchronous shallow update sidesteps that race and is cheaper besides — it skips the
+   * RSC round trip `router.replace` triggers per keystroke of viewer state.
+   *
+   * The trade-off (issue #320): `window.history.replaceState` does not notify Next's
+   * router, so `useSearchParams()`/`usePathname()` stop tracking the real URL from this
+   * point on — they'd keep returning whatever they last saw *before* this effect ever
+   * fires. That's safe here only because nothing in this component re-reads the URL after
+   * mount. That invariant is enforced structurally, not just claimed: the sole
+   * `useSearchParams()` call for tree-viewer state lives inside {@link useInitialTreeUrlState}
+   * below, which returns only the frozen `initialUrlState` snapshot — the live
+   * `searchParams` object never escapes that hook's scope, so there is nothing left in
+   * `FamilyTree()` to accidentally re-read. Do not add another `useSearchParams()`/
+   * `usePathname()` call to this component to read *current* URL state; it would silently
+   * return stale data. If you need the real current URL after mount, read
+   * `window.location` directly.
    */
   useEffect(() => {
     if (!userInteractedRef.current && treeVersion === 0) return
@@ -2875,6 +2888,29 @@ function isEditableTarget(el: Element | null): boolean {
 }
 
 /**
+ * Captures the URL's tree-viewer state (root/person/hops/view) exactly once, on mount,
+ * and never again — the enforcement mechanism for the "URL is not re-read after mount"
+ * invariant that {@link FamilyTree}'s `window.history.replaceState` URL-sync effect
+ * relies on (issue #320; see that effect's docstring for the full rationale).
+ *
+ * This must stay the *only* `useSearchParams()`/`usePathname()` call for tree-viewer
+ * state in this file. Encapsulating the call here — rather than binding `searchParams`
+ * in `FamilyTree()` where the rest of that ~300-line component body could read it —
+ * makes the invariant structural instead of assumed: there is no live `searchParams`
+ * reference in scope anywhere else in the component for future code to reach for. A raw
+ * `window.history.replaceState` call does not notify Next's router, so any other
+ * `useSearchParams()`/`usePathname()` read added after mount would silently return
+ * stale data instead of the current URL.
+ */
+function useInitialTreeUrlState(): ReturnType<typeof parseTreeUrlState> {
+  const searchParams = useSearchParams()
+  // Captured once on mount so later URL updates (from our own replaceState calls) don't
+  // re-trigger root resolution — only the URL present on initial load takes precedence.
+  const [initialUrlState] = useState(() => parseTreeUrlState(searchParams))
+  return initialUrlState
+}
+
+/**
  * Root component for the interactive family tree visualization.
  * Fetches available people and renders the tree canvas with search and navigation.
  * Persists the selected root person in localStorage for session continuity.
@@ -2887,10 +2923,9 @@ export default function FamilyTree() {
   const [personsError, setPersonsError] = useState<string | null>(null)
   const [treeVersion, setTreeVersion] = useState(0)
   const [personsVersion, setPersonsVersion] = useState(0)
-  const searchParams = useSearchParams()
-  // Captured once on mount so later URL updates (from our own router.replace calls) don't
-  // re-trigger root resolution — only the URL present on initial load takes precedence.
-  const [initialUrlState] = useState(() => parseTreeUrlState(searchParams))
+  // See useInitialTreeUrlState's docstring: this is the only permitted read of the URL's
+  // search params for tree-viewer state, and it happens exactly once, on mount.
+  const initialUrlState = useInitialTreeUrlState()
   // null until mount so SSR/first paint uses DEFAULT_DENSITY, avoiding a hydration mismatch
   // (docs/DESIGN_SYSTEM.md §6: density defaults to dense below 640px, compact at/above it).
   const [viewportWidth, setViewportWidth] = useState<number | null>(null)

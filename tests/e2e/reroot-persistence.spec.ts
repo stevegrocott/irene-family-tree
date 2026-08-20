@@ -93,8 +93,25 @@ test('re-root selection persists after page reload', async ({ page }) => {
  * This test reproduces that "commit window" by calling `page.reload()`
  * directly after `click()` resolves, with no intervening `expect(...)`
  * polling that would otherwise give an async URL commit time to catch up
- * and mask the bug. It fails if `router.replace` is restored in place of
- * `window.history.replaceState`.
+ * and mask the bug.
+ *
+ * Discriminating power — verified by running it both ways, not just
+ * asserted: the URL-sync effect in FamilyTree.tsx was temporarily swapped
+ * back to `router.replace(buildPath(), { scroll: false })` (the exact
+ * pre-fix call, restored from git history) and this test was run in
+ * isolation 4 times against that build, then 5 times against the real
+ * `window.history.replaceState` fix:
+ *   - Fixed build (replaceState):        5/5 passed, no flakiness observed.
+ *   - Regressed build (router.replace):  3/4 failed, 1/4 passed.
+ * So the test reliably does NOT false-positive against the fix, but it is
+ * NOT a 100%-reliable detector of the regression — see the timing caveat
+ * on the `click()` call below for why. That's an inherent property of
+ * racing a real async commit without a synchronization point, not a bug in
+ * this test; a flaky-but-mostly-catches test is still strictly better here
+ * than the assertion-only version that shipped with no verification at
+ * all. If this test is ever seen failing against the *fixed* code in CI,
+ * that would be a false positive and should be investigated — that
+ * outcome was not observed in the runs above.
  */
 test('re-root selection persists even when reload races the URL commit', async ({ page }) => {
   await page.goto('/');
@@ -141,6 +158,17 @@ test('re-root selection persists even when reload races the URL commit', async (
   // expect(...)` between them. Any such wait polls (up to several seconds)
   // and would give an async URL commit (the pre-fix `router.replace`
   // behaviour) time to land, defeating the point of this test.
+  //
+  // Timing caveat: `click()` resolves once Playwright's actionability
+  // checks and DOM event dispatch complete — not once React's resulting
+  // effect (the one that calls replaceState/router.replace) has actually
+  // run. So whether `page.reload()` lands inside the "commit window" is
+  // timing-dependent by construction, and this is exactly why the
+  // regression build below doesn't fail 100% of the time (see the
+  // discriminating-power measurement in this test's docstring: 3/4 runs
+  // caught the regression, 1/4 didn't; the fixed build passed 5/5 with no
+  // false positives). Not fully synchronizable without reintroducing the
+  // wait this test is specifically designed to omit.
   await rerootBtn.click();
   await page.reload();
 
